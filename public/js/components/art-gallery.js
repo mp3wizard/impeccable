@@ -2,6 +2,16 @@ import { readySkills, skillFocusAreas } from "../data.js";
 import { renderSkillDemo, setupDemoTabs } from "../demo-renderer.js";
 import { setupDemoToggles } from "../demo-toggles.js";
 
+function escapeHtml(value) {
+	if (typeof value !== "string") return "";
+	return value
+		.replaceAll("&", "&amp;")
+		.replaceAll("<", "&lt;")
+		.replaceAll(">", "&gt;")
+		.replaceAll('"', "&quot;")
+		.replaceAll("'", "&#39;");
+}
+
 export function initArtGallery() {
 	// Initial setup if needed
 }
@@ -18,7 +28,7 @@ export function renderGallery(skills) {
             ${filteredSkills.map((skill, index) => renderFrame(skill, index)).join("")}
         </div>
         <div class="gallery-map" role="tablist" aria-label="Skill gallery navigation">
-            ${filteredSkills.map((skill, index) => `<button class="gallery-dot ${index === 0 ? "active" : ""}" data-index="${index}" role="tab" aria-selected="${index === 0 ? "true" : "false"}" aria-label="View ${formatName(skill.id)} skill"></button>`).join("")}
+            ${filteredSkills.map((skill, index) => `<button class="gallery-dot ${index === 0 ? "active" : ""}" data-index="${index}" role="tab" aria-selected="${index === 0 ? "true" : "false"}" aria-label="View ${escapeHtml(formatName(skill.id))} skill"></button>`).join("")}
         </div>
     `;
 
@@ -33,19 +43,19 @@ function renderFrame(skill, index) {
 	const displayName = formatName(skill.id);
 
 	return `
-        <article class="gallery-frame ${index === 0 ? "active" : ""}" data-index="${index}" id="skill-${skill.id}">
+        <article class="gallery-frame ${index === 0 ? "active" : ""}" data-index="${index}" id="skill-${escapeHtml(skill.id)}">
             <div class="gallery-content">
                 <div class="gallery-visual">
                     ${isReady ? renderSkillDemo(skill.id) : renderComingSoonVisual(skill.id)}
                 </div>
                 <div class="gallery-info">
                     <div class="gallery-header">
-                        <h3 class="gallery-title">${displayName}</h3>
+                        <h3 class="gallery-title">${escapeHtml(displayName)}</h3>
                         <div class="gallery-meta">
                             Skill · ${isReady ? "Available" : "Coming Soon"}
                         </div>
                     </div>
-                    <p class="gallery-desc">${skill.description}</p>
+                    <p class="gallery-desc">${escapeHtml(skill.description)}</p>
                     
                     ${
 											focusAreas.length > 0
@@ -55,7 +65,7 @@ function renderFrame(skill, index) {
 															.slice(0, 4)
 															.map(
 																(area) => `
-                                <span class="gallery-tag">${area.area}</span>
+                                <span class="gallery-tag">${escapeHtml(area.area)}</span>
                             `,
 															)
 															.join("")}
