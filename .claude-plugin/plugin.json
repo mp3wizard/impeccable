@@ -1,12 +1,14 @@
 {
   "name": "impeccable",
-  "description": "Design vocabulary and skills for frontend development. Includes 21 skills (20 user-invocable: /polish, /distill, /audit, /typeset, /overdrive, etc.) and an enhanced frontend-design skill with curated anti-patterns.",
   "version": "1.6.0",
+  "description": "Design vocabulary and skills for frontend development. Includes 21 skills (20 user-invocable: /polish, /distill, /audit, /typeset, /overdrive, etc.) and an enhanced frontend-design skill with curated anti-patterns.",
   "author": {
-    "name": "Paul Bakaus",
-    "email": "paul@paulbakaus.com"
+    "name": "Sappawish Siripon",
+    "email": "mp3wizard@gmail.com",
+    "url": "https://github.com/mp3wizard"
   },
   "homepage": "https://impeccable.style",
-  "repository": "https://github.com/pbakaus/impeccable",
-  "skills": "./.claude/skills"
+  "repository": "https://github.com/mp3wizard/impeccable",
+  "license": "Apache-2.0",
+  "keywords": ["design", "frontend", "ui", "ux", "skills"]
 }
