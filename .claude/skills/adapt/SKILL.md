@@ -1,11 +1,11 @@
 ---
 name: adapt
-description: Adapt designs to work across different screen sizes, devices, contexts, or platforms. Implements breakpoints, fluid layouts, and touch targets. Use when the user mentions responsive design, mobile layouts, breakpoints, viewport adaptation, or cross-device compatibility.
+description: Adapt an existing design to work across different screen sizes, devices, input methods, or platforms. Use when the user mentions responsive design, mobile layouts, breakpoints, touch targets, viewport adaptation, cross-device compatibility, print styles, or email layout.
 user-invocable: true
 argument-hint: "[target] [context (mobile, tablet, print...)]"
 ---
 
-Adapt existing designs to work effectively across different contexts - different screen sizes, devices, platforms, or use cases.
+Adapt an existing design for a new context — rethinking layout, interactions, and content priorities for the target platform, not just scaling it down.
 
 ## MANDATORY PREPARATION
 

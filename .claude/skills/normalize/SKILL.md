@@ -1,6 +1,6 @@
 ---
 name: normalize
-description: Audits and realigns UI to match design system standards, spacing, tokens, and patterns. Use when the user mentions consistency, design drift, mismatched styles, tokens, or wants to bring a feature back in line with the system.
+description: Audit and realign a UI feature to match design system standards — replacing hard-coded values with tokens, one-off components with shared equivalents, and inconsistent patterns with established ones. Use when the user mentions consistency issues, design drift, mismatched styles, hard-coded values, tokens out of sync, or wants a feature aligned with the rest of the product.
 user-invocable: true
 argument-hint: "[feature (page, route, component...)]"
 ---
@@ -22,7 +22,7 @@ Before making changes, deeply understand the context:
    - Target audience and personas
    - Component patterns and conventions
    - Design tokens (colors, typography, spacing)
-   
+
    **CRITICAL**: If something isn't clear, ask. Don't guess at design system principles.
 
 2. **Analyze the current feature**: Assess what works and what doesn't:
@@ -34,7 +34,7 @@ Before making changes, deeply understand the context:
    - Which components can be replaced with design system equivalents?
    - Which styles need to use design tokens instead of hard-coded values?
    - How can UX patterns match established user flows?
-   
+
    **IMPORTANT**: Great design is effective design. Prioritize UX consistency and usability over visual polish alone. Think through the best possible experience for your use case and personas first.
 
 ## Execute

@@ -103,6 +103,37 @@ The skill includes explicit guidance on what to avoid:
 - Don't wrap everything in cards or nest cards inside cards
 - Don't use bounce/elastic easing (feels dated)
 
+## Fork Changes (mp3wizard)
+
+This fork applies the following improvements on top of the upstream `pbakaus/impeccable`:
+
+### Security Fixes
+
+| File | Fix |
+|------|-----|
+| `public/js/components/art-gallery.js` | Added `escapeHtml()` to sanitize `skill.id`, `skill.description`, `displayName`, and `area.area` before injecting into `innerHTML` — prevents XSS from untrusted skill data |
+| `functions/api/download/[type]/[provider]/[id].js` | Hardened download API handler |
+| `functions/api/download/bundle/[provider].js` | Hardened bundle download handler |
+
+### Skill Prompt Optimizations
+
+12 of 21 SKILL.md files were optimized using `prompt-optimizer` for trigger clarity and instruction precision:
+
+| Skill | What changed |
+|-------|-------------|
+| `adapt` | Removed output-describing clause from description; added `print` and `email` as explicit trigger contexts |
+| `animate` | Tightened trigger keywords; narrowed the AskUserQuestion condition to be specific |
+| `arrange` | Added `too much whitespace` and `monotonous sections` as trigger keywords |
+| `audit` | Added `AI slop scan` and `anti-pattern check` as explicit triggers |
+| `clarify` | Added `button labels`, `empty states`, and `tooltips` as trigger keywords |
+| `critique` | Shortened description from 2 verbose lines to 1 precise line listing what the skill actually produces |
+| `delight` | Removed filler phrase "Elevates functional to delightful"; clarified differentiation from `/animate` |
+| `distill` | Removed filler phrase "Great design is simple, powerful, and clean" from description |
+| `frontend-design` | Clarified dual role: foundation skill for all design skills + direct use for building from scratch |
+| `normalize` | Expanded description with specific trigger keywords (hard-coded values, tokens out of sync) |
+| `teach-impeccable` | Rewrote description for clearer trigger conditions; fixed malformed sentence in Step 3 body |
+| `typeset` | Added `type scale` and `generic fonts` as trigger keywords |
+
 ## See It In Action
 
 Visit [impeccable.style](https://impeccable.style#casestudies) to see before/after case studies of real projects transformed with Impeccable commands.

@@ -1,6 +1,6 @@
 ---
 name: frontend-design
-description: Create distinctive, production-grade frontend interfaces with high design quality. Generates creative, polished code that avoids generic AI aesthetics. Use when the user asks to build web components, pages, artifacts, posters, or applications, or when any design skill requires project context.
+description: Foundation for all design skills — provides design principles, anti-patterns, and the Context Gathering Protocol. Also use directly when building new web components, pages, UI artifacts, or applications from scratch, or when instructed to by another design skill.
 license: Apache 2.0. Based on Anthropic's frontend-design skill. See NOTICE.md for attribution.
 ---
 
