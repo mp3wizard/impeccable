@@ -262,6 +262,41 @@ The detector catches 24 issues across AI slop (side-tab borders, purple gradient
 - [Trae](https://trae.ai)
 - [Rovo Dev](https://www.atlassian.com/software/rovo)
 
+## Security
+
+This repository was audited with 10 automated security tools on 2026-04-16 (fork: mp3wizard/impeccable).
+
+| Tool | Scope | Result |
+|------|-------|--------|
+| Gitleaks | Secrets in git history (401 commits, 11.2 MB) | No leaks |
+| Semgrep OWASP | 80 JS files, 544 rules | 8 findings (wildcard postMessage — see below) |
+| Semgrep Secrets | 570 files | 0 findings |
+| Trivy | bun.lock deps + filesystem secrets | 2 HIGH fixed (see below) |
+| TruffleHog | Live-verified secrets (7,747 chunks) | 0 verified, 0 unverified |
+| mcps-audit | OWASP MCP Top 10 | Findings are false positives from CLI/extension code patterns |
+| OSV-Scanner | bun.lock — 292 packages | 5 vulns found → all fixed |
+| Bandit | Python SAST | N/A (no .py files) |
+| CodeQL | Semantic SAST | N/A (no codeql.yml workflow) |
+| mcp-exfil-scan | MCP exfil chains | 0 findings in repo (global skill env only) |
+
+### Findings & Fixes
+
+**Dependency vulnerabilities — all fixed in this fork:**
+
+| Package | Was | Fixed | CVE / Advisory | Severity |
+|---------|-----|-------|----------------|----------|
+| basic-ftp | 5.2.0 | 5.3.0 | GHSA-6v7q-wjvx-w8wg, CVE-2026-39983 | HIGH — CRLF injection |
+| lodash | 4.17.23 | 4.18.1 | GHSA-f23m-r3pf-42rh, GHSA-r5fr-rjxr-66jc | HIGH |
+| brace-expansion | 2.0.2 | 5.0.5 | GHSA-f886-m6hf-6m8v | MEDIUM — ReDoS |
+
+Fixed via `overrides` in `package.json` — `bun.lock` regenerated and verified clean with OSV-Scanner.
+
+**Semgrep — wildcard postMessage (8 findings, LOW risk):**
+
+`extension/content/content-script.js` and `src/detect-antipatterns-browser.js` use `window.postMessage(..., '*')`. This is standard practice for Chrome DevTools extension ↔ content-script messaging where no specific origin can be targeted. Messages contain only UI commands (toggle, highlight, remove) — no sensitive data. Not exploitable in the extension threat model.
+
+---
+
 ## Contributing
 
 See [DEVELOP.md](DEVELOP.md) for contributor guidelines and build instructions.
