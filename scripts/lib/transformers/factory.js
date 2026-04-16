@@ -54,7 +54,7 @@ export function createTransformer(config) {
     .filter(Boolean);
 
   return function transform(skills, distDir, options = {}) {
-    const { prefix = '', outputSuffix = '' } = options;
+    const { prefix = '', outputSuffix = '', skillsVersion = '' } = options;
     const providerDir = path.join(distDir, `${provider}${outputSuffix}`);
     const skillsDir = path.join(providerDir, `${configDir}/skills`);
 
@@ -67,6 +67,7 @@ export function createTransformer(config) {
       .map((s) => `${prefix}${s.name}`);
 
     let refCount = 0;
+    let scriptCount = 0;
 
     for (const skill of skills) {
       const skillName = `${prefix}${skill.name}`;
@@ -77,6 +78,7 @@ export function createTransformer(config) {
         name: skillName,
         description: skill.description,
       };
+      if (skillsVersion) frontmatterObj.version = skillsVersion;
 
       for (const spec of activeFields) {
         if (spec.condition && !spec.condition(skill)) continue;
@@ -89,6 +91,10 @@ export function createTransformer(config) {
       // Build body
       const cmdPrefix = (PROVIDER_PLACEHOLDERS[placeholderKey] || {}).command_prefix || '/';
       let skillBody = replacePlaceholders(skill.body, placeholderKey, commandNames, allSkillNames);
+
+      // Replace {{scripts_path}} with provider-aware path to skill's scripts directory
+      const scriptsPath = `${configDir}/skills/${skillName}/scripts`;
+      skillBody = skillBody.replace(/\{\{scripts_path\}\}/g, scriptsPath);
       if (prefix) skillBody = prefixSkillReferences(skillBody, prefix, allSkillNames, cmdPrefix);
       if (bodyTransform) skillBody = bodyTransform(skillBody, skill);
 
@@ -105,11 +111,22 @@ export function createTransformer(config) {
           refCount++;
         }
       }
+
+      // Copy script files
+      if (skill.scripts && skill.scripts.length > 0) {
+        const scriptsOutDir = path.join(skillDir, 'scripts');
+        ensureDir(scriptsOutDir);
+        for (const script of skill.scripts) {
+          writeFile(path.join(scriptsOutDir, script.name), script.content);
+          scriptCount++;
+        }
+      }
     }
 
     const userInvocableCount = skills.filter((s) => s.userInvocable).length;
     const refInfo = refCount > 0 ? ` (${refCount} reference files)` : '';
+    const scriptInfo = scriptCount > 0 ? ` (${scriptCount} script files)` : '';
     const prefixInfo = prefix ? ` [${prefix}prefixed]` : '';
-    console.log(`✓ ${displayName}${prefixInfo}: ${skills.length} skills (${userInvocableCount} user-invocable)${refInfo}`);
+    console.log(`✓ ${displayName}${prefixInfo}: ${skills.length} skills (${userInvocableCount} user-invocable)${refInfo}${scriptInfo}`);
   };
 }

@@ -1,6 +1,7 @@
 ---
 name: animate
-description: Analyze a feature and add purposeful animations, micro-interactions, and motion effects that improve usability and delight. Use when the user mentions adding animation, transitions, micro-interactions, motion design, hover effects, loading states, or making the UI feel more alive.
+description: Review a feature and enhance it with purposeful animations, micro-interactions, and motion effects that improve usability and delight. Use when the user mentions adding animation, transitions, micro-interactions, motion design, hover effects, or making the UI feel more alive.
+version: 2.1.1
 user-invocable: true
 argument-hint: "[target]"
 ---
@@ -9,7 +10,7 @@ Analyze a feature and strategically add animations and micro-interactions that e
 
 ## MANDATORY PREPARATION
 
-Invoke /frontend-design — it contains design principles, anti-patterns, and the **Context Gathering Protocol**. Follow the protocol before proceeding — if no design context exists yet, you MUST run /teach-impeccable first. Additionally gather: performance constraints.
+Invoke /impeccable — it contains design principles, anti-patterns, and the **Context Gathering Protocol**. Follow the protocol before proceeding — if no design context exists yet, you MUST run /impeccable teach first. Additionally gather: performance constraints.
 
 ---
 
@@ -30,7 +31,7 @@ Analyze where motion would improve the experience:
    - Who's the audience? (Motion-sensitive users? Power users who want speed?)
    - What matters most? (One hero animation vs many micro-interactions?)
 
-If performance constraints or brand personality are unclear from the codebase, STOP and call the AskUserQuestion tool to clarify before proceeding.
+If any of these are unclear from the codebase, STOP and call the AskUserQuestion tool to clarify.
 
 **CRITICAL**: Respect `prefers-reduced-motion`. Always provide non-animated alternatives for users who need them.
 
