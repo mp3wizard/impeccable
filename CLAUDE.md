@@ -104,12 +104,33 @@ Local state files inside harness directories (e.g. `.claude/scheduled_tasks.lock
 ## Testing
 
 ```bash
-bun run test       # Run all tests
+bun run test            # Default suite: unit + static framework fixtures
+bun run test:live-e2e   # Opt-in: full-cycle live-mode E2E across framework fixtures
 ```
 
 Unit tests (build orchestration, detector logic) run via `bun test`. Fixture tests (jsdom-based HTML detection) run via `node --test` because bun is too slow with jsdom. The `test` script handles this split automatically.
 
 **Important:** `tests/build.test.js` uses `spyOn(transformers, 'transformCursor')` with the named exports from `scripts/lib/transformers/index.js`. Those named exports (`transformCursor`, `transformClaudeCode`, etc.) are kept specifically for test spying, even though `build.js` itself uses `createTransformer + PROVIDERS` directly. **Do not delete them as "dead code"** — I made that mistake once and broke 8 tests.
+
+### Live-mode E2E
+
+`tests/live-e2e.test.mjs` drives the entire user flow (handshake → pick → Go → cycle → accept → carbonize cleanup) against every fixture in `tests/framework-fixtures/` that declares a `runtime` block. Each fixture installs real deps, boots its framework dev server (Vite, Next, SvelteKit, Astro, Nuxt static), and runs Playwright Chromium against a deterministic fake agent that produces realistic variants in the exact format `reference/live.md` describes.
+
+```bash
+bun run test:live-e2e                                       # full suite, ~2 min, 19 fixtures
+IMPECCABLE_E2E_ONLY=vite8-react-modal bun run test:live-e2e # scope to one fixture
+IMPECCABLE_E2E_DEBUG=1 bun run test:live-e2e                # dump page DOM + dev-server tail on failure
+```
+
+**One-time setup**: `npx playwright install chromium` (the suite uses a specific Chromium build keyed to the bundled Playwright version).
+
+**Kept out of the default `bun run test`** because (a) it does real `npm install` per fixture, (b) it boots framework dev servers, (c) wall time is ~2 minutes, and (d) it requires Playwright's browser cache. Run it locally before shipping changes to anything in `source/skills/impeccable/scripts/live-*.{mjs,js}`.
+
+The agent is pluggable via a one-method interface in `tests/live-e2e/agent.mjs`: `generateVariants(event, context) → { scopedCss, variants[] }`. The default fake agent emits canned variants that exercise all three param kinds (`range`, `steps`, `toggle`). The orchestrator (wrap, write, accept, carbonize) is agent-agnostic.
+
+**LLM agent (opt-in)**: set `IMPECCABLE_E2E_AGENT=llm` to swap the fake agent for `tests/live-e2e/agents/llm-agent.mjs`, which calls Claude (default Haiku 4.5) via `@anthropic-ai/sdk`. Requires `ANTHROPIC_API_KEY` in env; the test runner skips with a clear message when it's unset. Override the model with `IMPECCABLE_E2E_LLM_MODEL=claude-sonnet-4-6` if Haiku produces unreliable JSON. Caching is on — live.md is the cacheable prefix, and after the first call subsequent fixtures pay only the cache-read rate. Pass rate on a typical sweep is 18/19; the modal fixture's intrinsic state-loss flake is amplified by LLM latency and may need a re-run. **This path hits the API and costs money** — keep it out of CI unless you really want it there.
+
+Adding a new fixture is a matter of cloning a directory under `tests/framework-fixtures/`, swapping the source files, and writing a `fixture.json`. See `tests/framework-fixtures/README.md` for the full schema.
 
 ## CLI
 
