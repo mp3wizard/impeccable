@@ -259,25 +259,26 @@ The detector catches 24 issues across AI slop (side-tab borders, purple gradient
 
 ## Security
 
-This repository was audited with 11 automated security tools on 2026-04-24 (fork: mp3wizard/impeccable).
+This repository was audited with 12 automated security tools on 2026-04-27 (fork: mp3wizard/impeccable).
 
 | Tool | Scope | Result |
 |------|-------|--------|
-| Gitleaks | Secrets in git history (528 commits, 20.6 MB) | No leaks |
-| Semgrep OWASP | 104 JS files, 544 rules | 56 findings (wildcard postMessage — see below) |
-| Semgrep Secrets | 824 files | 0 findings |
-| Trivy | bun.lock deps + filesystem secrets | 3 HIGH fixed (see below) |
-| TruffleHog | Live-verified secrets (14,663 chunks) | 0 verified, 0 unverified |
-| mcps-audit | OWASP MCP Top 10 | 404 findings — false positives from CLI/extension code patterns |
-| OSV-Scanner | bun.lock — 419 packages | 6 vulns found in 3 packages → all fixed |
+| Gitleaks | Secrets in git history (544 commits, ~21 MB) | No leaks |
+| Semgrep OWASP | 105 JS files, 70 rules | 56 findings (wildcard postMessage — see below) |
+| Semgrep Secrets | 856 files | 0 findings |
+| Trivy | bun.lock deps + filesystem secrets | 0 vulnerabilities (clean) |
+| TruffleHog | Live-verified secrets (15,179 chunks) | 0 verified, 0 unverified |
+| mcps-audit | OWASP MCP Top 10 | 468 findings — false positives from CLI/extension code patterns |
+| OSV-Scanner | bun.lock — 419 packages | 0 issues |
 | Bandit | Python SAST | N/A (no .py files) |
 | CodeQL | Semantic SAST | N/A (no codeql.yml workflow) |
-| skill-audit | 11 SKILL.md files | All LOW RISK (scores 0–15/100) |
-| mcp-exfil-scan | MCP exfil chains | 0 findings in repo (global skill env only) |
+| skill-audit | 12 SKILL.md files | All LOW RISK (scores 0–15/100) |
+| security-audit | Claude config + global skills | 30 findings — all in global user env, not this repo |
+| mcp-exfil-scan | MCP exfil chains | 11 findings — all false positives in global skill env |
 
 ### Findings & Fixes
 
-**Dependency vulnerabilities — all fixed in this fork:**
+**Dependency vulnerabilities — all fixed in this fork (from previous audit, still clean):**
 
 | Package | Was | Fixed | CVE / Advisory | Severity |
 |---------|-----|-------|----------------|----------|
