@@ -259,26 +259,26 @@ The detector catches 24 issues across AI slop (side-tab borders, purple gradient
 
 ## Security
 
-This repository was audited with 12 automated security tools on 2026-04-27 (fork: mp3wizard/impeccable).
+This repository was audited with 12 automated security tools on 2026-04-28 (fork: mp3wizard/impeccable, HEAD: 3364eb7).
 
 | Tool | Scope | Result |
 |------|-------|--------|
-| Gitleaks | Secrets in git history (544 commits, ~21 MB) | No leaks |
-| Semgrep OWASP | 105 JS files, 70 rules | 56 findings (wildcard postMessage — see below) |
-| Semgrep Secrets | 856 files | 0 findings |
-| Trivy | bun.lock deps + filesystem secrets | 0 vulnerabilities (clean) |
-| TruffleHog | Live-verified secrets (15,179 chunks) | 0 verified, 0 unverified |
-| mcps-audit | OWASP MCP Top 10 | 468 findings — false positives from CLI/extension code patterns |
-| OSV-Scanner | bun.lock — 419 packages | 0 issues |
+| Gitleaks | Secrets in git history (556 commits, ~22 MB) | No leaks |
+| Semgrep OWASP | 107 JS files, 70 rules | 60 findings (wildcard postMessage — see below) |
+| Semgrep Secrets | 907 files | 0 findings |
+| Trivy | bun.lock deps + filesystem secrets | 0 vulnerabilities (430 packages, clean) |
+| TruffleHog | Live-verified secrets (15,735 chunks) | 0 verified, 0 unverified |
+| mcps-audit | OWASP MCP Top 10 | 577 findings — false positives from CLI/extension code patterns |
+| OSV-Scanner | bun.lock — 430 packages | 0 issues |
 | Bandit | Python SAST | N/A (no .py files) |
 | CodeQL | Semantic SAST | N/A (no codeql.yml workflow) |
-| skill-audit | 12 SKILL.md files | All LOW RISK (scores 0–15/100) |
-| security-audit | Claude config + global skills | 30 findings — all in global user env, not this repo |
+| skill-audit | 5 SKILL.md files (sample) | All LOW RISK (scores 0–15/100) |
+| security-audit | Claude config + global skills | 31 findings — all in global user env, not this repo |
 | mcp-exfil-scan | MCP exfil chains | 11 findings — all false positives in global skill env |
 
 ### Findings & Fixes
 
-**Dependency vulnerabilities — all fixed in this fork (from previous audit, still clean):**
+**Dependency vulnerabilities — all previously fixed overrides still clean:**
 
 | Package | Was | Fixed | CVE / Advisory | Severity |
 |---------|-----|-------|----------------|----------|
@@ -286,11 +286,11 @@ This repository was audited with 12 automated security tools on 2026-04-27 (fork
 | lodash | 4.17.23 | 4.18.0 | GHSA-f23m-r3pf-42rh, GHSA-r5fr-rjxr-66jc | HIGH + MEDIUM |
 | brace-expansion | 2.0.2 | 2.0.3 | GHSA-f886-m6hf-6m8v | MEDIUM — ReDoS |
 
-Fixed via `overrides` in `package.json` — `bun.lock` regenerated and verified clean with Trivy (0 vulnerabilities).
+No new CVEs in the 11 packages added by the 2026-04-28 upstream sync. Fixed via `overrides` in `package.json` — `bun.lock` regenerated and verified clean with Trivy (0 vulnerabilities).
 
-**Semgrep — wildcard postMessage (56 findings, LOW risk):**
+**Semgrep — wildcard postMessage (60 findings, LOW risk):**
 
-`extension/content/content-script.js`, `src/detect-antipatterns-browser.js`, and all distributed copies of `live-browser.js` use `window.postMessage(..., '*')`. This is standard practice for Chrome DevTools extension ↔ content-script messaging where no specific origin can be targeted. Messages contain only UI commands (toggle, highlight, remove, scan) — no sensitive data. Not exploitable in the extension threat model.
+`extension/content/content-script.js`, `src/detect-antipatterns-browser.js`, `plugin/skills/impeccable/scripts/live-browser.js`, and all distributed copies of `live-browser.js` use `window.postMessage(..., '*')`. This is standard practice for Chrome DevTools extension ↔ content-script messaging where no specific origin can be targeted. Messages contain only UI commands (toggle, highlight, remove, scan) — no sensitive data. Not exploitable in the extension threat model.
 
 ---
 
