@@ -137,7 +137,7 @@
 
 
       </div>
-      <p class="hero-version-link"><a href="#changelog">v3.0.1: live mode hardened</a></p>
+      <p class="hero-version-link"><a href="#changelog">v3.0.2: leaner Claude Code plugin</a></p>
       </div>
 
 
@@ -325,28 +325,28 @@
 
             <article class="why-panel why-panel--vizfirst is-active" id="why-panel-vz" role="tabpanel" data-index="vz">
               <h3 class="why-panel-title">Picture it. Build it. Ship the page.</h3>
-              <p class="why-panel-body">Neon Mirai started as generated reference images: a brand toolkit and a hi-fi conference mock. <code>/impeccable craft</code> turned them into a real responsive website, then iterated in the browser until the live page matched the direction.</p>
+              <p class="why-panel-body">Neo Mirai started as generated reference images: a brand toolkit and a hi-fi conference mock. <code>/impeccable craft</code> turned them into a real responsive website, then iterated in the browser until the live page matched the direction.</p>
               <div class="why-visual why-visual--vizfirst">
                 <figure class="why-vz-plate why-vz-plate--hifi">
                   <span class="why-vz-plate-kind">01 &middot; Visualize</span>
-                  <a class="why-vz-plate-frame" href="/cases/neon-mirai" aria-label="Read the Neon Mirai case study">
+                  <a class="why-vz-plate-frame" href="/cases/neo-mirai" aria-label="Read the Neo Mirai case study">
                     <img src="assets/openai_image_2_hifi.jpg" alt="Auto-generated hi-fi landing-page mock in editorial warm-paper style." loading="lazy" width="864" height="1821" />
                   </a>
                 </figure>
                 <figure class="why-vz-plate why-vz-plate--brand">
                   <span class="why-vz-plate-kind">02 &middot; Shape</span>
-                  <a class="why-vz-plate-frame" href="/cases/neon-mirai" aria-label="Read the Neon Mirai case study">
+                  <a class="why-vz-plate-frame" href="/cases/neo-mirai" aria-label="Read the Neo Mirai case study">
                     <img src="assets/openai_image_2_brand.jpg" alt="Auto-generated brand toolkit: identity lockups, palette, type, icon system, and application mocks for a fictional AI design conference." loading="lazy" width="1536" height="1024" />
                   </a>
                 </figure>
                 <figure class="why-vz-plate why-vz-plate--live">
                   <span class="why-vz-plate-kind">03 &middot; Live build</span>
-                  <a class="why-vz-plate-frame" href="/neon-mirai/" aria-label="Open the Neon Mirai live build">
-                    <img src="assets/cases/neon-mirai/live-fold.png" alt="Finished Neon Mirai website hero and agenda, implemented from the generated conference mock." loading="lazy" width="1440" height="1100" />
+                  <a class="why-vz-plate-frame" href="/neo-mirai/" aria-label="Open the Neo Mirai live build">
+                    <img src="assets/cases/neo-mirai/live-fold.png" alt="Finished Neo Mirai website hero and agenda, implemented from the generated conference mock." loading="lazy" width="1440" height="1100" />
                   </a>
                 </figure>
               </div>
-              <p class="why-panel-meta">A generated reference became shipped HTML, CSS, assets, responsive fixes, and interaction polish. &middot; <a href="/cases/neon-mirai">Read the case &rarr;</a> &middot; <a href="/neon-mirai/">Open the live build &rarr;</a></p>
+              <p class="why-panel-meta">A generated reference became shipped HTML, CSS, assets, responsive fixes, and interaction polish. &middot; <a href="/cases/neo-mirai">Read the case &rarr;</a> &middot; <a href="/neo-mirai/">Open the live build &rarr;</a></p>
             </article>
 
             <article class="why-panel why-panel--antidote" id="why-panel-1" role="tabpanel" data-index="1" hidden>
@@ -933,6 +933,17 @@
       </div>
 
       <div class="changelog-list" data-reveal>
+        <div class="changelog-entry">
+          <div class="changelog-version-header">
+            <span class="changelog-version">v3.0.2</span>
+            <span class="changelog-date">April 27, 2026</span>
+          </div>
+          <ul class="changelog-items">
+            <li><strong>Claude Code plugin install shrunk by 380×.</strong> The marketplace now ships only the runtime payload (~770 KB) instead of the entire monorepo (291 MB). Plugin source moved from <code>./</code> to <code>./plugin</code>, so the cache no longer copies <code>node_modules</code>, build scripts, tests, or the other harness directories. Reported in <a href="https://github.com/pbakaus/impeccable/issues/107" target="_blank" rel="noopener">#107</a>.</li>
+            <li><strong>Slash commands now register reliably on Claude Code.</strong> The <code>skills</code> field in <code>plugin.json</code> was missing the trailing slash that the documented schema expects (<code>"./skills/"</code>, not <code>"./skills"</code>), which caused Claude Code's plugin loader to skip command registration on some setups. Reported by three users in <a href="https://github.com/pbakaus/impeccable/issues/86" target="_blank" rel="noopener">#86</a>.</li>
+          </ul>
+        </div>
+
         <div class="changelog-entry">
           <div class="changelog-version-header">
             <span class="changelog-version">v3.0.1</span>
