@@ -277,21 +277,23 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-This repository was audited with 12 automated security tools on 2026-04-28 (fork: mp3wizard/impeccable, HEAD: 3364eb7).
+This repository was audited with 13 automated security tools on 2026-04-29 (fork: mp3wizard/impeccable, HEAD: b244480).
+
+**2 HIGH CVEs fixed this cycle** (GHSA-rp42-5vxx-qpwr basic-ftp, GHSA-5j98-mcp5-4vw2 glob) via `pnpm.overrides` in package.json.
 
 | Tool | Scope | Result |
 |------|-------|--------|
-| Gitleaks | Secrets in git history (556 commits, ~22 MB) | No leaks |
-| Semgrep OWASP | 107 JS files, 70 rules | 60 findings (wildcard postMessage — see below) |
-| Semgrep Secrets | 907 files | 0 findings |
-| Trivy | bun.lock deps + filesystem secrets | 0 vulnerabilities (430 packages, clean) |
-| TruffleHog | Live-verified secrets (15,735 chunks) | 0 verified, 0 unverified |
-| mcps-audit | OWASP MCP Top 10 | 577 findings — false positives from CLI/extension code patterns |
-| OSV-Scanner | bun.lock — 430 packages | 0 issues |
+| Gitleaks | Secrets in git history (583 commits, ~23.58 MB) | No leaks |
+| Semgrep OWASP | 109 JS files, 70 rules | 64 findings (wildcard postMessage — accepted browser extension pattern) |
+| Semgrep Secrets | 961 files | 0 findings |
+| Trivy | bun.lock + pnpm-lock.yaml | 0 vulnerabilities (post-fix) |
+| TruffleHog | Live-verified secrets (16,970 chunks) | 0 verified, 0 unverified |
+| mcps-audit | OWASP MCP Top 10 | 592 findings — false positives from CLI/extension code patterns |
+| OSV-Scanner | bun.lock + pnpm-lock.yaml | 0 issues (post-fix; 2 HIGH fixed) |
 | Bandit | Python SAST | N/A (no .py files) |
 | CodeQL | Semantic SAST | N/A (no codeql.yml workflow) |
-| skill-audit | 5 SKILL.md files (sample) | All LOW RISK (scores 0–15/100) |
-| security-audit | Claude config + global skills | 31 findings — all in global user env, not this repo |
+| skill-audit | source/ + .claude/ SKILL.md | LOW RISK (score 15/100) |
+| security-audit | Claude config + global skills | 31 findings — all in global user env or false positives |
 | mcp-exfil-scan | MCP exfil chains | 11 findings — all false positives in global skill env |
 
 ### Findings & Fixes
