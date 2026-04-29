@@ -284,7 +284,7 @@ This repository was audited with 13 automated security tools on 2026-04-29 (fork
 | Tool | Scope | Result |
 |------|-------|--------|
 | Gitleaks | Secrets in git history (583 commits, ~23.58 MB) | No leaks |
-| Semgrep OWASP | 109 JS files, 70 rules | 64 findings (wildcard postMessage — accepted browser extension pattern) |
+| Semgrep OWASP | 109 JS files, 70 semgrep configs | 64 findings (wildcard postMessage — accepted browser extension pattern) |
 | Semgrep Secrets | 961 files | 0 findings |
 | Trivy | bun.lock + pnpm-lock.yaml | 0 vulnerabilities (post-fix) |
 | TruffleHog | Live-verified secrets (16,970 chunks) | 0 verified, 0 unverified |
