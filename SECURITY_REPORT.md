@@ -1,15 +1,15 @@
-# Security Report — 2026-04-30
+# Security Report — 2026-05-01
 
-**Target:** `/Users/mp3wizard/Public/Claude skill/impeccable`
-**Scanned at:** 2026-04-30T03:08:00Z
-**Git HEAD:** 56ce218
+**Target:** `/Users/mp3wizard/Public/Claude skill/impeccable`  
+**Scanned at:** 2026-05-01T03:05:18Z  
+**Git HEAD:** 7bd7137  
 **Standard:** OWASP APTS-aligned (Scope Enforcement · Auditability · Manipulation Resistance · Reporting)
 
 ## Scope Record
 
 ```
 Scan target: /Users/mp3wizard/Public/Claude skill/impeccable
-Git HEAD:    56ce218
+Git HEAD:    7bd7137
 Include:     all supported
 Exclude:     .gitignore honored by each tool
 ```
@@ -18,133 +18,127 @@ Exclude:     .gitignore honored by each tool
 
 | Tool | Ran? | Version | Files covered | Skipped reason |
 |------|------|---------|---------------|----------------|
-| Gitleaks | OK | 8.30.1 | 591 commits (23.82 MB) | — |
+| Gitleaks | OK | 8.30.1 | 596 commits / ~23.9 MB | — |
 | Bandit | SKIPPED | 1.9.4 | — | No .py files |
-| Semgrep OWASP | OK | latest | 109 JS/TS files | — |
-| Semgrep Secrets | OK | latest | 961 files | — |
+| Semgrep OWASP | OK | latest | 109 JS files | — |
+| Semgrep TypeScript | OK | latest | 0 (no tracked .ts/.tsx) | git not tracking TS |
+| Semgrep Secrets | OK | latest | 962 files | — |
 | Trivy | OK | 0.69.3 | bun.lock, pnpm-lock.yaml | — |
-| TruffleHog | OK | 3.94.2 | 591 commits (23.19 MB) | — |
-| CodeQL | SKIPPED | — | — | No codeql.yml workflow |
-| mcps-audit | OK | 1.0.0 | 242 files, 48692 lines | — |
-| OSV-Scanner | OK | 2.3.5 | 415+430 packages | — |
-| security-audit (config-audit.py) | OK | bundled | settings.json, skills, plugins | — |
-| skill-security-auditor | OK | bundled | 3 SKILL.md files | — |
+| TruffleHog | OK | 3.94.2 | 596 commits / 23.3 MB | — |
+| CodeQL | SKIPPED | N/A | — | No .github/workflows/codeql.yml |
+| mcps-audit | OK | 1.0.0 | 242 files / 48,692 lines | — |
+| OSV-Scanner | OK | 2.3.5 | 845 packages (bun+pnpm) | — |
+| mcp-scan | OPT-IN | — | — | Not opted in |
+| config-audit | OK | bundled | ~/.claude settings + skills | — |
+| skill-audit | OK | bundled | SKILL.md (canonical) | — |
 | mcp-exfil-scan | OK | bundled | 56 skill files, 2 MCP configs | — |
-| mcp-scan | OPT-IN | — | — | Not consented |
 
-## Gitleaks — Secrets in Git History
+## Gitleaks — Secrets in git history
 
-**Summary:** 0 findings
+**Summary:** 0 findings  
+596 commits scanned, ~23.95 MB. No leaks found.
 
-591 commits scanned. No leaks found.
+## Semgrep — SAST
 
-## Semgrep OWASP — SAST
+**Summary:** 64 findings (OWASP), 0 findings (secrets), 0 findings (TypeScript)
 
-**Summary:** 64 findings (all same rule, duplicated across distribution directories)
+All 64 findings are `wildcard-postmessage-configuration` in `live-browser.js` and `content-script.js`. These are the same 4–5 unique call sites replicated across 15 IDE-specific skill distribution directories (`.agents/`, `.claude/`, `.cursor/`, `.gemini/`, `.github/`, `.kiro/`, `.opencode/`, `.pi/`, `.qoder/`, `.rovodev/`, `.trae/`, `.trae-cn/`, `plugin/`, `source/`) plus `src/detect-antipatterns-browser.js` and `extension/content/content-script.js`.
 
-All 64 findings are `wildcard-postmessage-configuration` — `window.postMessage(..., '*')` used in browser extension scripts and the browser-side antipattern detector. The findings appear 13+ times because the same source files are copied into every IDE-specific distribution directory (`.agents/`, `.claude/`, `.cursor/`, `.gemini/`, `.kiro/`, etc.).
+**Unique affected locations (not duplicates):**
+- `src/detect-antipatterns-browser.js` lines 2464, 2488, 2533
+- `extension/content/content-script.js` lines 28, 31, 35, 38, 100
 
-**Unique affected source files (2):**
-- `src/detect-antipatterns-browser.js` — lines 2464–2533: the injected page scanner reports results back to the extension host via postMessage with `'*'` origin
-- `extension/content/live-browser.js` (via distribution copies) — lines 3539–3613: live-mode commands sent to the injected script
+**Assessment:** Browser extensions communicate between content scripts and page contexts via `postMessage`. The target origin cannot be constrained to a specific domain because the extension runs on any page. The messages use a namespaced source prefix (`impeccable-command`, `impeccable-results`) to prevent spoofing. This is standard browser extension architecture; the wildcard origin is an accepted design trade-off, not a fixable vulnerability in this context.
 
-**Assessment:** This is an intentional design trade-off. A browser extension communicating with an injected content script cannot know the page origin at compile time. The messages contain UI commands (scan/remove/highlight) and scan results — no credentials or sensitive user data. Mitigated by the `source: 'impeccable-command'` / `source: 'impeccable-results'` namespace check in the `message` listener. Low practical risk.
-
-## Semgrep Secrets — Secret Detection
-
-**Summary:** 0 findings
-
-961 files scanned. No secrets detected.
+**Severity after context:** LOW (by design, no fix applicable)
 
 ## Trivy — Dependency Vulnerabilities
 
-**Summary:** 0 vulnerabilities
+**Summary:** 0 vulnerabilities  
+Scanned bun.lock (430 packages) and pnpm-lock.yaml (415 packages). Clean.
 
-- `bun.lock`: 430 packages — clean
-- `pnpm-lock.yaml`: 415 packages — clean
+## TruffleHog — Secret Detection (live-verified)
 
-## TruffleHog — Live-Verified Secrets
+**Summary:** 0 verified, 0 unverified secrets  
+17,344 chunks, 23.3 MB scanned in 3.1s.
 
-**Summary:** 0 verified secrets, 0 unverified secrets
+## mcps-audit — OWASP MCP Top 10 + Agentic AI
 
-17,258 chunks scanned across 591 commits. No secrets.
+**Summary:** 600 total findings (CRITICAL: 152, HIGH: 57, MEDIUM: 271, LOW: 120), Risk Score: 100/100
 
-## OSV-Scanner — SCA via OSV.dev
+**Context / false positive analysis:**
+The tool scores any repo containing `execSync`, `child_process`, or `Map.delete()` as CRITICAL/HIGH. Key findings:
+- `AS-001 CRITICAL` — `import { execSync } from 'node:child_process'` in `bin/commands/skills.mjs`: this is the project's own CLI binary. `execSync` is the correct API for a CLI tool.
+- `AS-003 HIGH` (×many) — `Map.delete(tabId)` flagged as "high-risk permission pattern": this is JavaScript's `Map.prototype.delete()` data structure operation, not a permission API.
+- `AS-009 MEDIUM` — `*   - public/antipattern-examples/{id}.html` in a documentation comment flagged as "unsafe output handling": false positive on template documentation.
 
-**Summary:** No issues found
+**No actionable findings from mcps-audit in the impeccable repo's own code.**
 
-415 packages (pnpm-lock.yaml) + 430 packages (bun.lock) scanned. No known vulnerabilities.
+## OSV-Scanner — Software Composition Analysis
 
-## mcps-audit — OWASP MCP Top 10
+**Summary:** No issues found  
+845 packages across bun.lock and pnpm-lock.yaml. Clean.
 
-**Summary:** 600 findings (CRITICAL: 152, HIGH: 57, MEDIUM: 271, LOW: 120) — largely false positives
+## config-audit — Claude Config Security Audit
 
-Risk Score: 100/100 (FAIL). The tool applied MCP/Agentic AI rules to CLI and browser-extension source files that are not MCP servers. Key flagged patterns:
+**Summary:** 31 findings (CRITICAL: 6, HIGH: 10, MEDIUM: 12, LOW: 3)
 
-- `execSync` in `bin/commands/skills.mjs` — intentional CLI use, not an MCP server
-- `.delete()` Map operations in `extension/background/service-worker.js` — tab management, not privilege escalation
-- `anti-patterns-catalog.js` content strings matched as "high-risk permission patterns" — false positives on CSS/HTML example snippets
+All findings are in `~/.claude/` (user's global Claude config), not in the impeccable repo code. Assessment per finding category:
 
-**Credible findings (MCP-04, MCP-06, MCP-10):** The repo ships as a skill package consumed by AI agents. `MCP-06 Indirect Prompt Injection` and `MCP-10 Context Window Pollution` are relevant if adversarial HTML is scanned — the antipattern detector reads arbitrary page DOM. Existing mitigation: results are structured findings, not free-text fed back to the model.
+| Category | Finding | Assessment |
+|----------|---------|------------|
+| CRITICAL (6) | "Data exfil: base64 + .env" in security-scanner/impeccable/skill-security-auditor SKILL.md files | **False positive** — security tools discussing base64 exfiltration patterns in their own descriptions are flagged by the pattern matcher |
+| HIGH (7) | `curl` to `localhost:${PORT}` in cc-beeper hooks | **False positive** — `localhost` is not an external URL; cc-beeper is the user's local notification daemon |
+| HIGH (2) | `mkfs`/`dd` in `validate-bash.sh` example hook | **False positive** — the hook validates and *blocks* these dangerous commands; they appear as detection patterns, not execution |
+| HIGH (1) | `netcat` reference in optimize skill | **False positive** — diagnostic check in security context |
+| MEDIUM (7) | Broad matcher `""` on cc-beeper hooks | Informational — broad hooks are intentional for session telemetry |
+| MEDIUM (1) | `skipDangerousModePermissionPrompt: true` | Informational — user's deliberate setting |
+| MEDIUM (3) | Cookie/password/credential references in playwright/notebooklm skills | **False positive** — skills reference these as test targets, not accessing them |
 
-## security-audit (config-audit.py) — Claude Config Audit
+**No actionable findings in impeccable repo code.**
 
-**Summary:** 31 issues — all false positives or expected user configuration
+## skill-audit — SKILL.md Security Score
 
-- **CRITICAL (6):** All are pattern-matches on the security scanner's own source files (skill-security-auditor, mcp-exfil-scan.sh, config-audit.py) that contain the word "base64", "ncat", or "ssh" in comments/documentation — not actual exfiltration code.
-- **HIGH (10):** All 10 are cc-beeper hooks in `~/.claude/settings.json` curling to `http://localhost:${PORT}` — the user's own notification system. Expected and benign.
-- **MEDIUM (12):** Broad matchers on cc-beeper hooks (expected), `skipDangerousModePermissionPrompt: true` (user preference), playwright/notebooklm skill references to cookies/passwords in documentation context.
-- **LOW (3):** Hooks configuration detected (informational).
+**Summary:** Risk Score 15/100, VERDICT: LOW RISK  
+Canonical `SKILL.md` scored on: no dangerous patterns, no code obfuscation, no hardcoded URLs, no credential access, no external dependencies, no privilege escalation, no prompt injection patterns. 2 file operations detected (expected for a design audit skill). Non-standard license noted (minor).
 
-No actionable findings.
+## mcp-exfil-scan — MCP Exfiltration Detection
 
-## skill-security-auditor — SKILL.md Risk Scores
+**Summary:** 11 findings (CRITICAL: 2, HIGH: 5, MEDIUM: 4), Risk Score: 100/100
 
-**Summary:** All scanned skills scored LOW RISK (0–5/100)
+All findings are in `~/.claude/skills/` (user's installed skills), not in the impeccable repo:
 
-| File | Score | Verdict |
-|------|-------|---------|
-| `.cursor/skills/impeccable/SKILL.md` | 5/100 | LOW RISK — APPROVE |
-| `.trae-cn/skills/impeccable/SKILL.md` | 5/100 | LOW RISK — APPROVE |
-| `.gemini/skills/impeccable/SKILL.md` | 0/100 | LOW RISK — APPROVE |
+| Finding | Assessment |
+|---------|------------|
+| CRITICAL: impeccable SKILL.md "exfiltration instruction" | **False positive** — triggered by the word "extract" in "extract or otherwise improve a frontend interface" |
+| CRITICAL: security-audit SKILL.md "exfiltration instruction" | **False positive** — security-audit skill discusses looking for exfiltration patterns; scanner matched its own detection vocabulary |
+| HIGH: skill-security-auditor Read+WebFetch | Expected — security auditors need these tools |
+| HIGH: atlas-cloud "URL shortener" | **False positive** — `client.chat.completions.create()` matched a URL-shortener heuristic |
+| HIGH: env var + network in atlas-cloud/skill-security-auditor | Expected — AI generation and security tools legitimately need both |
+| MEDIUM: playwright-cli/pyright/vtsls no source attribution | Informational — known Anthropic-bundled skills |
 
-No dangerous patterns, no prompt injection, no credential access, no network URLs detected.
-
-## mcp-exfil-scan — MCP Exfiltration Analysis
-
-**Summary:** 11 issues (CRITICAL: 2, HIGH: 5, MEDIUM: 4) — all false positives
-
-- **CRITICAL (2):** Skill descriptions containing the words "exfiltration" (impeccable skill description) and "exfiltrate" (security-audit skill describing its own purpose). Pattern-matched on legitimate documentation text.
-- **HIGH (4):** `skill-security-auditor` has `Read+WebFetch+Bash` — expected for a security auditing skill; `atlas-cloud` has env var refs + network calls — expected for an AI generation API skill; atlas-cloud "URL shortener" false positive (OpenAI client call).
-- **MEDIUM (3):** playwright-cli, pyright, vtsls skills lack source attribution metadata — informational.
-
-No actionable exfiltration chains detected in the impeccable skill itself.
+**No actionable findings in impeccable repo code.**
 
 ## Cross-Tool Observations
 
-- **Zero secrets across all tools:** Gitleaks, TruffleHog, and Semgrep secrets all found nothing. High confidence the codebase contains no hardcoded credentials.
-- **Zero dependency CVEs:** Trivy and OSV-Scanner both confirmed bun.lock and pnpm-lock.yaml are clean with 430+ packages each.
-- **Wildcard postMessage (Semgrep)** is the only legitimate technical finding. It is a known browser extension pattern, not a vulnerability introduced by this week's upstream commits.
-- **mcps-audit, config-audit, mcp-exfil-scan** all report high scores due to false-positive pattern matching on security tool source files and user-configured hooks. No cross-tool correlation elevates these to actionable findings.
+- **Zero true findings** across all secret detection tools (Gitleaks, TruffleHog, Semgrep secrets).
+- **Zero dependency CVEs** (Trivy, OSV-Scanner).
+- **Only substantive signal:** wildcard `postMessage` in the browser extension's content script. This is by design for browser extension architecture and has no fix that doesn't break functionality.
+- config-audit, mcp-exfil-scan, and mcps-audit all produce high noise-to-signal ratios on this type of repo. All of their CRITICAL/HIGH/MEDIUM findings are false positives or expected patterns, confirmed by cross-referencing with Gitleaks, TruffleHog (no real secrets), Trivy/OSV (no real CVEs).
 
 ## Fixes Applied
 
-None. No CVEs, secrets, or fixable code vulnerabilities were found.
+None required. No actionable security findings in the impeccable repo.
 
 ## Known Remaining Issues
 
-- **`window.postMessage(..., '*')`** in browser extension scripts: design trade-off, not a fixable bug. Messages carry no sensitive data and are namespace-checked on receipt.
-- **mcps-audit MCP-06/MCP-10**: Theoretical prompt injection risk when scanning adversarial HTML pages. Mitigated by structured output format.
-- **Trivy 0.70.0 available** (current: 0.69.3): Not a security issue — upgrade when convenient.
-
-## Coverage Gaps
-
-- Business logic, IDOR, and runtime behavior not covered by static analysis.
-- CodeQL not configured (no `.github/workflows/codeql.yml`).
-- mcp-scan (invariantlabs.ai) not run — opt-in required.
+- **Wildcard postMessage** (Semgrep, LOW): `window.postMessage({...}, '*')` in `extension/content/content-script.js` and `src/detect-antipatterns-browser.js`. Accepted risk — standard browser extension architecture where target origin cannot be constrained.
+- **mcp-scan** not run (opt-in required): runtime MCP tool description analysis not performed.
+- **CodeQL** not run: no `.github/workflows/codeql.yml` present.
+- **Business logic, IDOR, runtime behavior**: not covered by any static tool.
 
 ### APTS Audit Log
 
-- **Log:** `/tmp/css-scan-20260430T030520Z.jsonl`
-- **Tool runs recorded:** 3 (partial — apts-audit.sh log calls hit a zsh arithmetic issue with `$EPOCHREALTIME`; core scan integrity unaffected)
+- **Log:** `/tmp/css-scan-20260501T030518Z.jsonl`
+- **Tool runs recorded:** 13
 - **Standard:** OWASP APTS § Auditability

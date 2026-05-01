@@ -277,22 +277,22 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-This repository was audited with 12 automated security tools on 2026-04-30 (fork: mp3wizard/impeccable, HEAD: 56ce218).
+This repository was audited with 13 automated security tools on 2026-05-01 (fork: mp3wizard/impeccable, HEAD: 7bd7137).
 
-**No new CVEs this cycle.** All previously applied overrides remain clean. Full details in [SECURITY_REPORT.md](SECURITY_REPORT.md).
+**No new CVEs this cycle.** Zero actionable findings in the impeccable repo itself. Full details in [SECURITY_REPORT.md](SECURITY_REPORT.md).
 
 | Tool | Scope | Result |
 |------|-------|--------|
-| Gitleaks | Secrets in git history (591 commits, ~23.82 MB) | 0 leaks |
+| Gitleaks | Secrets in git history (596 commits, ~23.95 MB) | 0 leaks |
 | Semgrep OWASP | 109 JS files | 64 findings (wildcard postMessage — accepted browser extension pattern) |
-| Semgrep Secrets | 961 files | 0 findings |
+| Semgrep Secrets | 962 files | 0 findings |
 | Trivy | bun.lock + pnpm-lock.yaml (430+415 packages) | 0 vulnerabilities |
-| TruffleHog | Live-verified secrets (17,258 chunks) | 0 verified, 0 unverified |
+| TruffleHog | Live-verified secrets (17,344 chunks) | 0 verified, 0 unverified |
 | mcps-audit | OWASP MCP Top 10 | 600 findings — false positives from CLI/extension code patterns |
 | OSV-Scanner | bun.lock + pnpm-lock.yaml | 0 issues |
 | Bandit | Python SAST | N/A (no .py files) |
 | CodeQL | Semantic SAST | N/A (no codeql.yml workflow) |
-| skill-audit | 3 SKILL.md files | LOW RISK (score 0–5/100) |
+| skill-audit | canonical SKILL.md | LOW RISK (score 15/100) |
 | security-audit | Claude config + global skills | 31 findings — all in global user env or false positives |
 | mcp-exfil-scan | MCP exfil chains | 11 findings — all false positives in global skill env |
 
