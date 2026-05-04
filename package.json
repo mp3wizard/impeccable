@@ -26,6 +26,7 @@
   "engines": {
     "node": ">=18"
   },
+  "packageManager": "bun@1.3.11",
   "type": "module",
   "bin": {
     "impeccable": "bin/cli.js"
@@ -41,16 +42,19 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "bun run scripts/build.js",
+    "build:skills": "bun run scripts/build.js",
+    "build:site": "npx astro build",
+    "build": "bun run build:skills && bun run build:site && cp -R dist build/_data/dist",
     "build:browser": "node scripts/build-browser-detector.js",
     "build:extension": "node scripts/build-extension.js",
     "clean": "rm -rf dist build",
     "rebuild": "bun run clean && bun run build",
-    "dev": "bun run server/index.js",
-    "preview": "bun run build && wrangler pages dev",
+    "dev": "npx astro dev",
+    "preview": "bun run build && npx astro preview",
     "deploy": "bun run build && wrangler pages deploy build/",
-    "test": "bun test tests/build.test.js tests/detect-antipatterns.test.js tests/windows-path-fix.test.js && node --test tests/detect-antipatterns-fixtures.test.mjs && node --test tests/detect-antipatterns-browser.test.mjs && node --test tests/cleanup-deprecated.test.mjs && node --test tests/live-wrap.test.mjs && node --test tests/live-accept.test.mjs && node --test tests/live-inject.test.mjs && node --test tests/live-server.test.mjs && node --test tests/live-browser-regression.test.mjs && node --test tests/framework-fixtures.test.mjs",
+    "test": "bun test tests/build.test.js tests/detect-antipatterns.test.js tests/windows-path-fix.test.js && node --test tests/detect-antipatterns-fixtures.test.mjs && node --test tests/detect-antipatterns-browser.test.mjs && node --test tests/cleanup-deprecated.test.mjs && node --test tests/impeccable-paths.test.mjs && node --test tests/live-wrap.test.mjs && node --test tests/live-reference.test.mjs && node --test tests/live-accept.test.mjs && node --test tests/live-inject.test.mjs && node --test tests/live-poll.test.mjs && node --test tests/live-server.test.mjs && node --test tests/live-browser-regression.test.mjs && node --test tests/live-session-store.test.mjs && node --test tests/live-browser-session.test.mjs && node --test tests/live-browser-source.test.mjs && node --test tests/live-completion.test.mjs && node --test tests/live-recovery-commands.test.mjs && node --test tests/framework-fixtures.test.mjs",
     "test:live-e2e": "node --test --test-timeout=600000 tests/live-e2e.test.mjs",
+    "audit": "bun audit --audit-level=moderate",
     "prepack": "cp README.md README.repo.md && cp README.npm.md README.md",
     "postpack": "cp README.repo.md README.md && rm README.repo.md",
     "release:skill": "node scripts/release.mjs skill",
@@ -78,6 +82,8 @@
     }
   },
   "devDependencies": {
+    "astro": "^6.2.1",
+    "@paper-design/shaders": "^0.0.76",
     "@ai-sdk/anthropic": "^3.0.71",
     "@ai-sdk/openai": "^3.0.53",
     "@anthropic-ai/claude-agent-sdk": "^0.2.119",
