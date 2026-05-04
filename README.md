@@ -277,19 +277,19 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-This repository was audited with 13 automated security tools on 2026-05-01 (fork: mp3wizard/impeccable, HEAD: 7bd7137).
+This repository was audited with 13 automated security tools on 2026-05-04 (fork: mp3wizard/impeccable, HEAD: accf010).
 
-**No new CVEs this cycle.** Zero actionable findings in the impeccable repo itself. Full details in [SECURITY_REPORT.md](SECURITY_REPORT.md).
+**3 HIGH CVEs fixed this cycle** (basic-ftp: CVE-2026-39983, GHSA-6v7q-wjvx-w8wg, GHSA-rp42-5vxx-qpwr) — transitive deps resolved by regenerating bun.lock with existing package.json overrides. Full details in [SECURITY_REPORT.md](SECURITY_REPORT.md).
 
 | Tool | Scope | Result |
 |------|-------|--------|
-| Gitleaks | Secrets in git history (596 commits, ~23.95 MB) | 0 leaks |
-| Semgrep OWASP | 109 JS files | 64 findings (wildcard postMessage — accepted browser extension pattern) |
-| Semgrep Secrets | 962 files | 0 findings |
-| Trivy | bun.lock + pnpm-lock.yaml (430+415 packages) | 0 vulnerabilities |
-| TruffleHog | Live-verified secrets (17,344 chunks) | 0 verified, 0 unverified |
-| mcps-audit | OWASP MCP Top 10 | 600 findings — false positives from CLI/extension code patterns |
-| OSV-Scanner | bun.lock + pnpm-lock.yaml | 0 issues |
+| Gitleaks | Secrets in git history (624 commits, ~27.5 MB) | 0 leaks |
+| Semgrep OWASP | 120 JS/TS files | 64 findings (wildcard postMessage — accepted browser extension pattern) |
+| Semgrep Secrets | 1103 files | 0 findings |
+| Trivy | bun.lock + pnpm-lock.yaml | 0 vulnerabilities (3 HIGH fixed via bun install) |
+| TruffleHog | Live-verified secrets (22,209 chunks) | 0 verified, 0 unverified |
+| mcps-audit | OWASP MCP Top 10 | 632 findings — false positives from CLI/extension code patterns |
+| OSV-Scanner | bun.lock + pnpm-lock.yaml (1368 packages) | 8 findings resolved via bun.lock regeneration |
 | Bandit | Python SAST | N/A (no .py files) |
 | CodeQL | Semantic SAST | N/A (no codeql.yml workflow) |
 | skill-audit | canonical SKILL.md | LOW RISK (score 15/100) |
