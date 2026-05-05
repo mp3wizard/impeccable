@@ -277,40 +277,39 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-This repository was audited with 13 automated security tools on 2026-05-04 (fork: mp3wizard/impeccable, HEAD: accf010).
+This repository was audited with 12 automated security tools on 2026-05-05 (fork: mp3wizard/impeccable, HEAD: a422f7f0).
 
-**3 HIGH CVEs fixed this cycle** (basic-ftp: CVE-2026-39983, GHSA-6v7q-wjvx-w8wg, GHSA-rp42-5vxx-qpwr) — transitive deps resolved by regenerating bun.lock with existing package.json overrides. Full details in [SECURITY_REPORT.md](SECURITY_REPORT.md).
+**2 HIGH CVEs fixed this cycle** (GHSA-rp42-5vxx-qpwr basic-ftp, GHSA-5j98-mcp5-4vw2 glob) — lockfiles regenerated after 4 upstream commits merged. Full details in [SECURITY_REPORT.md](SECURITY_REPORT.md).
 
 | Tool | Scope | Result |
 |------|-------|--------|
-| Gitleaks | Secrets in git history (624 commits, ~27.5 MB) | 0 leaks |
-| Semgrep OWASP | 120 JS/TS files | 64 findings (wildcard postMessage — accepted browser extension pattern) |
-| Semgrep Secrets | 1103 files | 0 findings |
-| Trivy | bun.lock + pnpm-lock.yaml | 0 vulnerabilities (3 HIGH fixed via bun install) |
-| TruffleHog | Live-verified secrets (22,209 chunks) | 0 verified, 0 unverified |
-| mcps-audit | OWASP MCP Top 10 | 632 findings — false positives from CLI/extension code patterns |
-| OSV-Scanner | bun.lock + pnpm-lock.yaml (1368 packages) | 8 findings resolved via bun.lock regeneration |
+| Gitleaks | Secrets in git history (629 commits, ~27.5 MB) | 0 leaks |
+| Semgrep OWASP | 119 JS/TS files | 64 findings (wildcard postMessage — accepted browser extension pattern) |
+| Semgrep Secrets | 1104 files | 0 findings |
+| Trivy | bun.lock + pnpm-lock.yaml | 0 vulnerabilities |
+| TruffleHog | Live-verified secrets (22,400 chunks) | 0 verified, 0 unverified |
+| mcps-audit | OWASP MCP Top 10 | 630 findings — false positives from CLI/extension code patterns |
+| OSV-Scanner | bun.lock + pnpm-lock.yaml (688+668 packages) | 2 HIGH fixed; 0 remaining |
 | Bandit | Python SAST | N/A (no .py files) |
 | CodeQL | Semantic SAST | N/A (no codeql.yml workflow) |
-| skill-audit | canonical SKILL.md | LOW RISK (score 15/100) |
-| security-audit | Claude config + global skills | 31 findings — all in global user env or false positives |
-| mcp-exfil-scan | MCP exfil chains | 11 findings — all false positives in global skill env |
+| skill-audit | all SKILL.md copies | LOW RISK (score 0–15/100) |
+| security-audit | Claude config + global skills | 30 findings — all in global user env or false positives |
+| mcp-exfil-scan | MCP exfil chains | 11 findings — false positives in global skill env |
 
 ### Findings & Fixes
 
-**Dependency vulnerabilities — all previously fixed overrides still clean:**
+**Dependency vulnerabilities fixed this cycle:**
 
-| Package | Was | Fixed | CVE / Advisory | Severity |
-|---------|-----|-------|----------------|----------|
-| basic-ftp | 5.2.0 | 5.3.0 | CVE-2026-39983, GHSA-6v7q-wjvx-w8wg, GHSA-rp42-5vxx-qpwr | HIGH — CRLF injection + DoS |
-| lodash | 4.17.23 | 4.18.0 | GHSA-f23m-r3pf-42rh, GHSA-r5fr-rjxr-66jc | HIGH + MEDIUM |
-| brace-expansion | 2.0.2 | 2.0.3 | GHSA-f886-m6hf-6m8v | MEDIUM — ReDoS |
+| Package | Was | Fixed | Advisory | Severity |
+|---------|-----|-------|----------|----------|
+| basic-ftp | 5.2.2 | 5.3.0 | GHSA-rp42-5vxx-qpwr | HIGH |
+| glob | 10.4.5 | 10.5.0 | GHSA-5j98-mcp5-4vw2 | HIGH |
 
-No new CVEs in the 6 upstream commits merged on 2026-04-30.
+Overrides were already present in `package.json`; ran `bun install` + `npx pnpm install` to regenerate both lockfiles. Verified clean with `osv-scanner scan -L` on each.
 
 **Semgrep — wildcard postMessage (64 findings, LOW risk):**
 
-`src/detect-antipatterns-browser.js` and `extension/content/live-browser.js` (plus all distributed copies) use `window.postMessage(..., '*')`. This is standard practice for Chrome DevTools extension ↔ content-script messaging where no specific origin can be targeted. Messages contain only UI commands (toggle, highlight, remove, scan) and scan results — no sensitive data. Not exploitable in the extension threat model.
+`cli/engine/detect-antipatterns-browser.js` and `skill/scripts/live-browser.js` (plus all distributed copies) use `window.postMessage(..., '*')`. This is standard practice for Chrome DevTools extension page messaging where no specific origin can be targeted. Messages contain only UI commands (toggle, highlight, remove, scan) and scan results — no sensitive data. Not exploitable in the extension threat model.
 
 ---
 
