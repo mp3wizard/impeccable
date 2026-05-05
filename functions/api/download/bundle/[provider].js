@@ -1,4 +1,4 @@
-import { BUNDLE_DOWNLOAD_PROVIDERS } from "../../../../lib/download-providers.js";
+import { BUNDLE_DOWNLOAD_PROVIDERS } from "../../../../cli/lib/download-providers.js";
 
 const SECURITY_HEADERS = {
 	'X-Content-Type-Options': 'nosniff',
