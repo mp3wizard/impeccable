@@ -95,7 +95,7 @@ This fork applies the following improvements on top of the upstream `pbakaus/imp
 
 | File | Fix |
 |------|-----|
-| `public/js/components/art-gallery.js` | Added `escapeHtml()` to sanitize `skill.id`, `skill.description`, `displayName`, and `area.area` before injecting into `innerHTML` — prevents XSS from untrusted skill data |
+| `public/js/components/art-gallery.js` | Added `escapeHtml()` to sanitize `skill.id`, `skill.description`, `displayName`, and `area.area` before injecting into `innerHTML` (prevents XSS from untrusted skill data) |
 | `functions/api/download/[type]/[provider]/[id].js` | Hardened download API handler |
 | `functions/api/download/bundle/[provider].js` | Hardened bundle download handler |
 
@@ -111,7 +111,7 @@ This fork applies the following improvements on top of the upstream `pbakaus/imp
 | `audit` | Added `AI slop scan` and `anti-pattern check` as explicit triggers |
 | `clarify` | Added `button labels`, `empty states`, and `tooltips` as trigger keywords |
 | `critique` | Shortened description from 2 verbose lines to 1 precise line listing what the skill actually produces |
-| `delight` | Removed filler phrase "Elevates functional to delightful"; clarified differentiation from `/animate` |
+| `delight` | Removed filler phrase about raising functional to delightful; clarified differentiation from `/animate` |
 | `distill` | Removed filler phrase "Great design is simple, powerful, and clean" from description |
 | `frontend-design` | Clarified dual role: foundation skill for all design skills + direct use for building from scratch |
 | `normalize` | Expanded description with specific trigger keywords (hard-coded values, tokens out of sync) |
@@ -283,22 +283,22 @@ Join the community and ecosystem conversations:
 
 This repository was audited with 12 automated security tools on 2026-05-14 (fork: mp3wizard/impeccable, HEAD: a49659ee).
 
-**16 CVEs fixed this cycle** (ip-address, fast-uri×2, hono×5, protobufjs×7, @anthropic-ai/sdk) — all transitive deps, resolved via `overrides` in `package.json` + lockfile regeneration after 8 upstream commits merged. Full details in [SECURITY_REPORT.md](SECURITY_REPORT.md).
+**16 CVEs fixed this cycle** (ip-address, fast-uri×2, hono×5, protobufjs×7, @anthropic-ai/sdk): all transitive deps, resolved via `overrides` in `package.json` + lockfile regeneration after 8 upstream commits merged. Full details in [SECURITY_REPORT.md](SECURITY_REPORT.md).
 
 | Tool | Scope | Result |
 |------|-------|--------|
 | Gitleaks | Secrets in git history (650 commits, ~28.6 MB) | 0 leaks |
-| Semgrep OWASP | 119 JS/TS files | 64 findings (wildcard postMessage — accepted browser extension pattern) |
+| Semgrep OWASP | 119 JS/TS files | 64 findings (wildcard postMessage, accepted browser extension pattern) |
 | Semgrep Secrets | 1134 files | 0 findings |
 | Trivy | bun.lock + pnpm-lock.yaml | 0 vulnerabilities (after fix) |
 | TruffleHog | Live-verified secrets (23,620 chunks) | 0 verified, 0 unverified |
-| mcps-audit | OWASP MCP Top 10 | 647 findings — false positives from CLI/extension code patterns |
+| mcps-audit | OWASP MCP Top 10 | 647 findings (false positives from CLI/extension code patterns) |
 | OSV-Scanner | bun.lock + pnpm-lock.yaml (688+668 packages) | 16 CVEs fixed; 0 remaining |
 | Bandit | Python SAST | N/A (no .py files) |
 | CodeQL | Semantic SAST | N/A (no codeql.yml workflow) |
 | skill-audit | all SKILL.md copies | LOW RISK (score 15/100) |
-| security-audit | Claude config + global skills | 30 findings — all in global user env or false positives |
-| mcp-exfil-scan | MCP exfil chains | 11 findings — false positives in global skill env |
+| security-audit | Claude config + global skills | 30 findings (all in global user env or false positives) |
+| mcp-exfil-scan | MCP exfil chains | 11 findings (false positives in global skill env) |
 
 ### Findings & Fixes
 
@@ -311,9 +311,9 @@ This repository was audited with 12 automated security tools on 2026-05-14 (fork
 
 Overrides were already present in `package.json`; ran `bun install` + `npx pnpm install` to regenerate both lockfiles. Verified clean with `osv-scanner scan -L` on each.
 
-**Semgrep — wildcard postMessage (64 findings, LOW risk):**
+**Semgrep: wildcard postMessage (64 findings, LOW risk):**
 
-`cli/engine/detect-antipatterns-browser.js` and `skill/scripts/live-browser.js` (plus all distributed copies) use `window.postMessage(..., '*')`. This is standard practice for Chrome DevTools extension page messaging where no specific origin can be targeted. Messages contain only UI commands (toggle, highlight, remove, scan) and scan results — no sensitive data. Not exploitable in the extension threat model.
+`cli/engine/detect-antipatterns-browser.js` and `skill/scripts/live-browser.js` (plus all distributed copies) use `window.postMessage(..., '*')`. This is standard practice for Chrome DevTools extension page messaging where no specific origin can be targeted. Messages contain only UI commands (toggle, highlight, remove, scan) and scan results (no sensitive data). Not exploitable in the extension threat model.
 
 ---
 
