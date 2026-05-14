@@ -1,6 +1,6 @@
 {
-  "name": "impeccable",
-  "version": "2.1.9",
+  "name": "@mp3wizard/impeccable",
+  "version": "2.1.8",
   "author": "Paul Bakaus",
   "description": "Design skills, commands, and anti-pattern detection for AI coding agents",
   "keywords": [
@@ -71,12 +71,24 @@
   "overrides": {
     "basic-ftp": "^5.3.0",
     "brace-expansion": "^2.0.3",
-    "lodash": "^4.18.0"
+    "lodash": "^4.18.0",
+    "ip-address": "^10.1.1",
+    "hono": "^4.12.18",
+    "fast-uri": "^3.1.2",
+    "protobufjs": "^7.5.6",
+    "@protobufjs/utf8": "^1.1.1",
+    "@anthropic-ai/sdk": "^0.91.1"
   },
   "pnpm": {
     "overrides": {
       "basic-ftp": ">=5.3.0",
-      "glob": ">=10.5.0"
+      "glob": ">=10.5.0",
+      "ip-address": ">=10.1.1",
+      "hono": ">=4.12.18",
+      "fast-uri": ">=3.1.2",
+      "protobufjs": ">=7.5.6",
+      "@protobufjs/utf8": ">=1.1.1",
+      "@anthropic-ai/sdk": ">=0.91.1"
     }
   },
   "devDependencies": {

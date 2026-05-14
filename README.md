@@ -281,22 +281,22 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-This repository was audited with 12 automated security tools on 2026-05-05 (fork: mp3wizard/impeccable, HEAD: a422f7f0).
+This repository was audited with 12 automated security tools on 2026-05-14 (fork: mp3wizard/impeccable, HEAD: a49659ee).
 
-**2 HIGH CVEs fixed this cycle** (GHSA-rp42-5vxx-qpwr basic-ftp, GHSA-5j98-mcp5-4vw2 glob) — lockfiles regenerated after 4 upstream commits merged. Full details in [SECURITY_REPORT.md](SECURITY_REPORT.md).
+**16 CVEs fixed this cycle** (ip-address, fast-uri×2, hono×5, protobufjs×7, @anthropic-ai/sdk) — all transitive deps, resolved via `overrides` in `package.json` + lockfile regeneration after 8 upstream commits merged. Full details in [SECURITY_REPORT.md](SECURITY_REPORT.md).
 
 | Tool | Scope | Result |
 |------|-------|--------|
-| Gitleaks | Secrets in git history (629 commits, ~27.5 MB) | 0 leaks |
+| Gitleaks | Secrets in git history (650 commits, ~28.6 MB) | 0 leaks |
 | Semgrep OWASP | 119 JS/TS files | 64 findings (wildcard postMessage — accepted browser extension pattern) |
-| Semgrep Secrets | 1104 files | 0 findings |
-| Trivy | bun.lock + pnpm-lock.yaml | 0 vulnerabilities |
-| TruffleHog | Live-verified secrets (22,400 chunks) | 0 verified, 0 unverified |
-| mcps-audit | OWASP MCP Top 10 | 630 findings — false positives from CLI/extension code patterns |
-| OSV-Scanner | bun.lock + pnpm-lock.yaml (688+668 packages) | 2 HIGH fixed; 0 remaining |
+| Semgrep Secrets | 1134 files | 0 findings |
+| Trivy | bun.lock + pnpm-lock.yaml | 0 vulnerabilities (after fix) |
+| TruffleHog | Live-verified secrets (23,620 chunks) | 0 verified, 0 unverified |
+| mcps-audit | OWASP MCP Top 10 | 647 findings — false positives from CLI/extension code patterns |
+| OSV-Scanner | bun.lock + pnpm-lock.yaml (688+668 packages) | 16 CVEs fixed; 0 remaining |
 | Bandit | Python SAST | N/A (no .py files) |
 | CodeQL | Semantic SAST | N/A (no codeql.yml workflow) |
-| skill-audit | all SKILL.md copies | LOW RISK (score 0–15/100) |
+| skill-audit | all SKILL.md copies | LOW RISK (score 15/100) |
 | security-audit | Claude config + global skills | 30 findings — all in global user env or false positives |
 | mcp-exfil-scan | MCP exfil chains | 11 findings — false positives in global skill env |
 
