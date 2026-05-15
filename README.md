@@ -281,24 +281,19 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-This repository was audited with 12 automated security tools on 2026-05-14 (fork: mp3wizard/impeccable, HEAD: a49659ee).
+This repository was audited with 6 automated security tools on 2026-05-15 (fork: mp3wizard/impeccable, HEAD: 90c25bd5).
 
-**16 CVEs fixed this cycle** (ip-address, fast-uri×2, hono×5, protobufjs×7, @anthropic-ai/sdk): all transitive deps, resolved via `overrides` in `package.json` + lockfile regeneration after 8 upstream commits merged. Full details in [SECURITY_REPORT.md](SECURITY_REPORT.md).
+**0 CVEs this cycle** — Trivy found no vulnerabilities in bun.lock or pnpm-lock.yaml after merging 6 upstream commits (v3.1.1 bump, jsdom 29.1.1, Windows-safe CLI fix). Full details in [SECURITY_REPORT.md](SECURITY_REPORT.md).
 
 | Tool | Scope | Result |
 |------|-------|--------|
-| Gitleaks | Secrets in git history (650 commits, ~28.6 MB) | 0 leaks |
-| Semgrep OWASP | 119 JS/TS files | 64 findings (wildcard postMessage, accepted browser extension pattern) |
-| Semgrep Secrets | 1134 files | 0 findings |
-| Trivy | bun.lock + pnpm-lock.yaml | 0 vulnerabilities (after fix) |
-| TruffleHog | Live-verified secrets (23,620 chunks) | 0 verified, 0 unverified |
-| mcps-audit | OWASP MCP Top 10 | 647 findings (false positives from CLI/extension code patterns) |
-| OSV-Scanner | bun.lock + pnpm-lock.yaml (688+668 packages) | 16 CVEs fixed; 0 remaining |
-| Bandit | Python SAST | N/A (no .py files) |
+| Gitleaks 8.30.1 | Secrets in git history (668 commits, ~28.9 MB) | 0 leaks |
+| Semgrep OWASP | 1136 JS/TS/HTML files | 67 findings (wildcard postMessage, accepted browser extension pattern) |
+| Trivy 0.69.3 | bun.lock + pnpm-lock.yaml | 0 vulnerabilities |
+| TruffleHog 3.94.2 | Live-verified secrets (23,902 chunks) | 0 verified, 0 unverified |
+| mcps-audit 1.0.0 | OWASP MCP Top 10 | 675 findings (false positives: regex match calls + intentional CLI subprocess) |
+| Bandit 1.9.4 | Python SAST | N/A (no .py files) |
 | CodeQL | Semantic SAST | N/A (no codeql.yml workflow) |
-| skill-audit | all SKILL.md copies | LOW RISK (score 15/100) |
-| security-audit | Claude config + global skills | 30 findings (all in global user env or false positives) |
-| mcp-exfil-scan | MCP exfil chains | 11 findings (false positives in global skill env) |
 
 ### Findings & Fixes
 
