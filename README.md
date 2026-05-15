@@ -283,7 +283,7 @@ Join the community and ecosystem conversations:
 
 This repository was audited with 6 automated security tools on 2026-05-15 (fork: mp3wizard/impeccable, HEAD: 90c25bd5).
 
-**0 CVEs this cycle** — Trivy found no vulnerabilities in bun.lock or pnpm-lock.yaml after merging 6 upstream commits (v3.1.1 bump, jsdom 29.1.1, Windows-safe CLI fix). Full details in [SECURITY_REPORT.md](SECURITY_REPORT.md).
+**0 CVEs this cycle.** Trivy found no vulnerabilities in bun.lock or pnpm-lock.yaml after merging 6 upstream commits (v3.1.1 bump, jsdom 29.1.1, Windows-safe CLI fix). Full details in [SECURITY_REPORT.md](SECURITY_REPORT.md).
 
 | Tool | Scope | Result |
 |------|-------|--------|
