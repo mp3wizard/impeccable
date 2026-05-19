@@ -288,7 +288,7 @@ This repository was audited with 11 automated security tools on 2026-05-19 (fork
 | Tool | Scope | Result |
 |------|-------|--------|
 | Gitleaks 8.30.1 | Secrets in git history (675 commits, ~35 MB) | 0 leaks |
-| Semgrep OWASP | 135 JS/TS files (77 rules) | 131 findings (wildcard postMessage, accepted browser extension pattern) |
+| Semgrep OWASP | 135 JS/TS files | 131 findings (wildcard postMessage, accepted browser extension pattern) |
 | Semgrep Secrets | 1390 files | 0 secrets |
 | Trivy 0.69.3 | bun.lock + pnpm-lock.yaml | 1 finding fixed (ws) |
 | TruffleHog 3.94.2 | Live-verified secrets (25,000 chunks) | 0 verified, 0 unverified |
@@ -312,7 +312,7 @@ Added `"ws": "^8.20.1"` and `"devalue": "^5.8.1"` to `package.json#overrides`; a
 
 **Semgrep: wildcard postMessage (131 findings, LOW risk):**
 
-`cli/engine/detect-antipatterns-browser.js`, `skill/scripts/live-browser.js`, and `extension/content/content-script.js` (plus all harness-distributed copies) use `window.postMessage(..., '*')`. This is the required pattern for Chrome extension content-script ↔ injected-page-script IPC where no specific origin can be targeted. Messages carry only UI commands and scan results — no credentials or sensitive data. Not exploitable in the extension threat model.
+`cli/engine/detect-antipatterns-browser.js`, `skill/scripts/live-browser.js`, and `extension/content/content-script.js` (plus all harness-distributed copies) use `window.postMessage(..., '*')`. This is the required pattern for Chrome extension content-script to injected-page-script IPC where no specific origin can be targeted. Messages carry only UI commands and scan results; no credentials or sensitive data. Not exploitable in the extension threat model.
 
 ---
 
