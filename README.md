@@ -281,34 +281,38 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-This repository was audited with 6 automated security tools on 2026-05-15 (fork: mp3wizard/impeccable, HEAD: 90c25bd5).
+This repository was audited with 11 automated security tools on 2026-05-19 (fork: mp3wizard/impeccable, HEAD: 41c42683).
 
-**0 CVEs this cycle.** Trivy found no vulnerabilities in bun.lock or pnpm-lock.yaml after merging 6 upstream commits (v3.1.1 bump, jsdom 29.1.1, Windows-safe CLI fix). Full details in [SECURITY_REPORT.md](SECURITY_REPORT.md).
+**2 fixes applied.** bun.lock is fully clean. pnpm-lock.yaml has 12 transitive vulnerabilities remaining due to pnpm v11 override handling in non-TTY mode. Full details in [SECURITY_REPORT.md](SECURITY_REPORT.md).
 
 | Tool | Scope | Result |
 |------|-------|--------|
-| Gitleaks 8.30.1 | Secrets in git history (668 commits, ~28.9 MB) | 0 leaks |
-| Semgrep OWASP | 1136 JS/TS/HTML files | 67 findings (wildcard postMessage, accepted browser extension pattern) |
-| Trivy 0.69.3 | bun.lock + pnpm-lock.yaml | 0 vulnerabilities |
-| TruffleHog 3.94.2 | Live-verified secrets (23,902 chunks) | 0 verified, 0 unverified |
-| mcps-audit 1.0.0 | OWASP MCP Top 10 | 675 findings (false positives: regex match calls + intentional CLI subprocess) |
+| Gitleaks 8.30.1 | Secrets in git history (675 commits, ~35 MB) | 0 leaks |
+| Semgrep OWASP | 135 JS/TS files (77 rules) | 131 findings (wildcard postMessage, accepted browser extension pattern) |
+| Semgrep Secrets | 1390 files | 0 secrets |
+| Trivy 0.69.3 | bun.lock + pnpm-lock.yaml | 1 finding fixed (ws) |
+| TruffleHog 3.94.2 | Live-verified secrets (25,000 chunks) | 0 verified, 0 unverified |
+| OSV-Scanner 2.3.5 | bun.lock + pnpm-lock.yaml | bun.lock: clean; pnpm-lock.yaml: 12 transitive |
 | Bandit 1.9.4 | Python SAST | N/A (no .py files) |
 | CodeQL | Semantic SAST | N/A (no codeql.yml workflow) |
+| security-audit | Claude config + skills + hooks | 37 findings (all false positives) |
+| skill-security-auditor | All SKILL.md files | LOW RISK across all 15 copies |
+| mcp-exfil-scan | MCP + skill exfil patterns | 11 findings (all false positives) |
 
 ### Findings & Fixes
 
-**Dependency vulnerabilities fixed this cycle:**
+**Dependency vulnerabilities fixed this cycle (bun.lock):**
 
 | Package | Was | Fixed | Advisory | Severity |
 |---------|-----|-------|----------|----------|
-| basic-ftp | 5.2.2 | 5.3.0 | GHSA-rp42-5vxx-qpwr | HIGH |
-| glob | 10.4.5 | 10.5.0 | GHSA-5j98-mcp5-4vw2 | HIGH |
+| ws | 8.19.0 | 8.20.1 | CVE-2026-45736 | MEDIUM |
+| devalue | 5.8.0 | 5.8.1 | GHSA-77vg-94rm-hx3p | HIGH |
 
-Overrides were already present in `package.json`; ran `bun install` + `npx pnpm install` to regenerate both lockfiles. Verified clean with `osv-scanner scan -L` on each.
+Added `"ws": "^8.20.1"` and `"devalue": "^5.8.1"` to `package.json#overrides`; added `pnpm.yaml` for pnpm v11 override compatibility; ran `bun install` to update bun.lock.
 
-**Semgrep: wildcard postMessage (64 findings, LOW risk):**
+**Semgrep: wildcard postMessage (131 findings, LOW risk):**
 
-`cli/engine/detect-antipatterns-browser.js` and `skill/scripts/live-browser.js` (plus all distributed copies) use `window.postMessage(..., '*')`. This is standard practice for Chrome DevTools extension page messaging where no specific origin can be targeted. Messages contain only UI commands (toggle, highlight, remove, scan) and scan results (no sensitive data). Not exploitable in the extension threat model.
+`cli/engine/detect-antipatterns-browser.js`, `skill/scripts/live-browser.js`, and `extension/content/content-script.js` (plus all harness-distributed copies) use `window.postMessage(..., '*')`. This is the required pattern for Chrome extension content-script ↔ injected-page-script IPC where no specific origin can be targeted. Messages carry only UI commands and scan results — no credentials or sensitive data. Not exploitable in the extension threat model.
 
 ---
 
