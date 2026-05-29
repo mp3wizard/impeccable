@@ -87,14 +87,15 @@ All 20 SKILL.md files scored 0–15/100 (LOW RISK). No prompt injection, obfusca
 
 ## Fixes Applied
 
-1. Added `overrides` block to `package.json` resolving 29 CVEs across 13 packages (12 transitive + 1 transitively-pinned `@anthropic-ai/sdk`)
-2. Ran `bun install` twice to regenerate `bun.lock` with all fixed versions
-3. Verified: Trivy reports **0 vulnerabilities**; OSV-Scanner reports **No issues found**
+1. Added `overrides` block to `package.json` resolving 28 CVEs across 11 transitive packages: `basic-ftp >=5.3.1`, `ip-address >=10.1.1`, `ws >=8.20.1`, `@protobufjs/utf8 >=1.1.1`, `brace-expansion >=2.0.3`, `devalue >=5.8.1`, `fast-uri >=3.1.2`, `hono >=4.12.18`, `lodash >=4.18.0`, `protobufjs >=7.5.8`, `qs >=6.15.2`
+2. Ran `bun install` to regenerate `bun.lock` with fixed versions
+3. Verified: Trivy reports **0 vulnerabilities**; OSV-Scanner reports **1 remaining** (see Known Issues)
 
 ---
 
 ## Known Remaining Issues
 
+- **GHSA-p7fg-763f-g4gf (`@anthropic-ai/sdk` 0.81.0, MEDIUM/CVSS 4.8):** `@anthropic-ai/claude-agent-sdk@0.2.119` (devDep) pins `@anthropic-ai/sdk@^0.81.0` which resolves to 0.81.0 alongside the direct `^0.91.1`. A flat override fixes bun.lock but npm rejects overriding a direct dep (`EOVERRIDE`); bun 1.3.12 does not support nested override syntax. The 0.81.0 instance is a dev-only transitive dep, absent from the published CLI package files (`cli/`, `LICENSE`). No end-user exposure.
 - **Semgrep wildcard-postmessage (75):** By design — browser extension cross-context IPC. Cannot fix without redesigning the extension communication model. Messages are namespaced and contain no sensitive data.
 - **mcp-scan:** Not run (opt-in tool; automated session without user consent).
 
