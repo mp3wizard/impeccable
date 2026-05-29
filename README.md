@@ -297,38 +297,35 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-This repository was audited with 11 automated security tools on 2026-05-19 (fork: mp3wizard/impeccable, HEAD: 41c42683).
+This repository was audited with 14 automated security tools on 2026-05-29 (fork: mp3wizard/impeccable, HEAD: d65e787c, post 25-commit upstream sync).
 
-**2 fixes applied.** bun.lock is fully clean. pnpm-lock.yaml has 12 transitive vulnerabilities remaining due to pnpm v11 override handling in non-TTY mode. Full details in [SECURITY_REPORT.md](SECURITY_REPORT.md).
+**29 CVEs fixed.** bun.lock is fully clean (Trivy: 0, OSV-Scanner: 0). Full details in [SECURITY_REPORT.md](SECURITY_REPORT.md).
 
 | Tool | Scope | Result |
 |------|-------|--------|
-| Gitleaks 8.30.1 | Secrets in git history (675 commits, ~35 MB) | 0 leaks |
-| Semgrep OWASP | 135 JS/TS files | 131 findings (wildcard postMessage, accepted browser extension pattern) |
-| Semgrep Secrets | 1390 files | 0 secrets |
-| Trivy 0.69.3 | bun.lock + pnpm-lock.yaml | 1 finding fixed (ws) |
-| TruffleHog 3.94.2 | Live-verified secrets (25,000 chunks) | 0 verified, 0 unverified |
-| OSV-Scanner 2.3.5 | bun.lock + pnpm-lock.yaml | bun.lock: clean; pnpm-lock.yaml: 12 transitive |
+| Gitleaks 8.30.1 | Secrets in git history (744 commits, ~50 MB) | 0 leaks |
+| Semgrep OWASP | 123 JS/TS files | 75 findings (wildcard postMessage, accepted browser extension pattern) |
+| Semgrep TypeScript | 6 TS files | 0 findings |
+| Semgrep Secrets | 1453 files | 0 secrets |
+| Trivy 0.69.3 | bun.lock | 0 findings (6 fixed) |
+| TruffleHog 3.94.2 | Live-verified secrets (37,295 chunks) | 0 verified, 0 unverified |
+| OSV-Scanner 2.3.5 | bun.lock | 0 findings (29 fixed) |
 | Bandit 1.9.4 | Python SAST | N/A (no .py files) |
 | CodeQL | Semantic SAST | N/A (no codeql.yml workflow) |
-| security-audit | Claude config + skills + hooks | 37 findings (all false positives) |
-| skill-security-auditor | All SKILL.md files | LOW RISK across all 15 copies |
-| mcp-exfil-scan | MCP + skill exfil patterns | 11 findings (all false positives) |
+| security-audit | Claude config + skills + hooks | 39 findings (user config / false positives) |
+| skill-security-auditor | All SKILL.md files | LOW RISK across all 20 copies (0–15/100) |
+| mcp-exfil-scan | MCP + skill exfil patterns | 11 findings (false positives) |
+| mcp-scan | MCP tool poisoning | OPT-IN (not run) |
 
 ### Findings & Fixes
 
-**Dependency vulnerabilities fixed this cycle (bun.lock):**
+**29 dependency vulnerabilities fixed this cycle (bun.lock):**
 
-| Package | Was | Fixed | Advisory | Severity |
-|---------|-----|-------|----------|----------|
-| ws | 8.19.0 | 8.20.1 | CVE-2026-45736 | MEDIUM |
-| devalue | 5.8.0 | 5.8.1 | GHSA-77vg-94rm-hx3p | HIGH |
+Added `package.json#overrides` for: `@anthropic-ai/sdk >=0.91.1`, `basic-ftp >=5.3.1`, `ip-address >=10.1.1`, `ws >=8.20.1`, `@protobufjs/utf8 >=1.1.1`, `brace-expansion >=2.0.3`, `devalue >=5.8.1`, `fast-uri >=3.1.2`, `hono >=4.12.18`, `lodash >=4.18.0`, `protobufjs >=7.5.8`, `qs >=6.15.2`. Ran `bun install` to regenerate bun.lock.
 
-Added `"ws": "^8.20.1"` and `"devalue": "^5.8.1"` to `package.json#overrides`; added `pnpm.yaml` for pnpm v11 override compatibility; ran `bun install` to update bun.lock.
+**Semgrep: wildcard postMessage (75 findings, LOW risk):**
 
-**Semgrep: wildcard postMessage (131 findings, LOW risk):**
-
-`cli/engine/detect-antipatterns-browser.js`, `skill/scripts/live-browser.js`, and `extension/content/content-script.js` (plus all harness-distributed copies) use `window.postMessage(..., '*')`. This is the required pattern for Chrome extension content-script to injected-page-script IPC where no specific origin can be targeted. Messages carry only UI commands and scan results; no credentials or sensitive data. Not exploitable in the extension threat model.
+`cli/engine/detect-antipatterns-browser.js` and `extension/content/content-script.js` (plus all harness-distributed copies) use `window.postMessage(..., '*')`. This is the required pattern for Chrome extension content-script to injected-page-script IPC where no specific origin can be targeted. Messages carry only UI commands and scan results — no credentials or sensitive data. Not exploitable in the extension threat model.
 
 ---
 
