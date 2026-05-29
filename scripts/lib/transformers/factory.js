@@ -7,6 +7,7 @@ import {
   generateYamlDocument,
   replacePlaceholders,
   compileProviderBlocks,
+  stripRuleMarkers,
 } from '../utils.js';
 import { SKILL_CATEGORIES, CATEGORY_ORDER } from '../sub-pages-data.js';
 
@@ -47,6 +48,12 @@ const FIELD_SPECS = {
     yamlKey: 'allowed-tools',
   },
 };
+
+// Provider builds that Codex loads as a skill (it reads skills from .agents/skills,
+// and the .codex build mirrors it). For these, the Codex subagent .toml also travels
+// INSIDE the skill dir so context.mjs can point a running Codex agent at a local copy
+// when the sibling .codex/agents/ definition is missing (see skill/scripts/context.mjs).
+const CODEX_SKILL_PROVIDERS = new Set(['agents', 'codex']);
 
 function humanizeSkillName(name) {
   return name
@@ -220,6 +227,7 @@ export function createTransformer(config) {
       // Build body
       let skillBody = compileProviderBlocks(skill.body, providerTags);
       skillBody = replacePlaceholders(skillBody, placeholderKey, commandNames, allSkillNames);
+      skillBody = stripRuleMarkers(skillBody);
 
       // Replace {{scripts_path}} with provider-aware path to skill's scripts directory
       const scriptsPath = `${configDir}/skills/${skillName}/scripts`;
@@ -241,6 +249,7 @@ export function createTransformer(config) {
         for (const ref of skill.references) {
           let refContent = compileProviderBlocks(ref.content, providerTags);
           refContent = replacePlaceholders(refContent, placeholderKey, [], allSkillNames);
+          refContent = stripRuleMarkers(refContent);
           refContent = refContent.replace(/\{\{scripts_path\}\}/g, scriptsPath);
           writeFile(path.join(refDir, `${ref.name}.md`), refContent);
           refCount++;
@@ -254,6 +263,21 @@ export function createTransformer(config) {
         for (const script of skill.scripts) {
           writeFile(path.join(scriptsOutDir, script.name), script.content);
           scriptCount++;
+        }
+      }
+
+      // Bundle the Codex subagent .toml inside the skill dir for the variants
+      // Codex actually loads. The sibling .codex/agents/ definition is what Codex
+      // reads at runtime, but installers (notably `npx skills add`) only carry the
+      // skills/ subtree -- so context.mjs uses this in-skill copy to self-heal.
+      if (CODEX_SKILL_PROVIDERS.has(provider)) {
+        for (const agent of skill.agents || []) {
+          if (agent.providers && !agent.providers.includes('codex')) continue;
+          let agentBody = compileProviderBlocks(agent.body, providerTags);
+          agentBody = replacePlaceholders(agentBody, placeholderKey, [], allSkillNames);
+          const filename = `${agent.codexName || agent.name.replace(/-/g, '_')}.toml`;
+          ensureDir(path.join(skillDir, 'agents'));
+          writeFile(path.join(skillDir, 'agents', filename), buildCodexAgent(agent, agentBody));
         }
       }
     }
