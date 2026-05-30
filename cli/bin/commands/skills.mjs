@@ -8,7 +8,7 @@
  */
 
 import { execSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync, statSync, lstatSync, symlinkSync, readlinkSync, unlinkSync, mkdirSync, writeFileSync, rmSync, renameSync, createWriteStream, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync, lstatSync, unlinkSync, mkdirSync, writeFileSync, rmSync, renameSync, createWriteStream, realpathSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
@@ -237,31 +237,6 @@ function isAlreadyInstalled(root) {
   return null;
 }
 
-function escapeRegex(str) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function prefixSkillContent(content, prefix, allSkillNames) {
-  // Prefix the name in frontmatter
-  let result = content.replace(/^name:\s*(.+)$/m, (_, name) => `name: ${prefix}${name.trim()}`);
-
-  // Prefix cross-references: /skillname -> /prefix-skillname
-  const sorted = [...allSkillNames].sort((a, b) => b.length - a.length);
-  for (const name of sorted) {
-    // Command invocations: /skillname
-    result = result.replace(
-      new RegExp(`/(?=${escapeRegex(name)}(?:[^a-zA-Z0-9_-]|$))`, 'g'),
-      `/${prefix}`
-    );
-    // Prose references: "the skillname skill"
-    result = result.replace(
-      new RegExp(`(the) ${escapeRegex(name)} skill`, 'gi'),
-      (_, article) => `${article} ${prefix}${name} skill`
-    );
-  }
-  return result;
-}
-
 function isSkillDir(skillsDir, name) {
   // Skill entries can be real directories or symlinks to directories (npx skills uses symlinks)
   const full = join(skillsDir, name);
@@ -279,63 +254,40 @@ function isRealSkillDir(skillsDir, name) {
   } catch { return false; }
 }
 
-function renameSkillsWithPrefix(root, prefix) {
-  // First pass: collect all skill names across all providers (use first provider found)
-  let allSkillNames = [];
+/**
+ * One-way migration for installs from the era when the CLI offered a command
+ * prefix (default `i-`), renaming the skill to e.g. `i-impeccable`. The prefix
+ * only earned its keep when every command was its own skill; with a single
+ * `impeccable` skill it does nothing, so it is no longer offered. Rename any
+ * prefixed impeccable skill back to the canonical `impeccable` (the fresh
+ * install/update content lands there next) so users aren't left with a stale,
+ * orphaned `i-impeccable` alongside the new one. Scoped to the impeccable skill
+ * by name -- never touches third-party skills that happen to start with `i-`.
+ * Returns the number of skills migrated.
+ */
+function migrateUnprefixImpeccable(root) {
+  let migrated = 0;
   for (const d of PROVIDER_DIRS) {
     const skillsDir = join(root, d, 'skills');
     if (!existsSync(skillsDir)) continue;
-    const entries = readdirSync(skillsDir);
-    allSkillNames = entries.filter(name => isSkillDir(skillsDir, name));
-    if (allSkillNames.length > 0) break;
+    let entries;
+    try { entries = readdirSync(skillsDir); } catch { continue; }
+    for (const name of entries) {
+      // A prefixed impeccable skill is `<prefix>impeccable` -- not the canonical
+      // `impeccable`, and not the legacy `teach-impeccable` (cleanup handles that).
+      if (name === 'impeccable' || name === 'teach-impeccable') continue;
+      if (!name.endsWith('-impeccable')) continue;
+      if (!isRealSkillDir(skillsDir, name)) continue;
+
+      const dest = join(skillsDir, 'impeccable');
+      try {
+        rmSync(dest, { recursive: true, force: true });
+        renameSync(join(skillsDir, name), dest);
+        migrated++;
+      } catch {}
+    }
   }
-
-  // Second pass: rename real dirs and update their content
-  let count = 0;
-  for (const d of PROVIDER_DIRS) {
-    const skillsDir = join(root, d, 'skills');
-    if (!existsSync(skillsDir)) continue;
-    try {
-      const entries = readdirSync(skillsDir);
-      for (const name of entries) {
-        if (name.startsWith(prefix)) continue;
-        if (!isRealSkillDir(skillsDir, name)) continue;
-
-        const src = join(skillsDir, name);
-        const dest = join(skillsDir, prefix + name);
-
-        renameSync(src, dest);
-
-        // Prefix frontmatter name + all cross-references in SKILL.md
-        let content = readFileSync(join(dest, 'SKILL.md'), 'utf8');
-        content = prefixSkillContent(content, prefix, allSkillNames);
-        writeFileSync(join(dest, 'SKILL.md'), content);
-        count++;
-      }
-    } catch {}
-  }
-
-  // Third pass: fix symlinks that now point to renamed targets (npx skills uses these)
-  for (const d of PROVIDER_DIRS) {
-    const skillsDir = join(root, d, 'skills');
-    if (!existsSync(skillsDir)) continue;
-    try {
-      const entries = readdirSync(skillsDir);
-      for (const name of entries) {
-        if (name.startsWith(prefix)) continue;
-        const full = join(skillsDir, name);
-        try {
-          if (!lstatSync(full).isSymbolicLink()) continue;
-          const target = readlinkSync(full);
-          const newTarget = target.replace(new RegExp(`/${escapeRegex(name)}$`), `/${prefix}${name}`);
-          unlinkSync(full);
-          symlinkSync(newTarget, join(skillsDir, prefix + name));
-        } catch {}
-      }
-    } catch {}
-  }
-
-  return count;
+  return migrated;
 }
 
 /**
@@ -398,40 +350,9 @@ function copyProviderSkills(bundleDir, root, targets) {
   return written;
 }
 
-/**
- * Codex reads custom subagents from `.codex/agents/*.toml`, a sibling of the
- * skill dir that the skills/ copy never touches. Treat it as a sidecar: only
- * write it for projects that actually use Codex, so a pure Claude project
- * doesn't get a stray `.codex/` folder. Codex-likely = the .agents (Codex
- * skills) variant is a target, or a global ~/.codex install exists.
- */
-function isCodexLikely(targets) {
-  return targets.includes('.agents') || existsSync(join(homedir(), '.codex'));
-}
-
-/**
- * Copy the Codex subagent definitions from the bundle's top-level `.codex/agents`
- * into the project's `.codex/agents`. Returns the number of files written (0 when
- * the bundle has none).
- */
-function installCodexAgents(bundleDir, root) {
-  const srcDir = join(bundleDir, '.codex', 'agents');
-  if (!existsSync(srcDir)) return 0;
-  const destDir = join(root, '.codex', 'agents');
-  let written = 0;
-  for (const entry of readdirSync(srcDir, { withFileTypes: true })) {
-    if (!entry.isFile()) continue;
-    mkdirSync(destDir, { recursive: true });
-    writeFileSync(join(destDir, entry.name), readFileSync(join(srcDir, entry.name)));
-    written++;
-  }
-  return written;
-}
-
 async function install(flags) {
   const force = flags.includes('--force');
   const yes = flags.includes('-y') || flags.includes('--yes');
-  const prefixFlag = flags.find(f => f.startsWith('--prefix='));
   const providersFlag = flags.find(f => f.startsWith('--providers='));
   const root = findProjectRoot();
   const existing = isAlreadyInstalled(root);
@@ -472,16 +393,13 @@ async function install(flags) {
     process.exit(1);
   }
 
+  // Retire any old `i-`-prefixed install so the fresh copy lands on the
+  // canonical `impeccable` dir instead of orphaning the prefixed one.
+  migrateUnprefixImpeccable(root);
+
   let written = 0;
-  let codexAgents = 0;
   try {
     written = copyProviderSkills(bundleDir, root, targets);
-    // Codex users also need the asset-producer subagent, which lives in
-    // .codex/agents/ (a sibling of the skill dir, not part of skills/). Do this
-    // before the bundle is cleaned up below. Best-effort: never fail the install.
-    if (isCodexLikely(targets)) {
-      try { codexAgents = installCodexAgents(bundleDir, root); } catch {}
-    }
   } catch (e) {
     rmSync(bundleDir, { recursive: true, force: true });
     console.error(`Install failed: ${e.message}`);
@@ -494,28 +412,6 @@ async function install(flags) {
     process.exit(1);
   }
   console.log(`Installed impeccable into: ${targets.join(', ')}`);
-  if (codexAgents > 0) console.log(`Installed ${codexAgents} Codex subagent(s) into .codex/agents/`);
-
-  // Ask about prefixing (skip in CI mode unless --prefix= is set)
-  let prefix = '';
-  if (prefixFlag) {
-    prefix = prefixFlag.split('=')[1] || 'i-';
-  } else if (!yes) {
-    console.log();
-    const wantPrefix = await ask('Prefix commands to avoid conflicts? e.g. /i-audit instead of /audit (y/N) ');
-    if (wantPrefix === 'y' || wantPrefix === 'yes') {
-      const custom = await ask('Prefix (default: i-): ');
-      prefix = custom || 'i-';
-    }
-  }
-
-  if (prefix) {
-    const count = renameSkillsWithPrefix(root, prefix);
-    if (count > 0) {
-      console.log(`\nRenamed ${count} skills with "${prefix}" prefix.`);
-      console.log(`Commands are now available as /${prefix}<command> (e.g. /${prefix}audit).`);
-    }
-  }
 
   // Clean up deprecated skills from previous versions
   try {
@@ -529,71 +425,7 @@ async function install(flags) {
     // Cleanup script not available -- skip
   }
 
-  console.log(`\nDone! Run /${prefix}impeccable init in your AI harness to set up design context.\n`);
-}
-
-/** Detect prefix by looking for the 'impeccable' skill (or legacy 'teach-impeccable') */
-function detectPrefix(root) {
-  for (const d of PROVIDER_DIRS) {
-    const skillsDir = join(root, d, 'skills');
-    if (!existsSync(skillsDir)) continue;
-    for (const name of readdirSync(skillsDir)) {
-      if (name === 'impeccable') return '';
-      if (name.endsWith('-impeccable') && name !== 'teach-impeccable') return name.slice(0, -'impeccable'.length);
-      // Legacy fallback
-      if (name === 'teach-impeccable') return '';
-      if (name.endsWith('-teach-impeccable')) return name.slice(0, -'teach-impeccable'.length);
-    }
-  }
-  return '';
-}
-
-/** Undo prefixing: rename folders back and strip prefix from SKILL.md content */
-function undoPrefix(root, prefix) {
-  if (!prefix) return;
-  // Collect the unprefixed names (strip our prefix)
-  let allPrefixedNames = [];
-  for (const d of PROVIDER_DIRS) {
-    const skillsDir = join(root, d, 'skills');
-    if (!existsSync(skillsDir)) continue;
-    allPrefixedNames = readdirSync(skillsDir).filter(n => n.startsWith(prefix) && isRealSkillDir(skillsDir, n));
-    if (allPrefixedNames.length > 0) break;
-  }
-  const unprefixedNames = allPrefixedNames.map(n => n.slice(prefix.length));
-
-  for (const d of PROVIDER_DIRS) {
-    const skillsDir = join(root, d, 'skills');
-    if (!existsSync(skillsDir)) continue;
-    for (const name of readdirSync(skillsDir)) {
-      if (!name.startsWith(prefix)) continue;
-      const unprefixed = name.slice(prefix.length);
-      const src = join(skillsDir, name);
-      const dest = join(skillsDir, unprefixed);
-
-      if (lstatSync(src).isSymbolicLink()) {
-        const target = readlinkSync(src);
-        const newTarget = target.replace(`/${name}`, `/${unprefixed}`);
-        unlinkSync(src);
-        symlinkSync(newTarget, dest);
-      } else {
-        renameSync(src, dest);
-        // Strip prefix from SKILL.md content
-        const skillMd = join(dest, 'SKILL.md');
-        if (existsSync(skillMd)) {
-          let content = readFileSync(skillMd, 'utf8');
-          // Reverse the prefixing: replace prefixed names with unprefixed
-          content = content.replace(new RegExp(`^name:\\s*${escapeRegex(prefix)}`, 'm'), 'name: ');
-          const sorted = [...allPrefixedNames].sort((a, b) => b.length - a.length);
-          for (const pName of sorted) {
-            const uName = pName.slice(prefix.length);
-            content = content.replace(new RegExp(`/${escapeRegex(pName)}(?=[^a-zA-Z0-9_-]|$)`, 'g'), `/${uName}`);
-            content = content.replace(new RegExp(`(the) ${escapeRegex(pName)} skill`, 'gi'), `$1 ${uName} skill`);
-          }
-          writeFileSync(skillMd, content);
-        }
-      }
-    }
-  }
+  console.log('\nDone! Run /impeccable init in your AI harness to set up design context.\n');
 }
 
 // ─── skills update ────────────────────────────────────────────────────────────
@@ -703,18 +535,9 @@ async function update(flags = []) {
 
   // Compare local vs remote -- skip if already up to date
   if (isUpToDate(root, providers, tmpDir)) {
-    // Skills match, but the Codex subagent sidecar may still be missing (e.g.
-    // an `npx skills add` install that only carried skills/). Heal it before
-    // declaring nothing to do.
-    let healed = 0;
-    if (isCodexLikely(providers)
-        && !existsSync(join(root, '.codex', 'agents', 'impeccable_asset_producer.toml'))) {
-      try { healed = installCodexAgents(tmpDir, root); } catch {}
-    }
     rmSync(tmpDir, { recursive: true, force: true });
     const v = getSkillsVersion(root);
-    if (healed > 0) console.log(`Installed ${healed} Codex subagent(s) into .codex/agents/`);
-    console.log(`Skills are up to date${v ? ` (v${v})` : ''}.${healed > 0 ? '' : ' Nothing to do.'}`);
+    console.log(`Skills are up to date${v ? ` (v${v})` : ''}. Nothing to do.`);
     process.exit(0);
   }
 
@@ -730,6 +553,11 @@ async function update(flags = []) {
   }
 
   try {
+
+    // Retire any old `i-`-prefixed install up front so the refresh lands on the
+    // canonical `impeccable` dir rather than orphaning the prefixed copy.
+    const migrated = migrateUnprefixImpeccable(root);
+    if (migrated > 0) console.log('Migrated a prefixed install back to /impeccable (the i- prefix is no longer used).');
 
     // Copy from the bundle to each unique provider folder.
     // Deduplicate so symlinked dirs (e.g. .claude/skills -> .agents/skills)
@@ -751,19 +579,7 @@ async function update(flags = []) {
       }
     }
 
-    // Refresh the Codex subagent sidecar (.codex/agents/) alongside the skills.
-    if (isCodexLikely(providers)) {
-      try { installCodexAgents(tmpDir, root); } catch {}
-    }
-
     rmSync(tmpDir, { recursive: true, force: true });
-
-    // Re-apply prefix if detected
-    const prefix = detectPrefix(root);
-    if (prefix) {
-      const count = renameSkillsWithPrefix(root, prefix);
-      if (count > 0) console.log(`Re-applied "${prefix}" prefix to ${count} skills.`);
-    }
 
     // Run cleanup to remove deprecated stubs from the fresh download
     try {
@@ -795,6 +611,11 @@ function copyDirSync(src, dest) {
     }
   }
 }
+
+// ─── Test surface ───────────────────────────────────────────────────────────
+// Exported so the test suite exercises the real implementation rather than a
+// reimplementation in a helper script (which is how bugs slip through).
+export { migrateUnprefixImpeccable };
 
 // ─── Router ───────────────────────────────────────────────────────────────────
 
