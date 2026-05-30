@@ -126,10 +126,11 @@ All findings are in globally installed skills (`security-scanner`, `skill-securi
 
 ## Fixes Applied
 
-- **GHSA-p7fg-763f-g4gf** — Added `"@anthropic-ai/sdk": ">=0.91.1"` to `overrides` in `package.json` and ran `bun install`. OSV-Scanner re-run confirms "No issues found".
+- **GHSA-p7fg-763f-g4gf** — Investigated. The vulnerability is in `@anthropic-ai/sdk@0.81.0` nested under `@anthropic-ai/claude-agent-sdk` (a `devDependency`). The direct dependency has been at `^0.91.1` since upstream merge. A bun `overrides` entry for a direct dep conflicts with npm publish (EOVERRIDE); bun `resolutions` was not honored. The vulnerability is **dev-only and not shipped to consumers** of the npm package. Upstream should update `@anthropic-ai/claude-agent-sdk` to require `^0.91.1`.
 
 ## Known Remaining Issues
 
+- **GHSA-p7fg-763f-g4gf** (`@anthropic-ai/sdk@0.81.0` in `@anthropic-ai/claude-agent-sdk`) — dev-only transitive dep; not shipped to consumers. Cannot override via npm without EOVERRIDE conflict. Upstream fix needed in `pbakaus/impeccable`.
 - `wildcard-postmessage-configuration` — by design for browser extension architecture; no fix planned.
 - `skipDangerousModePermissionPrompt: true` in global settings — existing, user-acknowledged.
 - mcps-audit AS-001 function-declaration false positives — tool limitation.

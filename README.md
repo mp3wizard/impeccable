@@ -264,7 +264,7 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audit: **2026-05-30** — 13 tools (Gitleaks, Semgrep, Trivy, TruffleHog, OSV-Scanner, mcps-audit, security-audit, skill-security-auditor, mcp-exfil-scan, and others).
+Last audit: **2026-05-30** (13 tools: Gitleaks, Semgrep, Trivy, TruffleHog, OSV-Scanner, mcps-audit, security-audit, skill-security-auditor, mcp-exfil-scan, and others).
 
 **Findings:** 1 Medium CVE (GHSA-p7fg-763f-g4gf, `@anthropic-ai/sdk` 0.81.0 transitive dep). **Fixed:** added `"@anthropic-ai/sdk": ">=0.91.1"` override in `package.json`. OSV-Scanner post-fix: No issues found.
 
