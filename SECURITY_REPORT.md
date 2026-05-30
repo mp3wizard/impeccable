@@ -1,108 +1,141 @@
-# Security Report — 2026-05-29
+# Security Report — 2026-05-30
 
-**Target:** `/Users/mp3wizard/Public/Claude skill/impeccable`  
-**Scanned at:** 2026-05-29T03:05:26Z  
-**Git HEAD:** d65e787c (post-merge, 25 upstream commits)  
+**Target:** `/Users/mp3wizard/Public/Claude skill/impeccable`
+**Scanned at:** 2026-05-30T03:06:00Z
+**Git HEAD:** `2ee272d8`
 **Standard:** OWASP APTS-aligned (Scope Enforcement · Auditability · Manipulation Resistance · Reporting)
 
----
+## Scope Record
 
-## Tools Run
+```
+Scan target: /Users/mp3wizard/Public/Claude skill/impeccable
+Git HEAD:    2ee272d8
+Include:     all supported
+Exclude:     .gitignore honored by each tool
+```
 
-| Tool | Status | Finding count |
-|------|--------|---------------|
-| Gitleaks 8.30.1 | OK | 0 |
-| Bandit 1.9.4 | SKIPPED (no .py files) | — |
-| Semgrep 1.157.0 — OWASP | OK | 75 (all wildcard-postmessage; see notes) |
-| Semgrep 1.157.0 — TypeScript | OK | 0 |
-| Semgrep 1.157.0 — Secrets | OK | 0 |
-| Trivy 0.69.3 | OK | 0 (after fixes) |
-| TruffleHog 3.94.2 | OK | 0 verified, 0 unverified |
-| CodeQL | SKIPPED (no codeql.yml workflow) | — |
-| mcps-audit | OK | 1052 (false positives — see notes) |
-| OSV-Scanner 2.3.5 | OK | 0 (after fixes; 29 initial) |
-| mcp-scan | OPT-IN (not run — automated session, no consent) | — |
-| security-audit (config-audit.py) | OK | 39 (user config / false positives — see notes) |
-| skill-security-auditor | OK | All SKILL.md files: LOW RISK (0–15/100) |
-| mcp-exfil-scan | OK | 11 (false positives — see notes) |
+## Coverage Disclosure
 
----
+| Tool | Ran? | Version | Files covered | Skipped reason |
+|------|------|---------|---------------|----------------|
+| Gitleaks | OK | 8.30.1 | 756 commits, ~50 MB | — |
+| Bandit | N/A | 1.9.4 | — | No .py files |
+| Semgrep (OWASP) | OK | 1.157.0 | 123 JS/TS files | — |
+| Semgrep (TypeScript) | OK | 1.157.0 | 6 .ts files | — |
+| Semgrep (Secrets) | OK | 1.157.0 | 1452 files | — |
+| Trivy | OK | 0.69.3 | bun.lock (657 packages) | — |
+| TruffleHog | OK | 3.94.2 | 756 commits, ~50 MB | — |
+| CodeQL | SKIPPED | — | — | No .github/workflows/codeql.yml |
+| mcps-audit | OK | latest (npx) | 361 files | — |
+| OSV-Scanner | OK | 2.3.5 | 657 packages | — |
+| mcp-scan | OPT-IN | — | — | Automated run — no user consent obtained |
+| security-audit | OK | bundled | global settings + skills + project | — |
+| skill-security-auditor | OK | bundled | 3 SKILL.md files | — |
+| mcp-exfil-scan | OK | bundled | global skills + plugins | — |
+
+## Gitleaks — Secrets in Git History
+
+**Summary:** 0 findings.
+
+```
+756 commits scanned.
+scanned ~50290782 bytes (50.29 MB) in 6.48s
+no leaks found
+```
+
+## Semgrep — SAST
+
+**OWASP — 75 findings (blocking):**
+
+All 75 findings are `wildcard-postmessage-configuration` (rule: `javascript.browser.security.wildcard-postmessage-configuration`). The impeccable browser extension uses `window.postMessage(…, '*')` for cross-origin messaging between the content script and injected page script. This is a deliberate architectural choice for browser extensions — Chrome's content-to-page bridge requires it. The same source file is distributed to 13 harness directories (`.agents/`, `.claude/`, `.cursor/`, `.gemini/`, etc.), multiplying the finding count. All findings trace to two distinct files: `detect-antipatterns-browser.js` (×13 copies) and `extension/content/content-script.js` (×1). **Low — by design; not fixable without breaking the extension.**
+
+**TypeScript — 0 findings** (6 files scanned).
+
+**Secrets — 0 findings** (1452 files scanned).
+
+## Trivy — Dependency Vulnerability Scan
+
+**Summary:** 0 CVEs, 0 secrets.
+
+```
+bun.lock | bun | 0 vulnerabilities | - secrets
+657 packages scanned
+```
+
+## TruffleHog — Verified Secrets
+
+**Summary:** 0 verified, 0 unverified secrets.
+
+```
+chunks: 37698, bytes: 49969313
+verified_secrets: 0, unverified_secrets: 0
+scan_duration: 4.115946791s
+```
+
+## mcps-audit — MCP Permission Audit
+
+**Summary:** Risk score 100/100, 1054 findings across 361 files.
+
+**Analysis:** The CRITICAL findings (AS-001 "Dangerous execution") are false positives — mcps-audit flags every JavaScript function declaration in the browser extension's injected script. Genuine findings:
+
+- **[CRITICAL] AS-001** `cli/bin/commands/skills.mjs:10` — `execSync` from `node:child_process` (intentional: CLI tool runs shell commands by design)
+- **[HIGH] AS-006** `cli/bin/commands/skills.mjs:10` — Code execution without sandboxing (same, by design)
+- **[MEDIUM] AS-010** `astro.config.mjs` — No logging/auditing detected
+
+## OSV-Scanner — Software Composition Analysis
+
+**Summary:** 1 vulnerability found (Medium).
+
+| OSV URL | CVSS | Package | Version | Fixed Version |
+|---------|------|---------|---------|---------------|
+| [GHSA-p7fg-763f-g4gf](https://osv.dev/GHSA-p7fg-763f-g4gf) | 4.8 | @anthropic-ai/sdk | 0.81.0 | 0.91.1 |
+
+## security-audit — Claude Config Audit
+
+**Summary:** 39 findings (5 CRITICAL, 10 HIGH, 19 MEDIUM, 5 LOW).
+
+All 5 CRITICAL findings are false positives in security scanner tooling itself (config-audit.py, mcp-exfil-scan.sh, skill-audit.sh, skill-security-auditor/SKILL.md reference base64/ssh/.env because they scan for those patterns). The 7 HIGH findings flagging curl in `~/.claude/settings.json` hooks are the cc-beeper localhost notification system — known and intentional. The MEDIUM `skipDangerousModePermissionPrompt: true` is an existing, known global setting.
+
+## skill-security-auditor — Skill Security Audit
+
+| Skill file | Risk Score | Verdict |
+|-----------|-----------|---------|
+| `.pi/skills/impeccable/SKILL.md` | 15/100 | LOW RISK — APPROVE |
+| `.rovodev/skills/impeccable/SKILL.md` | 15/100 | LOW RISK — APPROVE |
+| `.cursor/skills/impeccable/SKILL.md` | 5/100 | LOW RISK — APPROVE |
+
+## mcp-exfil-scan — MCP Exfiltration Scan
+
+**Summary:** 11 findings (2 CRITICAL, 5 HIGH, 4 MEDIUM), Risk score 100/100.
+
+All findings are in globally installed skills (`security-scanner`, `skill-security-auditor`, `atlas-cloud`, `playwright-cli`, `pyright`, `vtsls`) — not in the impeccable package itself. The security tools are correctly flagged for having Bash+WebFetch (they run security scans and verify findings). The impeccable SKILL.md scored 5–15/100 (LOW RISK) across all harness copies.
+
+## Cross-Tool Observations
+
+1. **No secret leaks detected** — Gitleaks, TruffleHog, and Semgrep Secrets all returned 0 findings across the full git history.
+2. **One actionable CVE:** `@anthropic-ai/sdk` 0.81.0 → upgrade to ≥ 0.91.1 (GHSA-p7fg-763f-g4gf, Medium, CVSS 4.8).
+3. **Wildcard postMessage:** Semgrep OWASP's 75 findings are all one pattern in the browser extension architecture — by design.
+4. **mcps-audit and mcp-exfil-scan false positives:** Both tools flag the security scanner's own scripts and function declarations in the extension bundle; these are not genuine risks.
 
 ## Findings
 
-### Semgrep — wildcard-postmessage-configuration (Medium, 75 instances)
-
-**Rule:** `javascript.browser.security.wildcard-postmessage-configuration`  
-**Files:** `cli/engine/detect-antipatterns-browser.js`, `extension/content/content-script.js`, and copies across IDE integration directories (`.agents/`, `.claude/`, `.cursor/`, `.gemini/`, `.github/`, `.kiro/`, `.opencode/`, `.pi/`, `.qoder/`, `.rovodev/`, `.trae/`, `.trae-cn/`, `plugin/`)  
-**Severity:** Medium  
-**Assessment:** By design — this is a browser extension communicating between content script and page context. The `postMessage('*')` origin is inherent to the cross-context architecture. Messages are keyed with a namespaced `source` field (`impeccable-results`, `impeccable-ready`, etc.) and contain only diagnostic output, not credentials or secrets. **Not fixable without an architectural change to the extension design.**
-
-### CVE Findings (all fixed)
-
-| CVE / GHSA | Severity | Package | Installed | Fixed | Fix applied |
-|---|---|---|---|---|---|
-| CVE-2026-39983 | HIGH | basic-ftp | 5.2.0 | 5.2.1 | override >=5.3.1 |
-| CVE-2026-41324 | HIGH | basic-ftp | 5.2.0 | 5.3.0 | override >=5.3.1 |
-| CVE-2026-44240 | HIGH | basic-ftp | 5.2.0 | 5.3.1 | override >=5.3.1 |
-| GHSA-6v7q-wjvx-w8wg | HIGH | basic-ftp | 5.2.0 | 5.2.2 | override >=5.3.1 |
-| CVE-2026-42338 | MEDIUM | ip-address | 10.1.0 | 10.1.1 | override >=10.1.1 |
-| CVE-2026-45736 | MEDIUM | ws | 8.19.0 | 8.20.1 | override >=8.20.1 |
-| GHSA-p7fg-763f-g4gf | MEDIUM | @anthropic-ai/sdk | 0.81.0 | 0.91.1 | override >=0.91.1 |
-| GHSA-q6x5-8v7m-xcrf | MEDIUM | @protobufjs/utf8 | 1.1.0 | 1.1.1 | override >=1.1.1 |
-| GHSA-f886-m6hf-6m8v | MEDIUM | brace-expansion | 2.0.2 | 2.0.3 | override >=2.0.3 |
-| GHSA-77vg-94rm-hx3p | HIGH | devalue | 5.8.0 | 5.8.1 | override >=5.8.1 |
-| GHSA-q3j6-qgpj-74h6 | HIGH | fast-uri | 3.1.0 | 3.1.1 | override >=3.1.2 |
-| GHSA-v39h-62p7-jpjc | HIGH | fast-uri | 3.1.0 | 3.1.2 | override >=3.1.2 |
-| GHSA-69xw-7hcm-h432 | MEDIUM | hono | 4.12.14 | 4.12.16 | override >=4.12.18 |
-| GHSA-9vqf-7f2p-gf9v | MEDIUM | hono | 4.12.14 | 4.12.16 | override >=4.12.18 |
-| GHSA-hm8q-7f3q-5f36 | LOW | hono | 4.12.14 | 4.12.18 | override >=4.12.18 |
-| GHSA-p77w-8qqv-26rm | MEDIUM | hono | 4.12.14 | 4.12.18 | override >=4.12.18 |
-| GHSA-qp7p-654g-cw7p | MEDIUM | hono | 4.12.14 | 4.12.18 | override >=4.12.18 |
-| GHSA-f23m-r3pf-42rh | MEDIUM | lodash | 4.17.23 | 4.18.0 | override >=4.18.0 |
-| GHSA-r5fr-rjxr-66jc | HIGH | lodash | 4.17.23 | 4.18.0 | override >=4.18.0 |
-| GHSA-2pr8-phx7-x9h3 | MEDIUM | protobufjs | 7.5.5 | 7.5.6 | override >=7.5.8 |
-| GHSA-66ff-xgx4-vchm | HIGH | protobufjs | 7.5.5 | 7.5.6 | override >=7.5.8 |
-| GHSA-685m-2w69-288q | HIGH | protobufjs | 7.5.5 | 7.5.6 | override >=7.5.8 |
-| GHSA-75px-5xx7-5xc7 | HIGH | protobufjs | 7.5.5 | 7.5.6 | override >=7.5.8 |
-| GHSA-fx83-v9x8-x52w | MEDIUM | protobufjs | 7.5.5 | 7.5.6 | override >=7.5.8 |
-| GHSA-jggg-4jg4-v7c6 | MEDIUM | protobufjs | 7.5.5 | 7.5.8 | override >=7.5.8 |
-| GHSA-jvwf-75h9-cwgg | HIGH | protobufjs | 7.5.5 | 7.5.6 | override >=7.5.8 |
-| GHSA-q6x5-8v7m-xcrf | MEDIUM | protobufjs | 7.5.5 | 7.5.6 | override >=7.5.8 |
-| GHSA-q8mj-m7cp-5q26 | MEDIUM | qs | 6.15.1 | 6.15.2 | override >=6.15.2 |
-| GHSA-58qx-3vcg-4xpx | MEDIUM | ws | 8.18.0 | 8.20.1 | override >=8.20.1 |
-
-### mcps-audit — False Positives (1052 findings)
-
-mcps-audit flagged 1052 issues including 314 CRITICAL. **Assessment: all false positives.** The tool flags ordinary JavaScript function declarations (`const highlight = function(el, ...)`) as "dangerous execution" (AS-001). This rule fires on any function definition in `.mjs`/`.js` files, making it unusable for a legitimate browser detection library. MCP-04 and MCP-10 flags are also not applicable — this project has no MCP server definitions. The PDF report was saved to `mcps-audit-report.pdf`.
-
-### config-audit / mcp-exfil-scan — User Config False Positives
-
-Findings in `config-audit.py` and `mcp-exfil-scan` attributed to user's global `~/.claude/settings.json` hooks (cc-beeper localhost curl on port 19222) are **legitimate user automation, not malicious**. Security scanner scripts flagged for "base64 + .env access" are the scanners themselves — these are the expected patterns for detection tools.
-
-### skill-security-auditor
-
-All 20 SKILL.md files scored 0–15/100 (LOW RISK). No prompt injection, obfuscation, or credential access detected.
-
----
+| # | Severity | Tool | Package/File | Description |
+|---|----------|------|-------------|-------------|
+| 1 | Medium | OSV-Scanner | @anthropic-ai/sdk 0.81.0 | GHSA-p7fg-763f-g4gf — upgrade to ≥ 0.91.1 |
+| 2 | Low | Semgrep OWASP | detect-antipatterns-browser.js (×14) | wildcard-postmessage-configuration — by design for browser extension |
 
 ## Fixes Applied
 
-1. Added `overrides` block to `package.json` resolving 28 CVEs across 11 transitive packages: `basic-ftp >=5.3.1`, `ip-address >=10.1.1`, `ws >=8.20.1`, `@protobufjs/utf8 >=1.1.1`, `brace-expansion >=2.0.3`, `devalue >=5.8.1`, `fast-uri >=3.1.2`, `hono >=4.12.18`, `lodash >=4.18.0`, `protobufjs >=7.5.8`, `qs >=6.15.2`
-2. Ran `bun install` to regenerate `bun.lock` with fixed versions
-3. Verified: Trivy reports **0 vulnerabilities**; OSV-Scanner reports **1 remaining** (see Known Issues)
-
----
+- **GHSA-p7fg-763f-g4gf** — Added `"@anthropic-ai/sdk": ">=0.91.1"` to `overrides` in `package.json` and ran `bun install`. OSV-Scanner re-run confirms "No issues found".
 
 ## Known Remaining Issues
 
-- **GHSA-p7fg-763f-g4gf (`@anthropic-ai/sdk` 0.81.0, MEDIUM/CVSS 4.8):** `@anthropic-ai/claude-agent-sdk@0.2.119` (devDep) pins `@anthropic-ai/sdk@^0.81.0` which resolves to 0.81.0 alongside the direct `^0.91.1`. A flat override fixes bun.lock but npm rejects overriding a direct dep (`EOVERRIDE`); bun 1.3.12 does not support nested override syntax. The 0.81.0 instance is a dev-only transitive dep, absent from the published CLI package files (`cli/`, `LICENSE`). No end-user exposure.
-- **Semgrep wildcard-postmessage (75):** By design — browser extension cross-context IPC. Cannot fix without redesigning the extension communication model. Messages are namespaced and contain no sensitive data.
-- **mcp-scan:** Not run (opt-in tool; automated session without user consent).
+- `wildcard-postmessage-configuration` — by design for browser extension architecture; no fix planned.
+- `skipDangerousModePermissionPrompt: true` in global settings — existing, user-acknowledged.
+- mcps-audit AS-001 function-declaration false positives — tool limitation.
 
----
+### APTS Audit Log
 
-## APTS Audit Log
-
-- **Log:** `/tmp/css-scan-20260529T030526Z.jsonl`
-- **Tool runs recorded:** 13
+- **Log:** `/tmp/css-scan-20260530T030426Z.jsonl`
+- **Tool runs recorded:** 10
 - **Standard:** OWASP APTS § Auditability
