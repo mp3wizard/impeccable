@@ -56,6 +56,24 @@ describe('live-browser.js regression guards', () => {
     );
   });
 
+  it('shader bitmap decode failure keeps a visible fallback overlay', () => {
+    assert.match(
+      SOURCE,
+      /function showShaderBitmapFallback\(canvas, blob\)[\s\S]{0,900}?fallback\.style\.backgroundImage = 'url\("' \+ objectUrl \+ '"\)';[\s\S]{0,300}?shaderState = \{ canvas: fallback,[\s\S]{0,180}?objectUrl \};/,
+      'shader fallback should render the captured bitmap via a background-image div and keep its object URL revocable',
+    );
+    assert.match(
+      SOURCE,
+      /catch \(err\) \{[\s\S]{0,220}?shader bitmap decode failed[\s\S]{0,220}?showShaderBitmapFallback\(canvas, blob\);[\s\S]{0,80}?return;/,
+      'createImageBitmap failures should fall back to a visible captured-bitmap overlay',
+    );
+    assert.doesNotMatch(
+      SOURCE,
+      /new Image\(/,
+      'shader fallback should not use an image element fallback',
+    );
+  });
+
   it('locks every global bar mode toggle while manual Apply is in flight', () => {
     assert.match(
       SOURCE,
@@ -95,6 +113,32 @@ describe('live-browser.js regression guards', () => {
       SOURCE,
       /function shouldFocusSteerChat\(\) \{\s*return state !== 'CONFIGURING'\s*&& state !== 'EDITING'\s*&& !steerLocked;\s*\}/,
       'edit-mode contenteditable focus must not be stolen by the global steering chat focus recovery',
+    );
+  });
+
+  it('pins edit badge button metrics instead of inheriting host button chrome', () => {
+    const start = SOURCE.indexOf('const calloutStyle = (color, borderColor) => ({');
+    const end = SOURCE.indexOf('    });', start);
+    const calloutStyle = SOURCE.slice(start, end);
+    assert.match(
+      calloutStyle,
+      /fontSize: '10px'/,
+      'edit badge controls should not scale from host rem settings',
+    );
+    assert.match(
+      calloutStyle,
+      /lineHeight: '16px'/,
+      'edit badge controls need the same 22px button height on pages with or without button resets',
+    );
+    assert.match(
+      calloutStyle,
+      /boxSizing: 'border-box'/,
+      'edit badge controls should include padding and border in their rendered dimensions',
+    );
+    assert.doesNotMatch(
+      calloutStyle,
+      /fontSize: '0\.625rem'/,
+      'edit badge controls should not depend on the host root font-size',
     );
   });
 
@@ -245,6 +289,34 @@ describe('live-browser.js regression guards', () => {
       SOURCE,
       /if \(state === 'IDLE' && \(pickActive \|\| insertActive\)\) state = 'PICKING';/,
       'SSE connected must arm insert mode when saved preference has insert on',
+    );
+  });
+
+  it('detect mode shows an empty result toast once per requested scan', () => {
+    assert.match(
+      SOURCE,
+      /const DETECT_EMPTY_MESSAGE = 'No detector issues found\.';/,
+      'live detector zero result copy should live in one named constant',
+    );
+    assert.match(
+      SOURCE,
+      /function requestDetectScan\(\)[\s\S]{0,240}?const scanId = String\(\+\+detectScanSeq\);[\s\S]{0,80}?activeDetectScanId = scanId;[\s\S]{0,160}?config: \{ scanId \}/,
+      'Detect scans must send a fresh scan id to the detector',
+    );
+    assert.match(
+      SOURCE,
+      /if \(!detectActive\) return;[\s\S]{0,80}?if \(activeDetectScanId && e\.data\.scanId !== activeDetectScanId\) return;/,
+      'live detector results must ignore inactive and stale scan ids',
+    );
+    assert.match(
+      SOURCE,
+      /if \(detectActive && pendingDetectScanId && detectCount === 0\) \{[\s\S]{0,80}?showToast\(DETECT_EMPTY_MESSAGE, 3200\);[\s\S]{0,120}?pendingDetectScanId = null;/,
+      'a matching zero result scan must use the existing toast UI and clear the pending scan id',
+    );
+    assert.match(
+      SOURCE,
+      /window\.postMessage\(\{ source: 'impeccable-command', action: 'remove' \}, '\*'\);[\s\S]{0,80}?activeDetectScanId = null;[\s\S]{0,80}?pendingDetectScanId = null;/,
+      'turning Detect off must clear scan ids',
     );
   });
 
