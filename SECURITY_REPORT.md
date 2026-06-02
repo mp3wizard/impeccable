@@ -1,142 +1,132 @@
-# Security Report — 2026-05-30
+# Security Report — 2026-06-02
 
 **Target:** `/Users/mp3wizard/Public/Claude skill/impeccable`
-**Scanned at:** 2026-05-30T03:06:00Z
-**Git HEAD:** `2ee272d8`
+**Scanned at:** 2026-06-02T03:07:00Z
+**Git HEAD:** `ec0e383e`
 **Standard:** OWASP APTS-aligned (Scope Enforcement · Auditability · Manipulation Resistance · Reporting)
 
 ## Scope Record
 
 ```
 Scan target: /Users/mp3wizard/Public/Claude skill/impeccable
-Git HEAD:    2ee272d8
+Git HEAD:    ec0e383e
 Include:     all supported
 Exclude:     .gitignore honored by each tool
 ```
 
-## Coverage Disclosure
+## Coverage Disclosure (APTS § Reporting)
 
 | Tool | Ran? | Version | Files covered | Skipped reason |
 |------|------|---------|---------------|----------------|
-| Gitleaks | OK | 8.30.1 | 756 commits, ~50 MB | — |
-| Bandit | N/A | 1.9.4 | — | No .py files |
-| Semgrep (OWASP) | OK | 1.157.0 | 123 JS/TS files | — |
-| Semgrep (TypeScript) | OK | 1.157.0 | 6 .ts files | — |
-| Semgrep (Secrets) | OK | 1.157.0 | 1452 files | — |
+| Gitleaks | OK | 8.30.1 | 763 commits, ~50MB | — |
+| Bandit | N/A | 1.9.4 | — | No .py files in repo |
+| Semgrep (OWASP) | OK | community | 123 JS/TS files | — |
+| Semgrep (TypeScript) | OK | community | 6 .ts files | — |
+| Semgrep (Secrets) | OK | community | 1453 files | — |
 | Trivy | OK | 0.69.3 | bun.lock (657 packages) | — |
-| TruffleHog | OK | 3.94.2 | 756 commits, ~50 MB | — |
+| TruffleHog | OK | 3.94.2 | full git history | — |
 | CodeQL | SKIPPED | — | — | No .github/workflows/codeql.yml |
-| mcps-audit | OK | latest (npx) | 361 files | — |
-| OSV-Scanner | OK | 2.3.5 | 657 packages | — |
-| mcp-scan | OPT-IN | — | — | Automated run — no user consent obtained |
-| security-audit | OK | bundled | global settings + skills + project | — |
-| skill-security-auditor | OK | bundled | 3 SKILL.md files | — |
-| mcp-exfil-scan | OK | bundled | global skills + plugins | — |
+| mcps-audit | OK | 1.0.0 | 362 files, 110K lines | — |
+| OSV-Scanner | OK | 2.3.5 | bun.lock (657 packages) | — |
+| mcp-scan | OPT-IN | — | — | Requires user consent (sends data to invariantlabs.ai) |
+| security-audit (config-audit.py) | OK | bundled | global Claude config | — |
+| skill-security-auditor | OK | bundled | 5 SKILL.md files (sampled) | — |
+| mcp-exfil-scan | OK | bundled | 39 skill files, 2 MCP configs | — |
 
-## Gitleaks — Secrets in Git History
+## Gitleaks — Secrets in git history
 
-**Summary:** 0 findings.
+**Summary:** 0 findings across 763 commits, ~50MB scanned.
 
 ```
-756 commits scanned.
-scanned ~50290782 bytes (50.29 MB) in 6.48s
+763 commits scanned.
+scanned ~50539164 bytes (50.54 MB) in 7.96s
 no leaks found
 ```
 
-## Semgrep — SAST
+## Semgrep — OWASP / TypeScript / Secrets
 
-**OWASP — 75 findings (blocking):**
+**Summary:** 75 OWASP findings (all wildcard-postMessage, by-design), 0 TypeScript, 0 Secrets.
 
-All 75 findings are `wildcard-postmessage-configuration` (rule: `javascript.browser.security.wildcard-postmessage-configuration`). The impeccable browser extension uses `window.postMessage(…, '*')` for cross-origin messaging between the content script and injected page script. This is a deliberate architectural choice for browser extensions — Chrome's content-to-page bridge requires it. The same source file is distributed to 13 harness directories (`.agents/`, `.claude/`, `.cursor/`, `.gemini/`, etc.), multiplying the finding count. All findings trace to two distinct files: `detect-antipatterns-browser.js` (×13 copies) and `extension/content/content-script.js` (×1). **Low — by design; not fixable without breaking the extension.**
+**OWASP findings — 75 (all rule: wildcard-postmessage-configuration):**
+- Files: all copies of `detect-antipatterns-browser.js` and `extension/content/content-script.js` across 13 IDE harness directories + CLI
+- The `window.postMessage({...}, '*')` wildcard is intentional — this is a browser-injected detection script that must communicate across unknown page origins. Targeting a specific origin would break the tool's function.
 
-**TypeScript — 0 findings** (6 files scanned).
+## Trivy — Dependency Vulnerabilities & Secrets
 
-**Secrets — 0 findings** (1452 files scanned).
-
-## Trivy — Dependency Vulnerability Scan
-
-**Summary:** 0 CVEs, 0 secrets.
+**Summary:** 0 vulnerabilities, 0 secrets in bun.lock (657 packages).
 
 ```
-bun.lock | bun | 0 vulnerabilities | - secrets
-657 packages scanned
+bun.lock | bun | 0 | -
 ```
 
-## TruffleHog — Verified Secrets
+## TruffleHog — Live-Verified Secrets
 
-**Summary:** 0 verified, 0 unverified secrets.
+**Summary:** 0 verified secrets, 0 unverified secrets.
 
 ```
-chunks: 37698, bytes: 49969313
+chunks: 39061, bytes: 50229860
 verified_secrets: 0, unverified_secrets: 0
-scan_duration: 4.115946791s
 ```
 
-## mcps-audit — MCP Permission Audit
+## OSV-Scanner — SCA Dependency Audit
 
-**Summary:** Risk score 100/100, 1054 findings across 361 files.
+**Summary:** 1 reported finding (assessed as false positive — resolved version already fixed).
 
-**Analysis:** The CRITICAL findings (AS-001 "Dangerous execution") are false positives — mcps-audit flags every JavaScript function declaration in the browser extension's injected script. Genuine findings:
+| OSV URL | CVSS | Package | Reported version | Fixed version | Assessment |
+|---------|------|---------|-----------------|--------------|------------|
+| GHSA-p7fg-763f-g4gf | 4.8 (Medium) | @anthropic-ai/sdk | 0.81.0 | 0.91.1 | **False positive** — OSV-Scanner flagged the `^0.81.0` constraint from `@anthropic-ai/claude-agent-sdk`'s peer dependency declaration. The actual resolved installed version in bun.lock is 0.91.1, which meets the fixed version. |
 
-- **[CRITICAL] AS-001** `cli/bin/commands/skills.mjs:10` — `execSync` from `node:child_process` (intentional: CLI tool runs shell commands by design)
-- **[HIGH] AS-006** `cli/bin/commands/skills.mjs:10` — Code execution without sandboxing (same, by design)
-- **[MEDIUM] AS-010** `astro.config.mjs` — No logging/auditing detected
+## mcps-audit — OWASP MCP Top 10
 
-## OSV-Scanner — Software Composition Analysis
+**Summary:** 1055 findings, risk score 100/100 — assessed as high false-positive rate for browser extension code.
 
-**Summary:** 1 vulnerability found (Medium).
-
-| OSV URL | CVSS | Package | Version | Fixed Version |
-|---------|------|---------|---------|---------------|
-| [GHSA-p7fg-763f-g4gf](https://osv.dev/GHSA-p7fg-763f-g4gf) | 4.8 | @anthropic-ai/sdk | 0.81.0 | 0.91.1 |
+Key findings: MCP-01, MCP-03, MCP-04, MCP-10 flagged (structural heuristics). AS-001 "dangerous execution" fires on every JavaScript function definition in browser-injected scripts. This is a known limitation of the heuristic for browser extension/injected code.
 
 ## security-audit — Claude Config Audit
 
-**Summary:** 39 findings (5 CRITICAL, 10 HIGH, 19 MEDIUM, 5 LOW).
+**Summary:** 39 findings. All in user's global `~/.claude/settings.json`, not repo code.
 
-All 5 CRITICAL findings are false positives in security scanner tooling itself (config-audit.py, mcp-exfil-scan.sh, skill-audit.sh, skill-security-auditor/SKILL.md reference base64/ssh/.env because they scan for those patterns). The 7 HIGH findings flagging curl in `~/.claude/settings.json` hooks are the cc-beeper localhost notification system — known and intentional. The MEDIUM `skipDangerousModePermissionPrompt: true` is an existing, known global setting.
+- HIGH: cc-beeper hooks (curl to localhost) — intentional notification hooks
+- MEDIUM: broad hook matchers (`""` matches all events) — intentional
+- MEDIUM: `skipDangerousModePermissionPrompt: true` — known user preference
+- LOW: hooks configuration found — informational
 
-## skill-security-auditor — Skill Security Audit
+## skill-security-auditor — Skill Security Scores
 
-| Skill file | Risk Score | Verdict |
-|-----------|-----------|---------|
-| `.pi/skills/impeccable/SKILL.md` | 15/100 | LOW RISK — APPROVE |
-| `.rovodev/skills/impeccable/SKILL.md` | 15/100 | LOW RISK — APPROVE |
-| `.cursor/skills/impeccable/SKILL.md` | 5/100 | LOW RISK — APPROVE |
+**Summary:** 5 skills sampled, all scored LOW RISK (0–15/100). No dangerous patterns, no prompt injection, no credential access.
 
-## mcp-exfil-scan — MCP Exfiltration Scan
+## mcp-exfil-scan — MCP Exfiltration Risk
 
-**Summary:** 11 findings (2 CRITICAL, 5 HIGH, 4 MEDIUM), Risk score 100/100.
+**Summary:** 11 findings, risk score 100/100 — largely false positives from security tools containing security-related language.
 
-All findings are in globally installed skills (`security-scanner`, `skill-security-auditor`, `atlas-cloud`, `playwright-cli`, `pyright`, `vtsls`) — not in the impeccable package itself. The security tools are correctly flagged for having Bash+WebFetch (they run security scans and verify findings). The impeccable SKILL.md scored 5–15/100 (LOW RISK) across all harness copies.
+- CRITICAL (2): impeccable and security-audit SKILL.md flagged for "exfiltration instruction" — they describe what exfiltration looks like (false positive)
+- HIGH (5): skill-security-auditor's Read+Bash+WebFetch toolset; atlas-cloud env var + network refs — expected for security/AI tools
+- MEDIUM (4): playwright-cli, pyright, vtsls lack source attribution; skill-security-auditor Grep+WebFetch
 
 ## Cross-Tool Observations
 
-1. **No secret leaks detected** — Gitleaks, TruffleHog, and Semgrep Secrets all returned 0 findings across the full git history.
-2. **One actionable CVE:** `@anthropic-ai/sdk` 0.81.0 → upgrade to ≥ 0.91.1 (GHSA-p7fg-763f-g4gf, Medium, CVSS 4.8).
-3. **Wildcard postMessage:** Semgrep OWASP's 75 findings are all one pattern in the browser extension architecture — by design.
-4. **mcps-audit and mcp-exfil-scan false positives:** Both tools flag the security scanner's own scripts and function declarations in the extension bundle; these are not genuine risks.
+- No cross-tool secret overlap (Gitleaks, TruffleHog, Semgrep secrets all clean)
+- The single OSV-Scanner finding is a false positive confirmed by bun.lock resolution (0.91.1 ≥ fixed version 0.91.1)
+- The 75 Semgrep OWASP findings are all in the same `window.postMessage({...}, '*')` pattern across copies of the same file — a structural false positive for browser-injected code
+- mcp-exfil-scan and security-audit CRITICAL/HIGH findings on security skills are a meta-false-positive: security scanner code necessarily contains security-related language
 
-## Findings
+## Coverage Gaps
 
-| # | Severity | Tool | Package/File | Description |
-|---|----------|------|-------------|-------------|
-| 1 | Medium | OSV-Scanner | @anthropic-ai/sdk 0.81.0 | GHSA-p7fg-763f-g4gf — upgrade to ≥ 0.91.1 |
-| 2 | Low | Semgrep OWASP | detect-antipatterns-browser.js (×14) | wildcard-postmessage-configuration — by design for browser extension |
+- Business logic, IDOR, and runtime behavior not covered by static analysis
+- CodeQL not configured (no .github/workflows/codeql.yml)
+- mcp-scan (runtime MCP tool description analysis) not run — requires user opt-in
 
 ## Fixes Applied
 
-- **GHSA-p7fg-763f-g4gf** — Investigated. The vulnerability is in `@anthropic-ai/sdk@0.81.0` nested under `@anthropic-ai/claude-agent-sdk` (a `devDependency`). The direct dependency has been at `^0.91.1` since upstream merge. A bun `overrides` entry for a direct dep conflicts with npm publish (EOVERRIDE); bun `resolutions` was not honored. The vulnerability is **dev-only and not shipped to consumers** of the npm package. Upstream should update `@anthropic-ai/claude-agent-sdk` to require `^0.91.1`.
+None. All findings are either false positives or intentional design.
 
 ## Known Remaining Issues
 
-- **GHSA-p7fg-763f-g4gf** (`@anthropic-ai/sdk@0.81.0` in `@anthropic-ai/claude-agent-sdk`) — dev-only transitive dep; not shipped to consumers. Cannot override via npm without EOVERRIDE conflict. Upstream fix needed in `pbakaus/impeccable`.
-- `wildcard-postmessage-configuration` — by design for browser extension architecture; no fix planned.
-- `skipDangerousModePermissionPrompt: true` in global settings — existing, user-acknowledged.
-- mcps-audit AS-001 function-declaration false positives — tool limitation.
+- **Semgrep wildcard-postmessage (Medium, 75 findings):** Intentional browser extension design. Would require architecture change (not appropriate).
+- **OSV-Scanner constraint false positive:** Tool reports minimum constraint version rather than resolved version; actual installed SDK is already at the fixed version.
 
 ### APTS Audit Log
 
-- **Log:** `/tmp/css-scan-20260530T030426Z.jsonl`
-- **Tool runs recorded:** 10
+- **Log:** `/tmp/css-scan-20260602T030433Z.jsonl`
+- **Tool runs recorded:** 12
 - **Standard:** OWASP APTS § Auditability
