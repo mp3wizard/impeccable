@@ -127,7 +127,7 @@ Risk score: 100/100 — inflated by scanning global skill installations outside 
 
 | Finding | CVE/ID | Severity | Fix |
 |---------|--------|----------|-----|
-| Transitive dep `@anthropic-ai/sdk` 0.81.0 | GHSA-p7fg-763f-g4gf | Medium (CVSS 4.8) | Added `"@anthropic-ai/sdk": ">=0.91.1"` to `overrides` in `package.json`, ran `bun install` |
+| Transitive dep `@anthropic-ai/sdk` 0.81.0 (nested in bun.lock via `@anthropic-ai/claude-agent-sdk`) | GHSA-p7fg-763f-g4gf | Medium (CVSS 4.8) | Added flat `"@anthropic-ai/sdk": ">=0.91.1"` override in `package.json` overrides; ran `bun install` to reseal bun.lock — nested 0.81.0 entry removed, OSV-Scanner verified clean. Note: npm client rejects this override as conflicting with the direct devDep; bun handles it correctly. |
 
 ## Known Remaining Issues
 
