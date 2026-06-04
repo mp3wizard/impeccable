@@ -266,7 +266,7 @@ Join the community and ecosystem conversations:
 
 Last audit: **2026-06-04** (13 tools: Gitleaks 8.30.1, Semgrep, Trivy 0.69.3, TruffleHog 3.94.2, OSV-Scanner 2.3.5, mcps-audit, security-audit, skill-security-auditor, mcp-exfil-scan, and others).
 
-**Findings:** 1 fix applied. GHSA-p7fg-763f-g4gf (`@anthropic-ai/sdk` transitive dep, CVSS 4.8 Medium) — fixed by adding `"@anthropic-ai/sdk": ">=0.91.1"` to `package.json` overrides. 75 Semgrep OWASP findings (wildcard `postMessage`, intentional browser extension design — not fixable without breaking the tool). No secrets detected across full git history.
+**Findings:** 1 fix applied. GHSA-p7fg-763f-g4gf (`@anthropic-ai/sdk` transitive dep, CVSS 4.8 Medium), fixed by adding `"@anthropic-ai/sdk": ">=0.91.1"` to `package.json` overrides. 75 Semgrep OWASP findings (wildcard `postMessage`, intentional browser extension design, not fixable without breaking the tool). No secrets detected across full git history.
 
 See [SECURITY_REPORT.md](SECURITY_REPORT.md) for full details.
 
