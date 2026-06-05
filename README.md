@@ -105,11 +105,7 @@ This auto-detects your harness and writes the build compiled for it to the right
 
 Claude Code users can alternatively install the plugin with `/plugin marketplace add mp3wizard/impeccable`. The general-purpose `npx skills add mp3wizard/impeccable` also works, though it installs one shared build for all harnesses rather than the one compiled for yours.
 
-### Option 2: Download from Website
-
-Visit [impeccable.style](https://impeccable.style), download the ZIP for your tool, and extract to your project.
-
-### Option 3: Copy from Repository
+### Option 2: Copy from Repository
 
 Clone the repo first, then copy the build for your tool:
 
