@@ -98,18 +98,25 @@ Visit [impeccable.style](https://impeccable.style#casestudies) to see before/aft
 From the root of your project, run:
 
 ```bash
-npx impeccable skills install
+npx @mp3wizard/impeccable skills install
 ```
 
 This auto-detects your harness and writes the build compiled for it to the right location (`.claude/skills/`, `.cursor/skills/`, etc.). Works with Cursor, Claude Code, Gemini CLI, Codex CLI, and every other supported tool. Reload your harness afterward.
 
-Claude Code users can alternatively install the plugin with `/plugin marketplace add pbakaus/impeccable`. The general-purpose `npx skills add pbakaus/impeccable` also works, though it installs one shared build for all harnesses rather than the one compiled for yours.
+Claude Code users can alternatively install the plugin with `/plugin marketplace add mp3wizard/impeccable`. The general-purpose `npx skills add mp3wizard/impeccable` also works, though it installs one shared build for all harnesses rather than the one compiled for yours.
 
 ### Option 2: Download from Website
 
 Visit [impeccable.style](https://impeccable.style), download the ZIP for your tool, and extract to your project.
 
 ### Option 3: Copy from Repository
+
+Clone the repo first, then copy the build for your tool:
+
+```bash
+git clone https://github.com/mp3wizard/impeccable.git
+cd impeccable
+```
 
 **Cursor:**
 ```bash
@@ -232,10 +239,10 @@ If you reach for one command often, pin it with `/impeccable pin audit` to get `
 Impeccable includes a standalone CLI for detecting anti-patterns without an AI harness:
 
 ```bash
-npx impeccable detect src/                   # scan a directory
-npx impeccable detect index.html             # scan an HTML file
-npx impeccable detect https://example.com    # scan a URL (Puppeteer)
-npx impeccable detect --fast --json .        # regex-only, JSON output
+npx @mp3wizard/impeccable detect src/                   # scan a directory
+npx @mp3wizard/impeccable detect index.html             # scan an HTML file
+npx @mp3wizard/impeccable detect https://example.com    # scan a URL (Puppeteer)
+npx @mp3wizard/impeccable detect --fast --json .        # regex-only, JSON output
 ```
 
 The detector catches 24 issues across AI slop (side-tab borders, purple gradients, bounce easing, dark glows) and general design quality (line length, cramped padding, small touch targets, skipped headings, and more).
