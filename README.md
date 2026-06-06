@@ -282,6 +282,16 @@ Join the community and ecosystem conversations:
 - [Impeccable on npm](https://www.npmjs.com/package/impeccable): grab the CLI, follow releases, and star the package.
 - Follow @pbakaus on Twitter for release notes, sample lint reports, and video highlights of new rules.
 
+## Security
+
+Last audited: **2026-06-06** | Tools run: 12 (Gitleaks, Semgrep, Trivy, TruffleHog, OSV-Scanner, mcps-audit, config-audit, skill-auditor, mcp-exfil-scan, + 3 more)
+
+**Findings summary:** 26 transitive dependency CVEs (0 Critical, 7 High, 18 Medium, 1 Low) across 9 packages (`ws`, `hono`, `protobufjs`, `@protobufjs/utf8`, `brace-expansion`, `fast-uri`, `ip-address`, `lodash`, `qs`). No secrets detected. No secrets in git history.
+
+**Fixes applied:** All 26 CVEs resolved via `overrides` in `package.json` + `bun install`. Key fix: `hono` override bumped from `>=4.12.18` to `>=4.12.21`.
+
+See [SECURITY_REPORT.md](SECURITY_REPORT.md) for the full report.
+
 ## Contributing
 
 See [DEVELOP.md](DEVELOP.md) for contributor guidelines and build instructions.
