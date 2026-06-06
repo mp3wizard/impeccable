@@ -98,21 +98,38 @@ Visit [impeccable.style](https://impeccable.style#casestudies) to see before/aft
 From the root of your project, run:
 
 ```bash
-npx @mp3wizard/impeccable skills install
+npx impeccable skills install
 ```
 
 This auto-detects your harness and writes the build compiled for it to the right location (`.claude/skills/`, `.cursor/skills/`, etc.). Works with Cursor, Claude Code, Gemini CLI, Codex CLI, and every other supported tool. Reload your harness afterward.
 
-Claude Code users can alternatively install the plugin with `/plugin marketplace add mp3wizard/impeccable`. The general-purpose `npx skills add mp3wizard/impeccable` also works, though it installs one shared build for all harnesses rather than the one compiled for yours.
+Claude Code users can alternatively install the plugin with `/plugin marketplace add pbakaus/impeccable`. The general-purpose `npx skills add pbakaus/impeccable` also works, though it installs one shared build for all harnesses rather than the one compiled for yours.
 
-### Option 2: Copy from Repository
+### Option 2: Git Submodule
 
-Clone the repo first, then copy the build for your tool:
+For teams that want to keep Impeccable vendored and updated through Git, add this repo as a submodule and link the compiled provider build into your harness folders:
 
 ```bash
-git clone https://github.com/mp3wizard/impeccable.git
-cd impeccable
+git submodule add https://github.com/pbakaus/impeccable .impeccable
+npx impeccable skills link --source=.impeccable --providers=claude,cursor
+git add .gitmodules .impeccable .claude .cursor
+git commit -m "Add Impeccable skills"
 ```
+
+Use the providers your project needs, for example `claude`, `cursor`, `gemini`, `codex`, `github`, `opencode`, `pi`, `qoder`, `trae`, `trae-cn`, or `rovo-dev`. The command links individual skill folders from `.impeccable/dist/universal/` and leaves existing real skill directories untouched unless you pass `--force`.
+
+To update later:
+
+```bash
+git submodule update --remote .impeccable
+npx impeccable skills link --source=.impeccable --providers=claude,cursor
+```
+
+### Option 3: Download from Website
+
+Visit [impeccable.style](https://impeccable.style), download the ZIP for your tool, and extract to your project.
+
+### Option 4: Copy from Repository
 
 **Cursor:**
 ```bash
@@ -235,10 +252,10 @@ If you reach for one command often, pin it with `/impeccable pin audit` to get `
 Impeccable includes a standalone CLI for detecting anti-patterns without an AI harness:
 
 ```bash
-npx @mp3wizard/impeccable detect src/                   # scan a directory
-npx @mp3wizard/impeccable detect index.html             # scan an HTML file
-npx @mp3wizard/impeccable detect https://example.com    # scan a URL (Puppeteer)
-npx @mp3wizard/impeccable detect --fast --json .        # regex-only, JSON output
+npx impeccable detect src/                   # scan a directory
+npx impeccable detect index.html             # scan an HTML file
+npx impeccable detect https://example.com    # scan a URL (Puppeteer)
+npx impeccable detect --fast --json .        # regex-only, JSON output
 ```
 
 The detector catches 24 issues across AI slop (side-tab borders, purple gradients, bounce easing, dark glows) and general design quality (line length, cramped padding, small touch targets, skipped headings, and more).
@@ -264,14 +281,6 @@ Join the community and ecosystem conversations:
 - GitHub Discussions: file bugs, request features, and help newcomers.
 - [Impeccable on npm](https://www.npmjs.com/package/impeccable): grab the CLI, follow releases, and star the package.
 - Follow @pbakaus on Twitter for release notes, sample lint reports, and video highlights of new rules.
-
-## Security
-
-Last audit: **2026-06-04** (13 tools: Gitleaks 8.30.1, Semgrep, Trivy 0.69.3, TruffleHog 3.94.2, OSV-Scanner 2.3.5, mcps-audit, security-audit, skill-security-auditor, mcp-exfil-scan, and others).
-
-**Findings:** 1 fix applied. GHSA-p7fg-763f-g4gf (`@anthropic-ai/sdk` transitive dep, CVSS 4.8 Medium), fixed by adding `"@anthropic-ai/sdk": ">=0.91.1"` to `package.json` overrides. 75 Semgrep OWASP findings (wildcard `postMessage`, intentional browser extension design, not fixable without breaking the tool). No secrets detected across full git history.
-
-See [SECURITY_REPORT.md](SECURITY_REPORT.md) for full details.
 
 ## Contributing
 
