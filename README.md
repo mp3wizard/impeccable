@@ -290,7 +290,7 @@ Last audited: **2026-06-09** | Tools run: 13 (Gitleaks, Semgrep OWASP/TS/Secrets
 
 **Findings summary:** 22 transitive dependency CVEs (0 Critical, 6 High, 15 Medium, 1 Low) across 6 packages (`fast-uri`, `hono`, `protobufjs`, `@protobufjs/utf8`, `ip-address`, `qs`). No secrets detected. No secrets in git history.
 
-**Fixes applied:** All 22 CVEs resolved — `package.json` overrides were already targeting safe versions; running `bun install` regenerated `bun.lock` to apply them. Post-fix OSV-Scanner confirms 0 CVEs.
+**Fixes applied:** All 22 CVEs resolved: `package.json` overrides were already targeting safe versions; running `bun install` regenerated `bun.lock` to apply them. Post-fix OSV-Scanner confirms 0 CVEs.
 
 See [SECURITY_REPORT.md](SECURITY_REPORT.md) for the full report.
 
