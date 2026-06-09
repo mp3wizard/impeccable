@@ -286,11 +286,11 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audited: **2026-06-06** | Tools run: 12 (Gitleaks, Semgrep, Trivy, TruffleHog, OSV-Scanner, mcps-audit, config-audit, skill-auditor, mcp-exfil-scan, + 3 more)
+Last audited: **2026-06-09** | Tools run: 13 (Gitleaks, Semgrep OWASP/TS/Secrets, Trivy, TruffleHog, OSV-Scanner, mcps-audit, config-audit, skill-auditor, mcp-exfil-scan)
 
-**Findings summary:** 26 transitive dependency CVEs (0 Critical, 7 High, 18 Medium, 1 Low) across 9 packages (`ws`, `hono`, `protobufjs`, `@protobufjs/utf8`, `brace-expansion`, `fast-uri`, `ip-address`, `lodash`, `qs`). No secrets detected. No secrets in git history.
+**Findings summary:** 22 transitive dependency CVEs (0 Critical, 6 High, 15 Medium, 1 Low) across 6 packages (`fast-uri`, `hono`, `protobufjs`, `@protobufjs/utf8`, `ip-address`, `qs`). No secrets detected. No secrets in git history.
 
-**Fixes applied:** All 26 CVEs resolved via `overrides` in `package.json` + `bun install`. Key fix: `hono` override bumped from `>=4.12.18` to `>=4.12.21`.
+**Fixes applied:** All 22 CVEs resolved — `package.json` overrides were already targeting safe versions; running `bun install` regenerated `bun.lock` to apply them. Post-fix OSV-Scanner confirms 0 CVEs.
 
 See [SECURITY_REPORT.md](SECURITY_REPORT.md) for the full report.
 
