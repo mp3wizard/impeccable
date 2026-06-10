@@ -296,13 +296,11 @@ See [SECURITY_REPORT.md](SECURITY_REPORT.md) for the full report.
 
 ## Contributing
 
-See [DEVELOP.md](DEVELOP.md) for contributor guidelines and build instructions.
+See [DEVELOP.md](docs/DEVELOP.md) for contributor guidelines and build instructions.
 
 ## License
 
 Apache 2.0. See [LICENSE](LICENSE).
-
-The impeccable skill builds on [Anthropic's original frontend-design skill](https://github.com/anthropics/skills/tree/main/skills/frontend-design). See [NOTICE.md](NOTICE.md) for attribution.
 
 ---
 
