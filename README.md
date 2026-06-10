@@ -288,9 +288,9 @@ Join the community and ecosystem conversations:
 
 Last audited: **2026-06-10** | Tools run: 13 (Gitleaks, Semgrep OWASP/TS/Secrets, Trivy, TruffleHog, OSV-Scanner, mcps-audit, config-audit, skill-auditor, mcp-exfil-scan)
 
-**Findings summary:** 0 dependency CVEs. No secrets detected. No secrets in git history. 75 Semgrep OWASP findings are all `wildcard-postmessage-configuration` in browser extension injected scripts (same pattern replicated across 15 platform distribution directories) — upstream design decision, not fixable in fork.
+**Findings summary:** 0 dependency CVEs. No secrets detected. No secrets in git history. 75 Semgrep OWASP findings are all `wildcard-postmessage-configuration` in browser extension injected scripts (same pattern replicated across 15 platform distribution directories): upstream design decision, not fixable in fork.
 
-**Fixes applied:** None required — no genuine fixable vulnerabilities identified.
+**Fixes applied:** None required. No genuine fixable vulnerabilities identified.
 
 See [SECURITY_REPORT.md](SECURITY_REPORT.md) for the full report.
 
