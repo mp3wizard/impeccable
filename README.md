@@ -286,11 +286,11 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audited: **2026-06-09** | Tools run: 13 (Gitleaks, Semgrep OWASP/TS/Secrets, Trivy, TruffleHog, OSV-Scanner, mcps-audit, config-audit, skill-auditor, mcp-exfil-scan)
+Last audited: **2026-06-10** | Tools run: 13 (Gitleaks, Semgrep OWASP/TS/Secrets, Trivy, TruffleHog, OSV-Scanner, mcps-audit, config-audit, skill-auditor, mcp-exfil-scan)
 
-**Findings summary:** 22 transitive dependency CVEs (0 Critical, 6 High, 15 Medium, 1 Low) across 6 packages (`fast-uri`, `hono`, `protobufjs`, `@protobufjs/utf8`, `ip-address`, `qs`). No secrets detected. No secrets in git history.
+**Findings summary:** 0 dependency CVEs. No secrets detected. No secrets in git history. 75 Semgrep OWASP findings are all `wildcard-postmessage-configuration` in browser extension injected scripts (same pattern replicated across 15 platform distribution directories) — upstream design decision, not fixable in fork.
 
-**Fixes applied:** All 22 CVEs resolved: `package.json` overrides were already targeting safe versions; running `bun install` regenerated `bun.lock` to apply them. Post-fix OSV-Scanner confirms 0 CVEs.
+**Fixes applied:** None required — no genuine fixable vulnerabilities identified.
 
 See [SECURITY_REPORT.md](SECURITY_REPORT.md) for the full report.
 
