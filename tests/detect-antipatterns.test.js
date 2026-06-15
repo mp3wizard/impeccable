@@ -152,6 +152,11 @@ describe('detectText — CSS borders', () => {
     expect(f.some(r => r.antipattern === 'side-tab')).toBe(true);
   });
 
+  test('detects border-left shorthand in Sass', () => {
+    const f = detectText(".card\n  border-left: 4px solid #3b82f6", 'test.sass');
+    expect(f.some(r => r.antipattern === 'side-tab')).toBe(true);
+  });
+
   test('ignores neutral border', () => {
     const f = detectText('.card { border-left: 4px solid #e5e7eb; }', 'test.css');
     expect(f.filter(r => r.antipattern === 'side-tab')).toHaveLength(0);
@@ -239,6 +244,32 @@ describe('partials skip page-level checks', () => {
       '<small style="font-size: 13px">sm</small>\n</body></html>';
     const f = detectText(page, 'index.html');
     expect(f.some(r => r.antipattern === 'flat-type-hierarchy')).toBe(true);
+  });
+});
+
+describe('detectText — numbered section markers', () => {
+  test('flags visible full-page numbered section labels', () => {
+    const page = '<!DOCTYPE html><html><body>' +
+      '<section><span>01</span><h2>Strategy</h2></section>' +
+      '<section><span>02</span><h2>Prototype</h2></section>' +
+      '<section><span>03</span><h2>Launch</h2></section>' +
+      '</body></html>';
+    const f = detectText(page, 'test.html');
+    expect(f.some(r => r.antipattern === 'numbered-section-markers')).toBe(true);
+  });
+
+  test('does not run page-level numbered marker analysis on JS source with embedded HTML strings', () => {
+    const source = `
+      const shell = '<!DOCTYPE html><html><head><title>Preview</title></head><body></body></html>';
+      const palette = 'oklch(86% 0.07 84 / 0.08)';
+      const shadow = '0 0 0 1px oklch(0% 0 0 / 0.04), 0 4px 16px oklch(0% 0 0 / 0.05), 0 1px 3px oklch(0% 0 0 / 0.06)';
+      const size = '11.5px';
+      const eye = '<svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/></svg>';
+      const shader = 'float band = bandAt(uv.y - y, 0.05, 0.32);';
+      const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    `;
+    const f = detectText(source, 'live-browser.js');
+    expect(f.filter(r => r.antipattern === 'numbered-section-markers')).toHaveLength(0);
   });
 });
 
@@ -802,6 +833,10 @@ describe('ANTIPATTERNS registry', () => {
 // ---------------------------------------------------------------------------
 
 describe('walkDir', () => {
+  test('includes Sass files in scannable extensions', () => {
+    expect(SCANNABLE_EXTENSIONS.has('.sass')).toBe(true);
+  });
+
   test('finds scannable files', () => {
     const files = walkDir(FIXTURES);
     expect(files.length).toBeGreaterThanOrEqual(3);
@@ -1396,6 +1431,16 @@ describe('buildImportGraph', () => {
     const themeImports = graph.get(path.join(MF, 'theme.scss'));
     expect(themeImports).toBeDefined();
     expect(themeImports.has(path.join(MF, 'variables.scss'))).toBe(true);
+  });
+
+  test('resolves Sass @import', () => {
+    const graph = buildImportGraph([
+      path.join(MF, 'theme.sass'),
+      path.join(MF, 'variables.sass'),
+    ]);
+    const themeImports = graph.get(path.join(MF, 'theme.sass'));
+    expect(themeImports).toBeDefined();
+    expect(themeImports.has(path.join(MF, 'variables.sass'))).toBe(true);
   });
 
   test('ignores bare/node_modules imports', () => {

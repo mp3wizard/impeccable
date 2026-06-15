@@ -17,6 +17,7 @@ import { get } from 'node:https';
 import { createHash } from 'node:crypto';
 import { tmpdir, homedir } from 'node:os';
 import extract from 'extract-zip';
+import { getHookConsent, setHookConsent } from '../../lib/impeccable-config.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const API_BASE = 'https://impeccable.style';
@@ -42,6 +43,22 @@ const PROVIDER_ALIASES = {
   'trae-cn': '.trae-cn',
 };
 
+const PROVIDER_DISPLAY = {
+  '.agents': { name: 'Codex CLI', input: 'codex' },
+  '.claude': { name: 'Claude Code', input: 'claude' },
+  '.cursor': { name: 'Cursor', input: 'cursor' },
+  '.gemini': { name: 'Gemini CLI', input: 'gemini' },
+  '.github': { name: 'GitHub Copilot', input: 'github' },
+  '.kiro': { name: 'Kiro', input: 'kiro' },
+  '.opencode': { name: 'OpenCode', input: 'opencode' },
+  '.pi': { name: 'Project Indigo', input: 'pi' },
+  '.qoder': { name: 'Qoder', input: 'qoder' },
+  '.rovodev': { name: 'Rovo Dev', input: 'rovo-dev' },
+  '.trae': { name: 'Trae', input: 'trae' },
+  '.trae-cn': { name: 'Trae CN', input: 'trae-cn' },
+};
+const PROVIDER_INPUT_ORDER = ['claude', 'codex', 'cursor', 'gemini', 'github', 'kiro', 'opencode', 'pi', 'qoder', 'trae', 'trae-cn', 'rovo-dev'];
+
 // When a project has no harness folder yet, infer the target from globally
 // installed harnesses (~/.claude, ~/.codex, ...). Codex reads skills from
 // .agents/skills, so ~/.codex maps to the .agents bundle variant.
@@ -59,8 +76,46 @@ const GLOBAL_HARNESS_HINTS = [
 // Last-resort default when nothing is detected: Claude Code + the universal
 // (.agents, also Codex) folder, which covers the most common setups.
 const DEFAULT_TARGETS = ['.claude', '.agents'];
+const IMPECCABLE_HOOK_COMMAND_MARKERS = [
+  'skills/impeccable/scripts/hook-probe.mjs',
+  'skills/impeccable/scripts/hook.mjs',
+  'skills/impeccable/scripts/hook-before-edit.mjs',
+  'skills/impeccable/scripts/hook-after-edit.mjs',
+  'skills/impeccable/scripts/hook-stop.mjs',
+];
+const PROVIDER_HOOK_ARTIFACTS = {
+  '.claude': [
+    // The hook is a machine-local install side effect, so it lands in the
+    // gitignored `.claude/settings.local.json` rather than the team-shared
+    // `settings.json`. The bundle still ships the manifest as `settings.json`
+    // (the `rel` source), but we write it to `destRel`. A hook the user moved
+    // into `settings.json` is honored in place; see copyProviderHooks.
+    { sourceProvider: '.claude', rel: 'settings.json', destProvider: '.claude', destRel: 'settings.local.json' },
+  ],
+  '.cursor': [
+    { sourceProvider: '.cursor', rel: 'hooks.json', destProvider: '.cursor' },
+  ],
+  // Codex reads skills from `.agents/skills`, but project hooks from
+  // `.codex/hooks.json`, so the `.agents` install target owns this sidecar.
+  '.agents': [
+    { sourceProvider: '.codex', rel: 'hooks.json', destProvider: '.codex' },
+  ],
+};
 
+let pipedAnswers = null;
 function ask(question) {
+  if (!process.stdin.isTTY) {
+    process.stdout.write(question);
+    if (!pipedAnswers) {
+      let input = '';
+      try {
+        input = readFileSync(0, 'utf-8');
+      } catch {}
+      pipedAnswers = input.split(/\r?\n/);
+    }
+    return Promise.resolve(String(pipedAnswers.shift() || '').trim().toLowerCase());
+  }
+
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   return new Promise(r => rl.question(question, ans => { rl.close(); r(ans.trim().toLowerCase()); }));
 }
@@ -352,6 +407,82 @@ function normalizeProviderName(value) {
   return PROVIDER_ALIASES[key] || null;
 }
 
+function parseProviderList(value) {
+  const providers = [];
+  const invalid = [];
+  for (const raw of String(value || '').split(',').map(s => s.trim()).filter(Boolean)) {
+    const provider = normalizeProviderName(raw);
+    if (!provider) {
+      invalid.push(raw);
+      continue;
+    }
+    if (!providers.includes(provider)) providers.push(provider);
+  }
+  return { providers, invalid };
+}
+
+function providerInputName(provider) {
+  return PROVIDER_DISPLAY[provider]?.input || provider.replace(/^\./, '');
+}
+
+function providerDisplayName(provider) {
+  return PROVIDER_DISPLAY[provider]?.name || provider;
+}
+
+function formatProviderList(providers) {
+  return providers.map(providerInputName).join(', ');
+}
+
+function formatPathForDisplay(path, home = homedir()) {
+  if (path === home) return '~';
+  if (path.startsWith(`${home}/`)) return `~/${path.slice(home.length + 1)}`;
+  return path;
+}
+
+function collectInstallDetections(root, home = homedir()) {
+  const detections = [];
+  for (const provider of PROVIDER_DIRS) {
+    const foundPath = join(root, provider);
+    if (!existsSync(foundPath)) continue;
+    detections.push({
+      provider,
+      scope: 'project',
+      foundPath,
+      installRoot: root,
+      installPath: join(root, provider, 'skills'),
+      reason: 'project harness folder',
+    });
+  }
+
+  for (const { home: h, provider } of GLOBAL_HARNESS_HINTS) {
+    const foundPath = join(home, h);
+    if (!existsSync(foundPath)) continue;
+    detections.push({
+      provider,
+      scope: 'user',
+      foundPath,
+      installRoot: home,
+      installPath: join(home, provider, 'skills'),
+      reason: 'user harness folder',
+    });
+  }
+  return detections;
+}
+
+function uniqueProviders(detections) {
+  const providers = [];
+  for (const detection of detections) {
+    if (!providers.includes(detection.provider)) providers.push(detection.provider);
+  }
+  return providers;
+}
+
+function defaultDetectedProviders(detections) {
+  const projectProviders = uniqueProviders(detections.filter(d => d.scope === 'project'));
+  if (projectProviders.length > 0) return projectProviders;
+  return uniqueProviders(detections.filter(d => d.scope === 'user'));
+}
+
 /**
  * Decide which provider folders to install into.
  *  1. An explicit --providers=.claude,.cursor list wins.
@@ -361,26 +492,126 @@ function normalizeProviderName(value) {
  */
 function resolveInstallTargets(root, providersValue) {
   if (providersValue) {
-    const wanted = providersValue
-      .split(',')
-      .map(s => s.trim())
-      .filter(Boolean)
-      .map(normalizeProviderName)
-      .filter(Boolean);
-    return [...new Set(wanted)];
+    return parseProviderList(providersValue).providers;
   }
 
-  const inProject = PROVIDER_DIRS.filter(d => existsSync(join(root, d)));
-  if (inProject.length > 0) return inProject;
-
-  const home = homedir();
-  const inferred = [];
-  for (const { home: h, provider } of GLOBAL_HARNESS_HINTS) {
-    if (existsSync(join(home, h)) && !inferred.includes(provider)) inferred.push(provider);
-  }
-  if (inferred.length > 0) return inferred;
+  const detected = defaultDetectedProviders(collectInstallDetections(root));
+  if (detected.length > 0) return detected;
 
   return [...DEFAULT_TARGETS];
+}
+
+function normalizeInstallScope(value) {
+  const key = String(value || '').trim().toLowerCase();
+  if (['u', 'user', 'home', 'global'].includes(key)) return 'user';
+  if (['p', 'project', 'local', 'repo'].includes(key)) return 'project';
+  return null;
+}
+
+function getInstallScopeValue(flags) {
+  if (flags.includes('--user') || flags.includes('--home') || flags.includes('--global')) return 'user';
+  if (flags.includes('--project') || flags.includes('--local')) return 'project';
+  return getFlagValue(flags, '--scope') || getFlagValue(flags, '--install-scope');
+}
+
+function defaultInstallScope(detections, providers) {
+  const selected = new Set(providers);
+  if (detections.some(d => selected.has(d.provider) && d.scope === 'project')) return 'project';
+  if (detections.some(d => selected.has(d.provider) && d.scope === 'user')) return 'user';
+  return 'project';
+}
+
+function installRootForScope(scope, projectRoot) {
+  return scope === 'user' ? homedir() : projectRoot;
+}
+
+function printInstallDetections(projectRoot, detections) {
+  if (detections.length === 0) {
+    console.log(`No installed harness folders detected under ${formatPathForDisplay(projectRoot)} or ${formatPathForDisplay(homedir())}.`);
+    return;
+  }
+
+  console.log('Detected installed harnesses:');
+  for (const detection of detections) {
+    console.log(`  - ${providerDisplayName(detection.provider)}: found ${formatPathForDisplay(detection.foundPath)}; skills target ${formatPathForDisplay(detection.installPath)}`);
+  }
+}
+
+async function promptForProviders(defaultProviders = []) {
+  const choices = PROVIDER_INPUT_ORDER.join(', ');
+  const suffix = defaultProviders.length > 0 ? ` [${formatProviderList(defaultProviders)}]` : '';
+  while (true) {
+    const answer = await ask(`Select providers (comma-separated: ${choices})${suffix}: `);
+    if (!answer && defaultProviders.length > 0) return [...defaultProviders];
+    const { providers, invalid } = parseProviderList(answer);
+    if (invalid.length > 0) {
+      console.log(`Unknown provider(s): ${invalid.join(', ')}`);
+      continue;
+    }
+    if (providers.length > 0) return providers;
+    console.log('Choose at least one provider.');
+  }
+}
+
+async function chooseInstallProviders(projectRoot, providersValue, { yes } = {}) {
+  const detections = collectInstallDetections(projectRoot);
+  if (providersValue) {
+    const { providers, invalid } = parseProviderList(providersValue);
+    if (invalid.length > 0) {
+      throw new Error(`Unknown provider(s): ${invalid.join(', ')}`);
+    }
+    return { targets: providers, detections, explicit: true };
+  }
+
+  if (yes) {
+    return { targets: resolveInstallTargets(projectRoot, null), detections, explicit: false };
+  }
+
+  printInstallDetections(projectRoot, detections);
+  const detectedProviders = defaultDetectedProviders(detections);
+  if (detectedProviders.length === 0) {
+    return { targets: await promptForProviders(), detections, explicit: false };
+  }
+
+  const answer = await ask(`Install for detected harnesses only (${formatProviderList(detectedProviders)})? (Y/n) `);
+  if (answer === 'n' || answer === 'no') {
+    return { targets: await promptForProviders(detectedProviders), detections, explicit: false };
+  }
+  return { targets: detectedProviders, detections, explicit: false };
+}
+
+async function chooseInstallScope(projectRoot, targets, detections, { yes, scopeValue } = {}) {
+  const explicitScope = normalizeInstallScope(scopeValue);
+  if (scopeValue && !explicitScope) {
+    throw new Error(`Unknown install scope: ${scopeValue}. Use --scope=project or --scope=user.`);
+  }
+  if (explicitScope) return explicitScope;
+
+  // Preserve the old scripted behavior: `-y` installs into the current project
+  // unless the caller explicitly opts into `--scope=user`.
+  if (yes) return 'project';
+
+  const fallback = defaultInstallScope(detections, targets);
+  const answer = await ask(`Install location: user home (${formatPathForDisplay(homedir())}) or project (${formatPathForDisplay(projectRoot)})? [${fallback}] `);
+  if (!answer) return fallback;
+  const scope = normalizeInstallScope(answer);
+  if (!scope) {
+    console.log(`Unknown install location "${answer}", using ${fallback}.`);
+    return fallback;
+  }
+  return scope;
+}
+
+async function chooseInstallPlan(projectRoot, flags, { yes } = {}) {
+  const providersValue = getFlagValue(flags, '--providers');
+  const scopeValue = getInstallScopeValue(flags);
+  const { targets, detections } = await chooseInstallProviders(projectRoot, providersValue, { yes });
+  if (targets.length === 0) {
+    throw new Error('Could not determine a target harness folder.');
+  }
+  const scope = await chooseInstallScope(projectRoot, targets, detections, { yes, scopeValue });
+  const installRoot = installRootForScope(scope, projectRoot);
+  return { targets, scope, installRoot, hookRoot: projectRoot, detections };
 }
 
 /**
@@ -392,24 +623,305 @@ function copyProviderSkills(bundleDir, root, targets) {
   let written = 0;
   for (const provider of targets) {
     const srcDir = join(bundleDir, provider, 'skills');
-    if (!existsSync(srcDir)) continue;
-    const localSkillsDir = join(root, provider, 'skills');
-    // A previous `npx skills` install may have left this provider's skills dir
-    // as a symlink to another provider's canonical copy. Drop the link so we
-    // write a real, provider-specific directory instead of writing through it.
-    try {
-      if (lstatSync(localSkillsDir).isSymbolicLink()) unlinkSync(localSkillsDir);
-    } catch {}
-    for (const skill of readdirSync(srcDir, { withFileTypes: true })) {
-      if (!skill.isDirectory()) continue;
-      const src = join(srcDir, skill.name);
-      const dest = join(localSkillsDir, skill.name);
-      rmSync(dest, { recursive: true, force: true });
-      copyDirSync(src, dest);
-      written++;
+    if (existsSync(srcDir)) {
+      const localSkillsDir = join(root, provider, 'skills');
+      // A previous `npx skills` install may have left this provider's skills dir
+      // as a symlink to another provider's canonical copy. Drop the link so we
+      // write a real, provider-specific directory instead of writing through it.
+      try {
+        if (lstatSync(localSkillsDir).isSymbolicLink()) unlinkSync(localSkillsDir);
+      } catch {}
+      for (const skill of readdirSync(srcDir, { withFileTypes: true })) {
+        if (!skill.isDirectory()) continue;
+        const src = join(srcDir, skill.name);
+        const dest = join(localSkillsDir, skill.name);
+        rmSync(dest, { recursive: true, force: true });
+        copyDirSync(src, dest);
+        written++;
+      }
     }
   }
   return written;
+}
+
+function hookArtifactsForProvider(bundleDir, root, provider) {
+  return (PROVIDER_HOOK_ARTIFACTS[provider] || []).map(({ sourceProvider, rel, destProvider, destRel }) => {
+    const writeRel = destRel || rel;
+    const artifact = {
+      src: join(bundleDir, sourceProvider, rel),
+      dest: join(root, destProvider, writeRel),
+    };
+    // When the write target is a local override (e.g. settings.local.json), the
+    // team-shared sibling (settings.json) is where a legacy install or a
+    // deliberate user move would put our hook. Track it so we never duplicate.
+    if (writeRel !== rel) {
+      artifact.sharedDest = join(root, destProvider, rel);
+    }
+    return artifact;
+  });
+}
+
+function hookScriptPathForProvider(skillRoot, provider) {
+  if (provider === '.cursor') {
+    return join(skillRoot, provider, 'skills', 'impeccable', 'scripts', 'hook-before-edit.mjs');
+  }
+  if (provider === '.claude' || provider === '.agents') {
+    return join(skillRoot, provider, 'skills', 'impeccable', 'scripts', 'hook.mjs');
+  }
+  return null;
+}
+
+function rewriteHookCommandsForSkillRoot(value, provider, skillRoot) {
+  const hookScript = hookScriptPathForProvider(skillRoot, provider);
+  if (!hookScript) return value;
+
+  if (typeof value === 'string') {
+    if (valueHasImpeccableHookMarker(value)) return `node ${JSON.stringify(hookScript)}`;
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map(item => rewriteHookCommandsForSkillRoot(item, provider, skillRoot));
+  }
+  if (value && typeof value === 'object') {
+    const next = {};
+    for (const [key, child] of Object.entries(value)) {
+      next[key] = rewriteHookCommandsForSkillRoot(child, provider, skillRoot);
+    }
+    return next;
+  }
+  return value;
+}
+
+// The file paths the CLI writes hook manifests to (the local override target,
+// e.g. settings.local.json — not the shared sibling).
+function expectedHookDests(root, providers) {
+  const targets = Array.isArray(providers) ? providers : [providers];
+  return targets.flatMap(provider =>
+    (PROVIDER_HOOK_ARTIFACTS[provider] || []).map(({ rel, destProvider, destRel }) =>
+      join(root, destProvider, destRel || rel))
+  );
+}
+
+// Whether a hook manifest file actually wires up the Impeccable hook. We parse
+// the JSON and scan only the `hooks` subtree (via valueHasImpeccableHookMarker),
+// not the raw file text: an unrelated string elsewhere — e.g. a permissions
+// allow entry that happens to mention the hook path — must not read as a hook.
+function fileHasImpeccableHookMarker(file) {
+  if (!existsSync(file)) return false;
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync(file, 'utf-8'));
+  } catch {
+    return false;
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+  if (!parsed.hooks || typeof parsed.hooks !== 'object') return false;
+  return valueHasImpeccableHookMarker(parsed.hooks);
+}
+
+// Whether our hook is already wired up for a provider, used to decide if the
+// already-installed fast path should top up a missing hook. We look for the
+// Impeccable marker — not mere file existence — because the target files
+// (settings.local.json, hooks.json) commonly hold unrelated local settings; an
+// existence check would falsely report "installed" and skip repairing a missing
+// hook that `update` would otherwise add. For Claude we also honor our hook
+// living in the shared settings.json sibling (a legacy install or user move).
+function hookInstalledForProvider(root, provider) {
+  const artifacts = PROVIDER_HOOK_ARTIFACTS[provider] || [];
+  if (artifacts.length === 0) return true;
+  return artifacts.every(({ destProvider, rel, destRel }) => {
+    const writeRel = destRel || rel;
+    if (fileHasImpeccableHookMarker(join(root, destProvider, writeRel))) return true;
+    if (writeRel !== rel && fileHasImpeccableHookMarker(join(root, destProvider, rel))) return true;
+    return false;
+  });
+}
+
+function valueHasImpeccableHookMarker(value) {
+  if (typeof value === 'string') {
+    return IMPECCABLE_HOOK_COMMAND_MARKERS.some(marker => value.includes(marker));
+  }
+  if (Array.isArray(value)) return value.some(valueHasImpeccableHookMarker);
+  if (value && typeof value === 'object') {
+    return Object.values(value).some(valueHasImpeccableHookMarker);
+  }
+  return false;
+}
+
+function stripImpeccableHookEntry(entry) {
+  if (!entry || typeof entry !== 'object') return entry;
+  if (valueHasImpeccableHookMarker(entry.command) || valueHasImpeccableHookMarker(entry.args)) {
+    return null;
+  }
+  if (!Array.isArray(entry.hooks)) return entry;
+
+  const strippedHooks = entry.hooks
+    .map(stripImpeccableHookEntry)
+    .filter(Boolean);
+
+  if (strippedHooks.length === 0 && entry.hooks.some(valueHasImpeccableHookMarker)) {
+    return null;
+  }
+
+  return { ...entry, hooks: strippedHooks };
+}
+
+function stripImpeccableHookEntries(entries) {
+  if (!Array.isArray(entries)) return [];
+  return entries
+    .map(stripImpeccableHookEntry)
+    .filter(Boolean);
+}
+
+// Remove our hook from a manifest file, preserving any unrelated content. Used
+// when the hook is honored in the shared settings.json so a stale machine-local
+// copy doesn't make the detector run twice. Drops the file if nothing but our
+// hook scaffolding remains. Returns true if it changed anything.
+function pruneImpeccableHookFromManifest(manifestPath) {
+  if (!fileHasImpeccableHookMarker(manifestPath)) return false;
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync(manifestPath, 'utf-8'));
+  } catch {
+    return false;
+  }
+
+  const existingHooks = parsed.hooks && typeof parsed.hooks === 'object' && !Array.isArray(parsed.hooks)
+    ? parsed.hooks
+    : {};
+  const cleanedHooks = {};
+  for (const [event, entries] of Object.entries(existingHooks)) {
+    const kept = stripImpeccableHookEntries(entries);
+    if (kept.length > 0) cleanedHooks[event] = kept;
+  }
+
+  const next = { ...parsed };
+  if (Object.keys(cleanedHooks).length > 0) {
+    next.hooks = cleanedHooks;
+  } else {
+    // Our hook was the only thing here; drop the hook-manifest scaffolding too.
+    delete next.hooks;
+    delete next.description;
+    delete next.version;
+  }
+
+  if (Object.keys(next).length === 0) {
+    rmSync(manifestPath, { force: true });
+  } else {
+    writeFileSync(manifestPath, `${JSON.stringify(next, null, 2)}\n`);
+  }
+  return true;
+}
+
+function mergeHookManifests(existing, fresh) {
+  const existingObject = existing && typeof existing === 'object' && !Array.isArray(existing) ? existing : {};
+  const freshObject = fresh && typeof fresh === 'object' && !Array.isArray(fresh) ? fresh : {};
+  const existingHooks = existingObject.hooks && typeof existingObject.hooks === 'object' && !Array.isArray(existingObject.hooks)
+    ? existingObject.hooks
+    : {};
+  const freshHooks = freshObject.hooks && typeof freshObject.hooks === 'object' && !Array.isArray(freshObject.hooks)
+    ? freshObject.hooks
+    : {};
+
+  const merged = { ...existingObject, hooks: {} };
+  if (freshObject.version !== undefined) merged.version = freshObject.version;
+  if (freshObject.description !== undefined) merged.description = freshObject.description;
+
+  const hookEvents = new Set([...Object.keys(existingHooks), ...Object.keys(freshHooks)]);
+  for (const event of hookEvents) {
+    const preserved = stripImpeccableHookEntries(existingHooks[event]);
+    const added = Array.isArray(freshHooks[event]) ? freshHooks[event] : [];
+    const mergedEntries = [...preserved, ...added];
+    if (mergedEntries.length > 0) merged.hooks[event] = mergedEntries;
+  }
+
+  return merged;
+}
+
+function readJsonFile(filePath, description) {
+  try {
+    return JSON.parse(readFileSync(filePath, 'utf-8'));
+  } catch (e) {
+    throw new Error(`${description} is not valid JSON: ${filePath}. ${e.message}`);
+  }
+}
+
+function copyProviderHooks(bundleDir, root, providers, { force = false, skillRoot = root } = {}) {
+  const targets = Array.isArray(providers) ? providers : [providers];
+  const written = [];
+  for (const provider of targets) {
+    for (const { src, dest, sharedDest } of hookArtifactsForProvider(bundleDir, root, provider)) {
+      if (!existsSync(src)) continue;
+
+      // Leave-it-never-duplicate: our hook already lives in the team-shared
+      // settings.json (a legacy install or a deliberate user move). Honor it in
+      // place and skip the local write — but first strip any stale copy from the
+      // local override, or Claude Code would load both and run the detector
+      // twice per edit.
+      if (sharedDest && fileHasImpeccableHookMarker(sharedDest)) {
+        pruneImpeccableHookFromManifest(dest);
+        continue;
+      }
+
+      const freshManifest = readJsonFile(src, 'Bundled hook manifest');
+      const fresh = skillRoot === root
+        ? freshManifest
+        : rewriteHookCommandsForSkillRoot(freshManifest, provider, skillRoot);
+      let next = fresh;
+
+      if (existsSync(dest)) {
+        try {
+          const existing = JSON.parse(readFileSync(dest, 'utf-8'));
+          next = mergeHookManifests(existing, fresh);
+        } catch {
+          if (!force) {
+            throw new Error(`Existing hook manifest is not valid JSON: ${dest}. Re-run with --force to replace it.`);
+          }
+          writeFileSync(`${dest}.bak`, readFileSync(dest));
+          next = fresh;
+        }
+      }
+
+      mkdirSync(dirname(dest), { recursive: true });
+      writeFileSync(dest, `${JSON.stringify(next, null, 2)}\n`);
+      written.push(provider);
+    }
+  }
+  return [...new Set(written)];
+}
+
+const HOOK_EXPLAINER = [
+  '',
+  'Impeccable can install a design hook for this project. In Claude/Codex it',
+  'checks UI files after edits; in Cursor it checks proposed writes before they',
+  'land and can block writes with detector findings. It feeds results back to',
+  'your agent so design slop gets caught as you build. Change it later with',
+  '/impeccable hooks on|off.',
+  '',
+].join('\n');
+
+// Decide whether to install the design hook. Prompts once (default yes) the
+// first time, records the answer in .impeccable/config.local.json, and never
+// re-asks: a recorded decision or an already-installed hook short-circuits, and
+// non-interactive runs keep the historical install-by-default behavior.
+async function decideHookInstall(root, targets, { yes } = {}) {
+  if (targets.length === 0) return false;
+  const consent = getHookConsent(root);
+  if (consent === 'declined') return false;
+  if (consent === 'accepted') return true;
+  // Existing hook users (hook already wired up) are never nagged.
+  if (targets.length > 0 && targets.every(provider => hookInstalledForProvider(root, provider))) {
+    return true;
+  }
+  // Undecided and not yet installed. Non-interactive (-y or no TTY) keeps the
+  // historical default-on behavior without recording a (re-promptable) decision.
+  if (yes || !process.stdin.isTTY) return true;
+
+  process.stdout.write(HOOK_EXPLAINER);
+  const ans = await ask('Install the design hook? (Y/n) ');
+  const accepted = !(ans === 'n' || ans === 'no');
+  setHookConsent(root, accepted ? 'accepted' : 'declined');
+  return accepted;
 }
 
 function resolveLinkSource(sourceValue, root) {
@@ -549,12 +1061,41 @@ async function link(flags) {
 async function install(flags) {
   const force = flags.includes('--force');
   const yes = flags.includes('-y') || flags.includes('--yes');
-  const providersValue = getFlagValue(flags, '--providers');
-  const root = findProjectRoot();
-  const existing = isAlreadyInstalled(root);
+  const installHooks = !flags.includes('--no-hooks');
+  const projectRoot = findProjectRoot();
+  let plan;
+  try {
+    plan = await chooseInstallPlan(projectRoot, flags, { yes });
+  } catch (e) {
+    console.error(e.message);
+    console.error('Pass providers explicitly, e.g. --providers=claude,cursor');
+    process.exit(1);
+  }
+
+  const { targets, installRoot, hookRoot, scope } = plan;
+  const existing = isAlreadyInstalled(installRoot);
 
   if (existing && !force) {
     console.log(`Impeccable skills are already installed (found in ${existing}/).`);
+    const installedTargets = findInstalledProviders(installRoot);
+    const hookTargets = targets.filter(provider => installedTargets.includes(provider));
+    const wantHooks = installHooks && await decideHookInstall(hookRoot, hookTargets, { yes });
+    const missingHookTargets = wantHooks
+      ? hookTargets.filter(provider => !hookInstalledForProvider(hookRoot, provider))
+      : [];
+    if (missingHookTargets.length > 0) {
+      let bundleDir;
+      try {
+        bundleDir = await downloadAndExtractBundle();
+        const writtenHookTargets = copyProviderHooks(bundleDir, hookRoot, missingHookTargets, { skillRoot: installRoot });
+        if (writtenHookTargets.length > 0) console.log(`Installed hooks into: ${writtenHookTargets.join(', ')}`);
+      } catch (e) {
+        console.error(`Hook install failed: ${e.message}`);
+        process.exit(1);
+      } finally {
+        if (bundleDir) rmSync(bundleDir, { recursive: true, force: true });
+      }
+    }
     console.log('Run with --force to reinstall.\n');
     process.exit(0);
   }
@@ -564,7 +1105,6 @@ async function install(flags) {
   // to `npx skills add`: its name-based discovery can install the uncompiled
   // source, and its symlink default points every harness at one shared variant.
   // Copying per-provider variants is the only correct install for this skill.
-  const targets = resolveInstallTargets(root, providersValue);
   if (targets.length === 0) {
     console.error('Could not determine a target harness folder.');
     console.error('Pass one explicitly, e.g. --providers=.claude,.cursor');
@@ -573,12 +1113,15 @@ async function install(flags) {
 
   if (!yes) {
     console.log(`Target harness folder(s): ${targets.join(', ')}`);
+    console.log(`Install root: ${formatPathForDisplay(installRoot)} (${scope === 'user' ? 'user' : 'project'})`);
     const ans = await ask(`Install impeccable skills into ${targets.length} folder(s)? (Y/n) `);
     if (ans === 'n' || ans === 'no') {
       console.log('Aborted. Re-run with --providers=<dirs> to choose explicitly (e.g. --providers=.claude,.cursor).');
       process.exit(0);
     }
   }
+
+  const wantHooks = installHooks && await decideHookInstall(hookRoot, targets, { yes });
 
   console.log('\nDownloading impeccable skills...');
   let bundleDir;
@@ -591,11 +1134,13 @@ async function install(flags) {
 
   // Retire any old `i-`-prefixed install so the fresh copy lands on the
   // canonical `impeccable` dir instead of orphaning the prefixed one.
-  migrateUnprefixImpeccable(root);
+  migrateUnprefixImpeccable(installRoot);
 
   let written = 0;
+  let hookTargets = [];
   try {
-    written = copyProviderSkills(bundleDir, root, targets);
+    written = copyProviderSkills(bundleDir, installRoot, targets);
+    hookTargets = wantHooks ? copyProviderHooks(bundleDir, hookRoot, targets, { force, skillRoot: installRoot }) : [];
   } catch (e) {
     rmSync(bundleDir, { recursive: true, force: true });
     console.error(`Install failed: ${e.message}`);
@@ -607,7 +1152,8 @@ async function install(flags) {
     console.error(`Nothing was installed: the bundle had no variants for ${targets.join(', ')}.`);
     process.exit(1);
   }
-  console.log(`Installed impeccable into: ${targets.join(', ')}`);
+  console.log(`Installed impeccable into: ${targets.join(', ')} (${scope === 'user' ? 'user home' : 'project'})`);
+  if (hookTargets.length > 0) console.log(`Installed hooks into: ${hookTargets.join(', ')}`);
 
   console.log('\nDone! Run /impeccable init in your AI harness to set up design context.\n');
 }
@@ -692,6 +1238,8 @@ function downloadFile(url, dest) {
 
 async function update(flags = []) {
   const yes = flags.includes('-y') || flags.includes('--yes');
+  const force = flags.includes('--force');
+  const installHooks = !flags.includes('--no-hooks');
 
   // Download the latest skills directly from impeccable.style.
   // We skip `npx skills update` because it has a known upstream bug
@@ -726,10 +1274,20 @@ async function update(flags = []) {
 
   // Compare local vs remote -- skip if already up to date
   if (isUpToDate(root, copyProviders, tmpDir)) {
-    rmSync(tmpDir, { recursive: true, force: true });
-    const v = getSkillsVersion(root);
-    console.log(`Skills are up to date${v ? ` (v${v})` : ''}. Nothing to do.`);
-    process.exit(0);
+    try {
+      const wantHooks = installHooks && await decideHookInstall(root, copyProviders, { yes });
+      const hookTargets = wantHooks ? copyProviderHooks(tmpDir, root, copyProviders, { force }) : [];
+      rmSync(tmpDir, { recursive: true, force: true });
+      const v = getSkillsVersion(root);
+      console.log(`Skills are up to date${v ? ` (v${v})` : ''}.`);
+      if (hookTargets.length > 0) console.log(`Installed hooks into: ${hookTargets.join(', ')}`);
+      console.log('Nothing else to do.');
+      process.exit(0);
+    } catch (e) {
+      rmSync(tmpDir, { recursive: true, force: true });
+      console.error(`Update failed: ${e.message}`);
+      process.exit(1);
+    }
   }
 
   console.log(`Found skills in: ${copyProviders.join(', ')}`);
@@ -769,11 +1327,14 @@ async function update(flags = []) {
         updated++;
       }
     }
+    const wantHooks = installHooks && await decideHookInstall(root, providers, { yes });
+    const hookTargets = wantHooks ? copyProviderHooks(tmpDir, root, providers, { force }) : [];
 
     rmSync(tmpDir, { recursive: true, force: true });
 
     const v = getSkillsVersion(root);
     console.log(`Updated ${updated} skill(s)${v ? ` to v${v}` : ''}.`);
+    if (hookTargets.length > 0) console.log(`Installed hooks into: ${hookTargets.join(', ')}`);
     console.log('Done!\n');
   } catch (e) {
     console.error(`Update failed: ${e.message}`);
@@ -798,7 +1359,18 @@ function copyDirSync(src, dest) {
 // ─── Test surface ───────────────────────────────────────────────────────────
 // Exported so the test suite exercises the real implementation rather than a
 // reimplementation in a helper script (which is how bugs slip through).
-export { migrateUnprefixImpeccable, linkProviderSkills, resolveLinkSource };
+export {
+  collectInstallDetections,
+  copyProviderHooks,
+  copyProviderSkills,
+  decideHookInstall,
+  expectedHookDests,
+  linkProviderSkills,
+  mergeHookManifests,
+  migrateUnprefixImpeccable,
+  resolveInstallTargets,
+  resolveLinkSource,
+};
 
 // ─── Router ───────────────────────────────────────────────────────────────────
 
