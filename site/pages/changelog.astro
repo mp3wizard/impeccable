@@ -23,8 +23,19 @@ import '../styles/changelog-faq-kinpaku.css';
       <button type="button" class="cf-filter-btn" data-cf-filter="all" aria-pressed="false">All</button>
     </div>
 
-    <article id="v3.6.0" class="cf-entry cf-entry--current">
-      <header class="cf-entry-head"><span class="cf-version">v3.6.0</span><span class="cf-date">June 14, 2026</span><span class="cf-current-badge">Current</span></header>
+    <article id="v3.7.0" class="cf-entry cf-entry--current">
+      <header class="cf-entry-head"><span class="cf-version">v3.7.0</span><span class="cf-date">June 16, 2026</span><span class="cf-current-badge">Current</span></header>
+      <p class="cf-entry-lead">Impeccable now carries project design context into hooks, the detector, and docs. The agent can compare edits against your actual typography, color, and radius system instead of only using global anti-pattern rules.</p>
+      <ul class="cf-items">
+        <li><strong>Design-aware hook detections.</strong> When a project has <code>DESIGN.md</code>, hooks and <code>impeccable detect</code> load the local design system and flag font, color, and radius drift against the documented palette, typography stacks, rounded scale, and sidecar tonal ramps.</li>
+        <li><strong>Ignores now work across hooks and the CLI.</strong> Detector exceptions moved into shared config, and <code>impeccable ignores</code> can list, add, and remove rule, file, and value ignores without hand-editing JSON.</li>
+        <li><strong>Docs cover the full project context path.</strong> New reference pages explain hooks, the detector, configuration, and Design Context, including how <code>PRODUCT.md</code>, <code>DESIGN.md</code>, and <code>.impeccable/design.json</code> are loaded and kept current.</li>
+        <li><strong>Docs code blocks now use the Impeccable palette.</strong> Shiki syntax highlighting uses design-system colors in both light and dark mode, with contrast tests so examples stay readable and do not trigger design-system color drift.</li>
+      </ul>
+    </article>
+
+    <article id="v3.6.0" class="cf-entry">
+      <header class="cf-entry-head"><span class="cf-version">v3.6.0</span><span class="cf-date">June 14, 2026</span></header>
       <p class="cf-entry-lead">Impeccable now helps while the agent is editing, and the core skill is leaner: ablation-tested guidance, project hooks, sharper detector signal, and Live Mode support for Svelte and manual browser edits.</p>
       <ul class="cf-items">
         <li><strong>Ablation-tested skill core.</strong> The main skill got leaner after rule-level evals across three providers and four niches. Redundant typography and copy guidance moved out of the always-on prompt, rules with no measurable lift were cut, and examples that primed models to repeat the exact pattern being banned were rewritten. The result is a smaller prompt that spends attention on guidance proven to move design output.</li>
@@ -81,6 +92,15 @@ import '../styles/changelog-faq-kinpaku.css';
         <li><strong>Detector: 14 new rules.</strong> <code>cream-palette</code>, <code>em-dash-overuse</code>, <code>marketing-buzzword</code>, <code>numbered-section-markers</code>, <code>aphoristic-cadence</code>, <code>theater-slop-phrase</code>, <code>oversized-h1</code>, <code>extreme-negative-tracking</code>, <code>gpt-thin-border-wide-shadow</code>, <code>repeating-stripes-gradient</code>, <code>image-hover-transform</code>, <code>broken-image</code>, <code>text-overflow</code>, and <code>clipped-overflow-container</code>. 41 deterministic rules total, one canonical registry feeding the CLI, the browser extension, critique, and the evals.</li>
         <li><strong>The skill keeps itself current.</strong> On the first session of the day, Impeccable quietly checks whether a newer version shipped. If one has, it offers to run <code>npx impeccable update</code> for you. It always asks first, never nags about a version you declined, and never interrupts the task you're on. Set <code>IMPECCABLE_NO_UPDATE_CHECK=1</code> to turn it off.</li>
         <li><strong>Sharper craft under the hood.</strong> Beyond the bans, the craft itself got tighter. Small defaults landed where they pay off, like <code>text-wrap: balance</code> on headings, which cleaned up ragged hero type across the ablation runs. And the instructions themselves got leaner: orphan reference files folded into their commands, context loading simplified, and a new LLM-backed test suite that catches instruction-following regressions across three providers on every change. Plus dedicated <a href="/changelog">/changelog</a> and <a href="/faq">/faq</a> pages.</li>
+      </ul>
+    </article>
+
+    <article id="cli-v3.0.2" class="cf-entry">
+      <header class="cf-entry-head"><span class="cf-version">CLI v3.0.2</span><span class="cf-date">June 16, 2026</span></header>
+      <ul class="cf-items">
+        <li><strong><code>impeccable detect</code> now understands your design system.</strong> When a project has <code>DESIGN.md</code>, CLI scans load the same context as hooks and flag font, color, and radius drift against documented typography, palette, rounded scale, and sidecar tonal ramps. Pass <code>--no-design-system</code> when you want the global detector only.</li>
+        <li><strong>Ignore management is now a first-class CLI workflow.</strong> <code>impeccable ignores</code> can list, add, and remove rule, file, and value exceptions in the shared detector config, so teams no longer have to hand-edit <code>.impeccable/config.json</code>. Hooks and manual CLI scans honor the same exceptions.</li>
+        <li><strong>Install no longer fails silently on newer Node.</strong> On Node v24.16.0 and v26.1.0+, <code>impeccable install</code> could print "Downloading impeccable skills...", exit 0, and write nothing. ZIP extraction now uses pure-JS <code>fflate</code>, avoiding the destroyed-stream stall behind <a href="https://github.com/nodejs/node/issues/63487" target="_blank" rel="noopener">nodejs/node#63487</a> while preserving the Windows install fix. Reported by <a href="https://github.com/kenryu42" target="_blank" rel="noopener">@kenryu42</a> in <a href="https://github.com/pbakaus/impeccable/issues/250" target="_blank" rel="noopener">#250</a>.</li>
       </ul>
     </article>
 
