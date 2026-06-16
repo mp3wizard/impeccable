@@ -320,11 +320,11 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audited: **2026-06-15** | Tools run: 12 (Gitleaks, Semgrep OWASP/TS/Secrets, Trivy, TruffleHog, OSV-Scanner, mcps-audit, config-audit, skill-auditor, mcp-exfil-scan, skillspector)
+Last audited: **2026-06-16** | Tools run: 9 (Gitleaks, Semgrep OWASP/TS/Secrets, TruffleHog, OSV-Scanner, config-audit, skill-auditor ×5, mcp-exfil-scan)
 
-**Findings summary:** 3 dependency CVEs fixed (esbuild HIGH+LOW, ip-address MEDIUM). No secrets detected. No secrets in git history. Semgrep OWASP `wildcard-postmessage-configuration` findings are intentional upstream design (browser overlay must inject into arbitrary origins).
+**Findings summary:** 4 dependency CVEs fixed (vite HIGH+MEDIUM, ws HIGH, js-yaml MEDIUM). No secrets detected. No secrets in 885-commit git history. Semgrep OWASP `wildcard-postmessage-configuration` in extension content script — accepted browser extension design constraint.
 
-**Fixes applied:** Added `overrides` in package.json for `esbuild >=0.28.1` and `ip-address >=10.1.1`; updated bun.lock. OSV-Scanner post-fix: no issues found.
+**Fixes applied:** Added `overrides` in package.json for `vite >=7.3.5`, `ws >=8.21.0`, `js-yaml >=4.2.0`; updated bun.lock. OSV-Scanner post-fix: no issues found (658 packages).
 
 See [SECURITY_REPORT.md](SECURITY_REPORT.md) for the full report.
 
