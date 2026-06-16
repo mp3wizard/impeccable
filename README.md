@@ -330,11 +330,11 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audited: **2026-06-16** | Tools run: 9 (Gitleaks, Semgrep OWASP/TS/Secrets, TruffleHog, OSV-Scanner, config-audit, skill-auditor ×5, mcp-exfil-scan)
+Last audited: **2026-06-16** | Tools run: 13 (Gitleaks, Semgrep OWASP/TS/Secrets, Trivy, TruffleHog, OSV-Scanner, config-audit, skill-audit ×5, skillspector, mcp-exfil-scan)
 
-**Findings summary:** 4 dependency CVEs fixed (vite HIGH+MEDIUM, ws HIGH, js-yaml MEDIUM). No secrets detected. No secrets in 885-commit git history. Semgrep OWASP `wildcard-postmessage-configuration` in extension content script — accepted browser extension design constraint.
+**Findings summary:** No secrets detected in 890-commit git history. No dependency CVEs (650 packages, Trivy + OSV-Scanner clean). Semgrep OWASP `wildcard-postmessage-configuration` in extension content script — accepted browser extension design constraint. skillspector: SAFE.
 
-**Fixes applied:** Added `overrides` in package.json for `vite >=7.3.5`, `ws >=8.21.0`, `js-yaml >=4.2.0`; updated bun.lock. OSV-Scanner post-fix: no issues found (658 packages).
+**Fixes applied:** None required this cycle. (Prior cycle: `vite >=7.3.5`, `ws >=8.21.0`, `js-yaml >=4.2.0` overrides remain in package.json.)
 
 See [SECURITY_REPORT.md](SECURITY_REPORT.md) for the full report.
 

@@ -1,15 +1,15 @@
 # Security Report — 2026-06-16
 
 **Target:** `/Users/mp3wizard/Public/Claude skill/impeccable`
-**Scanned at:** 2026-06-16T02:39:47Z
-**Git HEAD:** 90284530
+**Scanned at:** 2026-06-16T12:40:55Z
+**Git HEAD:** f17c1dc8
 **Standard:** OWASP APTS-aligned (Scope Enforcement · Auditability · Manipulation Resistance · Reporting)
 
 ## Scope Record
 
 ```
 Scan target: /Users/mp3wizard/Public/Claude skill/impeccable
-Git HEAD:    90284530
+Git HEAD:    f17c1dc8
 Include:     all supported
 Exclude:     .gitignore honored by each tool
 ```
@@ -18,64 +18,48 @@ Exclude:     .gitignore honored by each tool
 
 | Tool | Status | Version | Finding count | Notes |
 |------|--------|---------|---------------|-------|
-| Gitleaks | OK | 8.30.1 | 0 | 885 commits, 57.94 MB scanned |
-| Semgrep OWASP | OK | — | 5 (wildcard postMessage) | JS/TS files |
+| Gitleaks | OK | 8.30.1 | 0 | 890 commits, 59.03 MB scanned |
+| Semgrep OWASP | OK | — | 5 MEDIUM | JS/TS files; wildcard postMessage in extension |
 | Semgrep TypeScript | OK | — | 0 | 6 tracked .ts files |
-| Semgrep Secrets | OK | — | 0 | 1637 files |
-| Trivy | SKIPPED | 0.69.3 | — | DB download failed (docker-credential-desktop) |
-| TruffleHog | OK | 3.94.2 | 0 verified, 0 unverified | 48766 chunks |
-| OSV-Scanner | OK | 2.3.5 | 0 after fixes | bun.lock, 658 packages post-fix |
-| config-audit.py | OK | — | 6 Low (global hooks) | No project-level findings |
-| skill-audit.sh | OK | — | 5–15/100 LOW | 5 SKILL.md variants scanned, all approved |
-| mcp-exfil-scan.sh | OK | — | 0/100 CLEAN | |
-| skillspector | N/A | — | — | No standalone AI skill artifacts |
+| Semgrep Secrets | OK | — | 0 | 1656 files; 38 >300KB skipped |
+| Trivy | OK (skip-db-update) | 0.69.3 | 0 | bun.lock, 650 packages |
+| TruffleHog | OK | 3.94.2 | 0 verified, 0 unverified | 50051 chunks, 58.9 MB |
+| OSV-Scanner | OK | 2.3.5 | 0 | bun.lock, 650 packages |
+| config-audit.py | OK | — | Global env findings (out-of-scope for repo) | |
+| skill-audit.sh | OK | — | LOW RISK | All 5 sampled SKILL.md variants |
+| skillspector | OK | — | SAFE (no issues) | impeccable SKILL.md, --no-llm |
+| mcp-exfil-scan.sh | OK | — | 0 in-repo | Global ~/.claude/skills/ findings out-of-scope |
 | CodeQL | SKIPPED | — | — | No codeql.yml workflow |
 | mcp-scan | OPT-IN | — | — | Not run (sends data to invariantlabs.ai) |
+| Bandit | N/A | — | — | No .py files |
+
+**Coverage note:** 38 files >300KB were skipped by Semgrep. 14 .ts files in build/ skipped by .semgrepignore.
 
 ## Findings
 
-### GHSA-fx2h-pf6j-xcff — vite 7.3.2 (HIGH, CVSS 8.2) — FIXED
-- **Affected package:** vite (transitive via astro / wrangler)
-- **Fixed in:** 7.3.5
-- **Fix:** `"vite": ">=7.3.5"` added to `overrides` in package.json
-
-### GHSA-96hv-2xvq-fx4p — ws 8.20.1 (HIGH, CVSS 7.5) — FIXED
-- **Affected package:** ws (transitive)
-- **Fixed in:** 8.21.0
-- **Fix:** `"ws": ">=8.21.0"` added to `overrides` in package.json
-
-### GHSA-v6wh-96g9-6wx3 — vite 7.3.2 (MEDIUM, CVSS 5.5) — FIXED
-- Same vite finding as GHSA-fx2h, same fix
-
-### GHSA-h67p-54hq-rp68 — js-yaml 4.1.1 (MEDIUM, CVSS 5.3) — FIXED
-- **Affected package:** js-yaml (transitive)
-- **Fixed in:** 4.2.0
-- **Fix:** `"js-yaml": ">=4.2.0"` added to `overrides` in package.json
-
 ### Semgrep OWASP — wildcard postMessage (MEDIUM, KNOWN/ACCEPTED)
-- **Rule:** javascript.browser.security.wildcard-postmessage-configuration
-- **Files:** extension/content/content-script.js lines 28, 31, 35, 38, 100
-- **Detail:** `window.postMessage(..., '*')` used for browser extension cross-frame communication
-- **Assessment:** Accepted design constraint — browser extension must communicate with arbitrary tabs; origin is unknowable at inject time. Namespaced via `source: 'impeccable-command'`.
+
+**Rule:** `javascript.browser.security.wildcard-postmessage-configuration`
+**File:** `extension/content/content-script.js`
+**Lines:** 28, 31, 35, 38, 100
+
+`window.postMessage(..., '*')` is used for browser extension cross-frame communication between the content script and the injected overlay. The wildcard origin is an accepted architectural constraint: a browser extension communicates with arbitrary tabs and cannot hardcode the page origin at inject time. Messages are namespaced via `source: 'impeccable-command'` and carry only UI commands (toggle-overlays, remove, highlight, unhighlight) — no sensitive data.
+
+This finding was present in the previous audit (2026-06-16 prior run) and remains accepted.
 
 ## Fixes Applied
 
-| CVE | Package | Old version | Fixed version | Method |
-|-----|---------|-------------|---------------|--------|
-| GHSA-fx2h-pf6j-xcff | vite | 7.3.2 | 7.3.5 | `overrides` in package.json |
-| GHSA-96hv-2xvq-fx4p | ws | 8.20.1 | 8.21.0 | `overrides` in package.json |
-| GHSA-v6wh-96g9-6wx3 | vite | 7.3.2 | 7.3.5 | same override as above |
-| GHSA-h67p-54hq-rp68 | js-yaml | 4.1.1 | 4.2.0 | `overrides` in package.json |
-
-Post-fix OSV-Scanner: **No issues found** (658 packages) ✓
+None required. All findings are either absent (secrets, CVEs) or accepted architectural constraints (wildcard postMessage in browser extension).
 
 ## Known Remaining Issues
 
-- Wildcard postMessage in browser extension content script — accepted architectural constraint
-- Trivy DB download failed (missing docker-credential-desktop) — covered by OSV-Scanner
+- Wildcard postMessage in `extension/content/content-script.js`: accepted architectural constraint for browser extension cross-frame messaging.
+- Trivy ran with `--skip-db-update` due to Docker credential unavailability. OSV-Scanner covered the dependency surface (650 packages, 0 issues).
+- 38 files >300KB were skipped by Semgrep `--max-target-bytes 300000` (images, build artifacts, dist zips).
+
+---
 
 ### APTS Audit Log
-
-- **Log:** `/tmp/css-scan-20260616T023947Z.jsonl`
+- **Log:** `/tmp/css-scan-20260616T123622Z.jsonl`
+- **Tool runs recorded:** 11 (measured: 11, asserted: 0)
 - **Standard:** OWASP APTS § Auditability
-- Note: apts-audit.sh finalize encountered an upstream syntax error; all tool runs were measured during execution.
