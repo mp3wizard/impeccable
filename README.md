@@ -332,7 +332,7 @@ Join the community and ecosystem conversations:
 
 Last audited: **2026-06-16** | Tools run: 13 (Gitleaks, Semgrep OWASP/TS/Secrets, Trivy, TruffleHog, OSV-Scanner, config-audit, skill-audit ×5, skillspector, mcp-exfil-scan)
 
-**Findings summary:** No secrets detected in 890-commit git history. No dependency CVEs (650 packages, Trivy + OSV-Scanner clean). Semgrep OWASP `wildcard-postmessage-configuration` in extension content script — accepted browser extension design constraint. skillspector: SAFE.
+**Findings summary:** No secrets detected in 890-commit git history. No dependency CVEs (650 packages, Trivy + OSV-Scanner clean). Semgrep OWASP `wildcard-postmessage-configuration` in extension content script (accepted browser extension design constraint). skillspector: SAFE.
 
 **Fixes applied:** None required this cycle. (Prior cycle: `vite >=7.3.5`, `ws >=8.21.0`, `js-yaml >=4.2.0` overrides remain in package.json.)
 
