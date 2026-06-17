@@ -330,11 +330,11 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audited: **2026-06-16** | Tools run: 13 (Gitleaks, Semgrep OWASP/TS/Secrets, Trivy, TruffleHog, OSV-Scanner, config-audit, skill-audit ×5, skillspector, mcp-exfil-scan)
+Last audited: **2026-06-17** | Tools run: 13 (Gitleaks, Semgrep OWASP/TS/Secrets, Trivy, TruffleHog, OSV-Scanner, config-audit, skill-audit, skillspector, mcp-exfil-scan)
 
-**Findings summary:** No secrets detected in 890-commit git history. No dependency CVEs (650 packages, Trivy + OSV-Scanner clean). Semgrep OWASP `wildcard-postmessage-configuration` in extension content script (accepted browser extension design constraint). skillspector: SAFE.
+**Findings summary:** No secrets detected in 898-commit git history. No dependency CVEs after fix (648 packages, Trivy + OSV-Scanner clean). Semgrep OWASP `wildcard-postmessage-configuration` in extension content script (accepted browser extension design constraint). skillspector: SAFE.
 
-**Fixes applied:** None required this cycle. (Prior cycle: `vite >=7.3.5`, `ws >=8.21.0`, `js-yaml >=4.2.0` overrides remain in package.json.)
+**Fixes applied:** `astro` bumped from `^6.2.1` to `^6.4.6` (resolves GHSA-2pvr-wf23-7pc7 High 7.5, GHSA-jrpj-wcv7-9fh9 Medium 4.2). Installed: astro@6.4.7.
 
 See [SECURITY_REPORT.md](SECURITY_REPORT.md) for the full report.
 
