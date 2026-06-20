@@ -330,11 +330,11 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audited: **2026-06-18** | Tools run: 13 (Gitleaks, Semgrep OWASP/TS/Secrets, Trivy offline, TruffleHog, OSV-Scanner, config-audit, skill-audit, skillspector, mcp-exfil-scan)
+Last audited: **2026-06-20** | Tools run: 13 (Gitleaks, Semgrep OWASP/TS/Secrets, Trivy offline, TruffleHog, OSV-Scanner, config-audit, skill-audit, skillspector, mcp-exfil-scan)
 
-**Findings summary:** No secrets detected in 903-commit git history (Gitleaks + TruffleHog clean). No dependency CVEs (648 packages, Trivy offline + OSV-Scanner clean). Semgrep OWASP: 5 instances of `wildcard-postmessage-configuration` in extension content script (accepted browser extension design constraint). All SKILL.md files scored LOW RISK (0–15/100). mcp-exfil-scan: CLEAN (0/100).
+**Findings summary:** No secrets detected in 910-commit git history (Gitleaks + TruffleHog clean). Semgrep OWASP: 5 instances of `wildcard-postmessage-configuration` in extension content script (accepted browser extension design constraint). All SKILL.md files scored LOW RISK (0–15/100). mcp-exfil-scan: CLEAN (0/100).
 
-**Fixes applied:** None. No actionable CVEs or secrets found this cycle.
+**Fixes applied:** Added `undici >=7.28.0` override to resolve 7 CVEs (max CVSS 7.5: GHSA-hm92-r4w5-c3mj, GHSA-vxpw-j846-p89q) in the undici transitive dependency via miniflare. OSV-Scanner clean after fix.
 
 See [SECURITY_REPORT.md](SECURITY_REPORT.md) for the full report.
 
