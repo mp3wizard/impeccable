@@ -331,11 +331,11 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audited: **2026-06-20** | Tools run: 13 (Gitleaks, Semgrep OWASP/TS/Secrets, Trivy offline, TruffleHog, OSV-Scanner, config-audit, skill-audit, skillspector, mcp-exfil-scan)
+Last audited: **2026-06-21** | Tools run: 13 (Gitleaks, Semgrep OWASP/TS/Secrets, Trivy, TruffleHog, OSV-Scanner, config-audit, skill-audit, skillspector 2.1.4, mcp-exfil-scan)
 
-**Findings summary:** No secrets detected in 910-commit git history (Gitleaks + TruffleHog clean). Semgrep OWASP: 5 instances of `wildcard-postmessage-configuration` in extension content script (accepted browser extension design constraint). All SKILL.md files scored LOW RISK (0–15/100). mcp-exfil-scan: CLEAN (0/100).
+**Findings summary:** No secrets detected in 925-commit git history (Gitleaks + TruffleHog clean). Semgrep OWASP: 5 instances of `wildcard-postmessage-configuration` in extension content script (accepted browser extension design constraint). SKILL.md scored LOW RISK (15/100). mcp-exfil-scan: CLEAN (0/100). skillspector: 0 findings, score 0/100 SAFE.
 
-**Fixes applied:** Added `undici >=7.28.0` override to resolve 7 CVEs (max CVSS 7.5: GHSA-hm92-r4w5-c3mj, GHSA-vxpw-j846-p89q) in the undici transitive dependency via miniflare. OSV-Scanner clean after fix.
+**Fixes applied (2026-06-21):** 41 CVEs resolved across 11 packages (0 Critical, 13 High, 24 Medium, 4 Low). Added overrides for `@protobufjs/utf8 >=1.1.1`, `fast-uri >=3.1.2`, `hono >=4.12.25`, `protobufjs >=7.6.3`, `qs >=6.15.2` (plus 6 pre-existing overrides). OSV-Scanner clean after `bun install`. Highest-severity fix: vite GHSA-fx2h-pf6j-xcff (CVSS 8.2) + protobufjs GHSA-75px-5xx7-5xc7 (CVSS 8.1).
 
 See [SECURITY_REPORT.md](SECURITY_REPORT.md) for the full report.
 
