@@ -29,7 +29,7 @@ export const SUITES = {
       /^site\/(pages|content|components|layouts)\//,
       /^README(\.npm)?\.md$/,
       /^cli\/bin\//,
-      /^tests\/(build|cleanup-deprecated|cli-ignores|context|context-signals|critique-storage|design-parser|docs-integrity|hook|hook-build|impeccable-paths|shiki-theme|skills-cli|test-suites|windows-path-fix|zip)\.test\.(js|mjs)$/,
+      /^tests\/(build|cleanup-deprecated|cli-ignores|context|context-signals|critique-storage|design-parser|docs-integrity|hook|hook-build|impeccable-paths|shiki-theme|skills-cli|target-args|test-suites|windows-path-fix|zip)\.test\.(js|mjs)$/,
       /^tests\/lib\//,
     ],
     commands: [
@@ -47,6 +47,7 @@ export const SUITES = {
           'tests/lib/transformers/providers.test.js',
           'tests/docs-integrity.test.js',
           'tests/skills-cli.test.js',
+          'tests/validate-plugin-versions.test.js',
         ],
       },
       {
@@ -60,6 +61,7 @@ export const SUITES = {
           'tests/hook-build.test.mjs',
           'tests/hook.test.mjs',
           'tests/impeccable-paths.test.mjs',
+          'tests/target-args.test.mjs',
           'tests/shiki-theme.test.mjs',
           'tests/test-suites.test.mjs',
           'tests/zip.test.mjs',
@@ -138,6 +140,7 @@ export const SUITES = {
           'tests/live-reference.test.mjs',
           'tests/live-server.test.mjs',
           'tests/live-session-store.test.mjs',
+          'tests/live-target-context.test.mjs',
           'tests/live-wrap.test.mjs',
           'tests/live-wrap-buffer-aware.test.mjs',
         ],
