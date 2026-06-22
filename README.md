@@ -335,7 +335,7 @@ Join the community and ecosystem conversations:
 
 Last audited: **2026-06-22** | Tools run: 13 (Gitleaks, Semgrep OWASP/TS/Secrets, Trivy, TruffleHog, OSV-Scanner, mcps-audit, config-audit, skill-audit, skillspector 2.1.4, mcp-exfil-scan)
 
-**Findings summary:** No secrets in 932-commit git history (Gitleaks + TruffleHog clean). No CVEs in 638 bun dependencies (Trivy + OSV-Scanner clean). Semgrep OWASP: 5 `wildcard-postmessage-configuration` in extension content script — accepted upstream browser extension constraint. SKILL.md scored LOW RISK (15/100). mcp-exfil-scan: CLEAN (0/100). skillspector: 0 findings, score 0/100 SAFE.
+**Findings summary:** No secrets in 932-commit git history (Gitleaks + TruffleHog clean). No CVEs in 638 bun dependencies (Trivy + OSV-Scanner clean). Semgrep OWASP: 5 `wildcard-postmessage-configuration` in extension content script (accepted upstream browser extension constraint). SKILL.md scored LOW RISK (15/100). mcp-exfil-scan: CLEAN (0/100). skillspector: 0 findings, score 0/100 SAFE.
 
 **Fixes applied (2026-06-22):** None required. Dependency tree is clean; no actionable CVEs found.
 
