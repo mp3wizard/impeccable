@@ -335,7 +335,7 @@ Join the community and ecosystem conversations:
 
 Last audited: **2026-06-26** | Tools run: 6 (Gitleaks, Semgrep OWASP+JS, Trivy, TruffleHog, mcps-audit, CodeQL check)
 
-**Findings summary:** No secrets in 947-commit git history (Gitleaks + TruffleHog clean). No CVEs in bun dependencies (Trivy offline clean). Semgrep OWASP: 5 `wildcard-postmessage-configuration` in extension content script (accepted browser extension constraint -- content script to page-context IPC requires wildcard origin). mcps-audit: 1,323 findings, predominantly false positives for CLI tooling (execSync, delete operator misclassified).
+**Findings summary:** No secrets in 947-commit git history (Gitleaks + TruffleHog clean). No CVEs in bun dependencies (Trivy offline clean). Semgrep OWASP: 5 `wildcard-postmessage-configuration` in extension content script (accepted browser extension constraint; content script to page-context IPC requires wildcard origin). mcps-audit: 1,323 findings, predominantly false positives for CLI tooling (execSync, delete operator misclassified).
 
 **Fixes applied (2026-06-26):** None required. No actionable CVEs found; all semgrep findings are accepted architectural patterns.
 
