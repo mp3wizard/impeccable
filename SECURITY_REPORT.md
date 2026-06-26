@@ -1,172 +1,51 @@
-# Security Report — 2026-06-22
+# Security Report — 2026-06-26
 
 **Target:** `/Users/mp3wizard/Public/Claude skill/impeccable`
-**Scanned at:** 2026-06-22T03:11:44Z
-**Git HEAD:** `063131e5`
-**Standard:** OWASP APTS-aligned (Scope Enforcement · Auditability · Manipulation Resistance · Reporting)
+**Scanned at:** 2026-06-26T03:10:00Z
+**Git HEAD:** `5901d974` (post-merge)
 
-## Scope Record
+## Tools Run
 
-```
-Scan target: /Users/mp3wizard/Public/Claude skill/impeccable
-Git HEAD:    063131e5
-Include:     all supported
-Exclude:     .gitignore honored by each tool
-```
+| Tool | Status | Finding count |
+|------|--------|--------------|
+| Gitleaks 8.30.1 | OK | 0 |
+| Bandit 1.9.4 | Skipped — no .py files | N/A |
+| Semgrep 1.166.0 | OK | 5 (blocking) |
+| Trivy 0.71.2 | OK (offline; vuln DB stale) | 0 |
+| TruffleHog 3.95.6 | OK | 0 |
+| CodeQL | N/A — no `.github/workflows/codeql.yml` | — |
+| mcps-audit 1.0.0 | OK | 1,323 (mostly false positives) |
 
-## Coverage Disclosure
+## Findings
 
-| Tool | Status | Version | Files Covered | Skipped / Notes |
-|------|--------|---------|---------------|-----------------|
-| Gitleaks | OK | 8.30.1 | 932 commits, ~60 MB | — |
-| Semgrep (OWASP) | OK | 1.166.0 | 141 JS/TS files | 38 files >300 KB skipped; 391 .semgrepignore |
-| Semgrep (TypeScript) | OK | 1.166.0 | 6 TS files | 1745 non-matching patterns |
-| Semgrep (Secrets) | OK | 1.166.0 | 1713 files | 38 files >300 KB skipped |
-| Trivy | OK | 0.71.2 | bun.lock (638 pkgs) | DB update skipped (docker-credential-desktop missing) |
-| TruffleHog | OK | 3.95.6 | 51755 chunks, ~61 MB | — |
-| CodeQL | SKIPPED | — | — | No .github/workflows/codeql.yml |
-| mcps-audit | OK | — | 426 files, 145852 lines | — |
-| OSV-Scanner | OK | 2.4.0 | bun.lock (638 pkgs) | — |
-| config-audit.py | OK | bundled | global + project settings | — |
-| skill-audit.sh | OK | bundled | .claude/skills/impeccable/SKILL.md | — |
-| mcp-exfil-scan | OK | bundled | 2 MCP configs, 26 skill files | — |
-| skillspector | OK | 2.1.4 | SKILL.md (168 lines) | --no-llm mode (local-only) |
-| Bandit | SKIPPED | 1.9.4 | — | No .py files in target |
-| mcp-scan | OPT-IN | — | — | Skipped — sends data to invariantlabs.ai |
+### Semgrep — 5 wildcard postMessage (CWE-345)
 
-## Gitleaks — Secrets in Git History
+**File:** `extension/content/content-script.js`
+**Rule:** `javascript.browser.security.wildcard-postmessage-configuration`
 
-**Summary:** 0 findings
+Lines 28, 31, 35, 38, 100 use `window.postMessage({...}, '*')`.
 
-```
-932 commits scanned.
-scanned ~60369862 bytes (60.37 MB) in 8.67s
-no leaks found
-```
+**Assessment:** Accepted architectural pattern. Content scripts communicate with injected page-context scripts (`detector/detect.js`) via `window.postMessage`. Because the content script runs on arbitrary user pages, no specific targetOrigin can be specified. The receiver in `detect.js` guards with `e.source !== window` to filter same-window messages only. This is standard browser extension architecture — not fixable without breaking extension functionality. Same assessment as all prior weekly audits.
 
-## Semgrep OWASP — Security Vulnerabilities
+### mcps-audit — 1,323 findings (399 critical, 147 high, 555 medium, 222 low)
 
-**Summary:** 5 findings (MEDIUM) — all wildcard postMessage in browser extension content script
+**Assessment:** Predominantly false positives for a CLI tool:
+- `AS-001` CRITICAL: flags `execSync` in CLI command files — expected; the CLI legitimately shells out
+- `AS-003` MEDIUM: flags JavaScript `delete` operator as "high-risk permission pattern" — false positive
+- `AS-005` CRITICAL: "Known injection pattern" — triggers on normal JS patterns in CLI code
 
-```
-/Users/mp3wizard/Public/Claude skill/impeccable/extension/content/content-script.js
-Rule: javascript.browser.security.wildcard-postmessage-configuration
+OWASP MCP Top 10 coverage: 5/8 mitigated. MCP-01, MCP-03, MCP-04 listed as failing — consistent with previous weeks; these are CLI/skill concerns, not active server vulnerabilities.
 
-Line 28:  window.postMessage({ source: 'impeccable-command', action: 'toggle-overlays' }, '*');
-Line 31:  window.postMessage({ source: 'impeccable-command', action: 'remove' }, '*');
-Line 35:  window.postMessage({ source: 'impeccable-command', action: 'highlight', selector: msg.selector }, '*');
-Line 38:  window.postMessage({ source: 'impeccable-command', action: 'unhighlight' }, '*');
-Line 100: window.postMessage(msg, '*');
-```
+### Trivy
 
-**Analysis:** These are upstream findings in the browser extension content script. The `'*'` wildcard is used for same-page messaging between the content script and the injected page script — a common extension pattern. Messages contain only UI commands (toggle-overlays, highlight, etc.), not sensitive data. Pre-existing upstream issue; no fix applied to fork.
-
-## Semgrep TypeScript — TypeScript Rules
-
-**Summary:** 0 findings (74 rules, 6 files)
-
-## Semgrep Secrets — Secrets Detection
-
-**Summary:** 0 findings (42 rules, 1713 files)
-
-## Trivy — Dependency Vulnerabilities
-
-**Summary:** 0 CVEs in bun.lock (638 packages)
-
-```
-Report Summary
-┌──────────┬──────┬─────────────────┬─────────┐
-│  Target  │ Type │ Vulnerabilities │ Secrets │
-├──────────┼──────┼─────────────────┼─────────┤
-│ bun.lock │ bun  │        0        │    -    │
-└──────────┴──────┴─────────────────┴─────────┘
-```
-
-Note: DB update failed due to missing docker-credential-desktop. Used cached DB (--skip-db-update). Results may be slightly stale.
-
-## TruffleHog — Live-Verified Secrets
-
-**Summary:** 0 verified, 0 unverified secrets
-
-```
-chunks: 51755, bytes: 61376835
-verified_secrets: 0, unverified_secrets: 0, scan_duration: 5.87s
-```
-
-## mcps-audit — MCP Permission Audit
-
-**Summary:** Risk Score 100/100 — largely false positives
-
-```
-Findings: 1323
-  CRITICAL: 1  (AS-005 line 1227 of skills.mjs — "Known injection pattern")
-  MEDIUM:   4  (AS-003 — "High-risk permission pattern": JS delete operator)
-  ... + 1313 more
-```
-
-**Analysis:** AS-003 MEDIUM findings flag `delete next.hooks;` / `delete next.description;` / `delete next.version;` as high-risk — these are JavaScript's standard property-deletion operator, not security issues. AS-005 CRITICAL at line 1227 also false positive in same context. The 100/100 score reflects mcps-audit's overly aggressive JS heuristics; cross-tool consensus (skill-audit 15/100, mcp-exfil 0/100, skillspector 0/100) confirms no real risk.
-
-## OSV-Scanner — Known Vulnerability Database
-
-**Summary:** No issues found (638 packages in bun.lock)
-
-## config-audit.py — Claude Config Security Audit
-
-**Summary:** 48 findings (7 CRITICAL, 10 HIGH, 24 MEDIUM, 7 LOW) — all false positives or known-good
-
-- **CRITICAL (7):** Scanner flagged its own bundled scripts for "base64 + .env access" / "ncat + SSH directory" patterns — these are detection signatures inside the security tools themselves.
-- **HIGH (10):** cc-beeper hooks in ~/.claude/settings.json using `curl localhost:${PORT}` — intentional local notification hooks, not external exfiltration.
-- **MEDIUM (24):** Broad-matcher hooks (expected), browser-related skill descriptions, .env reference in documentation.
-- **LOW (7):** Informational hooks-present notices.
-
-## skill-audit.sh — Skill Security Auditor
-
-**Summary:** Risk Score 15/100 — LOW RISK — APPROVE
-
-```
-Dangerous patterns: 0 | Prompt injection: 0 | Network URLs: 0
-File operations: 4 | Credential access: 0
-```
-
-## mcp-exfil-scan — MCP Exfiltration Scanner
-
-**Summary:** Risk Score 0/100 — CLEAN
-
-No tool description poisoning, no outbound data flow issues, no exfiltration chains, no encoded payloads, no env var leaking, all sources verified.
-
-## skillspector — AI-Skill Scanner (NVIDIA, --no-llm)
-
-**Summary:** Score 0/100 — LOW — SAFE
-
-```
-SKILL.md: 168 lines, markdown, no executable scripts
-No security issues detected.
-```
-
-## Cross-Tool Observations
-
-- **Zero CVEs:** Trivy, OSV-Scanner, TruffleHog all agree — clean dependency tree, no secrets.
-- **Gitleaks + TruffleHog consensus:** No secrets across 932 commits or filesystem.
-- **Semgrep 5 OWASP findings:** Isolated to the browser extension content script (upstream code), not in the skill distribution artifacts or CLI.
-- **config-audit.py CRITICALs are self-scan false positives:** Flagging the security scanner's own scripts.
-- **mcps-audit vs. other skill tools:** 100/100 disagreed by skill-audit (15/100), mcp-exfil-scan (0/100), and skillspector (0/100) — mcps-audit over-triggers on large JS codebases.
-
-## Coverage Disclosure
-
-**Files >300 KB skipped by Semgrep:** `skill/scripts/live-browser.js`, build artifacts in `build/`, `node_modules/` (multiple). node_modules covered by OSV-Scanner via lockfile.
+0 vulnerabilities in `bun.lock`. Note: vuln DB offline scan only (Docker credential issue prevented DB update). Known gap: may miss very recent CVEs published after last DB update. OSV-scanner not separately run this cycle.
 
 ## Fixes Applied
 
-None. No CVEs found in dependencies. The 5 OWASP wildcard-postMessage findings are in upstream browser extension code; the fork does not own that file.
+None. All actionable findings from prior weeks remain resolved. No new fixable findings this cycle.
 
 ## Known Remaining Issues
 
-| ID | Tool | Severity | Location | Notes |
-|----|------|----------|----------|-------|
-| OWASP-1 through 5 | Semgrep | MEDIUM | `extension/content/content-script.js:28,31,35,38,100` | Wildcard postMessage in browser extension — upstream code, messages carry only UI commands |
-
-### APTS Audit Log
-
-- **Log:** `/tmp/css-scan-20260622T031144Z.jsonl`
-- **Tool runs recorded:** 3 (measured: 3, asserted: 0)
-- **Standard:** OWASP APTS § Auditability
+1. **Wildcard postMessage (Semgrep, 5 findings):** Accepted browser-extension architectural pattern. Receiver-side `e.source !== window` guard is in place. No fix possible without breaking content-script ↔ page-context communication.
+2. **mcps-audit false positives:** CLI tool's use of `execSync`, `delete`, and standard JS patterns triggers noise. Not reflective of real vulnerabilities.
+3. **Trivy vuln DB stale:** Docker credential missing prevents DB update. Scan uses cached/offline DB. Risk: may miss recent CVEs.
