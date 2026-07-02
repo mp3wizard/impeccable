@@ -373,11 +373,11 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audited: **2026-06-26** | Tools run: 6 (Gitleaks, Semgrep OWASP+JS, Trivy, TruffleHog, mcps-audit, CodeQL check)
+Last audited: **2026-07-02** | Tools run: 2 (Claude Code security audit scan.py, dependency review)
 
-**Findings summary:** No secrets in 947-commit git history (Gitleaks + TruffleHog clean). No CVEs in bun dependencies (Trivy offline clean). Semgrep OWASP: 5 `wildcard-postmessage-configuration` in extension content script (accepted browser extension constraint; content script to page-context IPC requires wildcard origin). mcps-audit: 1,323 findings, predominantly false positives for CLI tooling (execSync, delete operator misclassified).
+**Findings summary:** 54 raw findings, all false positives or benign. Security scanning tools (skill-security-auditor, mcp-exfil-scan.sh, skill-audit.sh, config-audit.py) flagged for containing the very patterns they scan for. Globally installed caveman plugin flagged for installer curl usage (not in this repo). cc-beeper localhost notification hooks flagged as curl-to-external (localhost only, benign). No CVEs in package.json direct or transitive dependencies.
 
-**Fixes applied (2026-06-26):** None required. No actionable CVEs found; all semgrep findings are accepted architectural patterns.
+**Fixes applied (2026-07-02):** None required. No actionable findings.
 
 See [SECURITY_REPORT.md](SECURITY_REPORT.md) for the full report.
 
