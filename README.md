@@ -373,11 +373,13 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audited: **2026-07-02** | Tools run: 2 (Claude Code security audit scan.py, dependency review)
+Last audited: **2026-07-04** | Tools run: 5 (Gitleaks 8.30.1, Semgrep community, Trivy 0.71.2, TruffleHog 3.95.6, mcps-audit 1.0.0)
 
-**Findings summary:** 54 raw findings, all false positives or benign. Security scanning tools (skill-security-auditor, mcp-exfil-scan.sh, skill-audit.sh, config-audit.py) flagged for containing the very patterns they scan for. Globally installed caveman plugin flagged for installer curl usage (not in this repo). cc-beeper localhost notification hooks flagged as curl-to-external (localhost only, benign). No CVEs in package.json direct or transitive dependencies.
+**Findings summary:** 0 CVEs, 0 secrets. Semgrep: 86 findings (3 unique types) — wildcard postMessage in browser extension content scripts (by-design, 85 instances), dependabot missing cooldown (fixed), mutable GitHub Actions tags (upstream responsibility). mcps-audit: 1,333 findings, majority false positives for a CLI tool.
 
-**Fixes applied (2026-07-02):** None required. No actionable findings.
+**Fixes applied (2026-07-04):** Added `cooldown: default-days: 7` to `.github/dependabot.yml` for both `bun` and `github-actions` ecosystems.
+
+**Known remaining issues:** Wildcard `window.postMessage` in browser extension content scripts (upstream design, non-sensitive commands). Mutable GitHub Actions tags in CI workflows (upstream repo files).
 
 See [SECURITY_REPORT.md](SECURITY_REPORT.md) for the full report.
 
