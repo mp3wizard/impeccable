@@ -375,7 +375,7 @@ Join the community and ecosystem conversations:
 
 Last audited: **2026-07-04** | Tools run: 5 (Gitleaks 8.30.1, Semgrep community, Trivy 0.71.2, TruffleHog 3.95.6, mcps-audit 1.0.0)
 
-**Findings summary:** 0 CVEs, 0 secrets. Semgrep: 86 findings (3 unique types) — wildcard postMessage in browser extension content scripts (by-design, 85 instances), dependabot missing cooldown (fixed), mutable GitHub Actions tags (upstream responsibility). mcps-audit: 1,333 findings, majority false positives for a CLI tool.
+**Findings summary:** 0 CVEs, 0 secrets. Semgrep: 86 findings (3 unique types): wildcard postMessage in browser extension content scripts (by-design, 85 instances), dependabot missing cooldown (fixed), mutable GitHub Actions tags (upstream responsibility). mcps-audit: 1,333 findings, majority false positives for a CLI tool.
 
 **Fixes applied (2026-07-04):** Added `cooldown: default-days: 7` to `.github/dependabot.yml` for both `bun` and `github-actions` ecosystems.
 
