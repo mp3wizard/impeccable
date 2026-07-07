@@ -373,13 +373,13 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audited: **2026-07-04** | Tools run: 5 (Gitleaks 8.30.1, Semgrep community, Trivy 0.71.2, TruffleHog 3.95.6, mcps-audit 1.0.0)
+Last audited: **2026-07-07** | Tools run: 8 (Gitleaks 8.30.1, TruffleHog 3.95.6, Trivy 0.71.2, OSV-Scanner 2.4.0, Semgrep community, security-audit, skill-audit, mcp-exfil-scan)
 
-**Findings summary:** 0 CVEs, 0 secrets. Semgrep: 86 findings (3 unique types): wildcard postMessage in browser extension content scripts (by-design, 85 instances), dependabot missing cooldown (fixed), mutable GitHub Actions tags (upstream responsibility). mcps-audit: 1,333 findings, majority false positives for a CLI tool.
+**Findings summary:** 0 secrets. OSV-Scanner: 30 transitive dependency CVEs (0 Critical, 8 High, 21 Medium, 1 Low) across `@protobufjs/utf8`, `fast-uri`, `hono`, `ip-address`, `js-yaml`, `protobufjs`, `qs`. Semgrep: 1 unique type, 5 instances of wildcard `postMessage` in the browser extension content script. skill-audit: 15/100 (LOW RISK). mcp-exfil-scan: 0/100 (CLEAN).
 
-**Fixes applied (2026-07-04):** Added `cooldown: default-days: 7` to `.github/dependabot.yml` for both `bun` and `github-actions` ecosystems.
+**Fixes applied (2026-07-07):** Pinned all 7 vulnerable transitive packages via `overrides` in `package.json` and ran `bun install` — re-scan confirms 0 issues. Replaced the wildcard `postMessage` target origin (`'*'`) with `window.location.origin` at all 5 call sites in `extension/content/content-script.js` — re-scan confirms 0 findings.
 
-**Known remaining issues:** Wildcard `window.postMessage` in browser extension content scripts (upstream design, non-sensitive commands). Mutable GitHub Actions tags in CI workflows (upstream repo files).
+**Known remaining issues:** None outstanding from this cycle.
 
 See [SECURITY_REPORT.md](SECURITY_REPORT.md) for the full report.
 

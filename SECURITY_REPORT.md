@@ -1,7 +1,7 @@
-# Security Report — 2026-07-04
+# Security Report — 2026-07-07
 
-**Target:** `/Users/mp3wizard/Public/Claude skill/impeccable`  **Scanned at:** 2026-07-04T10:05:00+07:00
-**Tools run:** Gitleaks, Semgrep, Trivy, TruffleHog, mcps-audit  **Tools skipped:** Bandit (no `.py` files), CodeQL (no workflow in repo)
+**Target:** `/Users/mp3wizard/Public/Claude skill/impeccable`  **Scanned at:** 2026-07-07T10:04:00+07:00
+**Tools run:** Gitleaks, TruffleHog, Trivy, OSV-Scanner, Semgrep (OWASP/TypeScript/secrets), security-audit (config-audit.py), skill-audit, mcp-exfil-scan  **Tools skipped:** Bandit (no `.py` files), CodeQL (no workflow in repo), mcp-scan/skillspector (opt-in, not run this cycle)
 
 ## Pre-flight Summary
 
@@ -9,90 +9,27 @@
 |------|--------|----------------|
 | Gitleaks   | OK      | 8.30.1 |
 | Bandit     | SKIPPED | no `.py` files in repo |
-| Semgrep    | OK      | community rules |
+| Semgrep    | OK      | community rules (OWASP Top Ten, TypeScript, secrets) |
 | Trivy      | OK      | 0.71.2 |
 | TruffleHog | OK      | 3.95.6 |
+| OSV-Scanner | OK     | 2.4.0 |
 | CodeQL     | N/A     | no `.github/workflows/codeql.yml` in repo |
-| mcps-audit | OK      | 1.0.0 |
+| security-audit (config-audit.py) | OK | scoped to Claude config; repo-local findings informational only |
+| skill-audit | OK | run against `.claude/skills/impeccable/SKILL.md` |
+| mcp-exfil-scan | OK | run against repo root |
+| mcp-scan | OPT-IN, not run | requires explicit user consent |
+| skillspector | OPT-IN, not run | not exercised this cycle |
 
 ---
 
 ## Gitleaks — Secrets in git history + filesystem
 
-**Summary:** 0 findings. 979 commits scanned, ~60.8 MB.
+**Summary:** 0 findings. 987 commits scanned, ~60.9 MB.
 
 ```
-10:04AM INF 979 commits scanned.
-10:04AM INF scanned ~60764856 bytes (60.76 MB) in 7.7s
-10:04AM INF no leaks found
-```
-
----
-
-## Semgrep — SAST (OWASP Top 10 + Python rules)
-
-**Summary:** 86 findings (86 blocking) across 3 unique rule types. Root unique issues: 3.
-
-```
-Scanning 1732 files tracked by git with 564 Code rules:
-  Language      Rules   Files
-  <multilang>       6    1732
-  js               65    1014
-  html              1      51
-  json              3      31
-  ts               71       6
-  yaml             28       6
-
-Scan completed successfully.
- Findings: 86 (86 blocking)
- Rules run: 109
- Targets scanned: 1732
- Parsed lines: ~99.9%
- Files larger than 0.5 MB skipped: 21
- Files matching .semgrepignore patterns: 391
-```
-
-### Finding 1: wildcard-postmessage-configuration (MEDIUM) — 85 instances
-
-**Rule:** `javascript.browser.security.wildcard-postmessage-configuration`
-**Files:** All `**/scripts/live-browser.js` copies across 14 provider dirs + `extension/content/content-script.js`
-**Note:** By-design for browser extension content scripts. Target origin `*` is required because the extension injects into arbitrary pages. Messages contain only scan commands (non-sensitive). This is a known, accepted pattern for Chrome extension content scripts. **No fix applied; upstream design decision.**
-
-```
-skill/scripts/live-browser.js
-  9823  window.postMessage({ source: 'impeccable-command', action: 'scan', config: { scanId } }, '*');
-  9845  window.postMessage({ source: 'impeccable-command', action: 'remove' }, '*');
-
-extension/content/content-script.js
-   28  window.postMessage({ source: 'impeccable-command', action: 'toggle-overlays' }, '*');
-   31  window.postMessage({ source: 'impeccable-command', action: 'remove' }, '*');
-  100  window.postMessage(msg, '*');
-```
-
-### Finding 2: dependabot-missing-cooldown (LOW) — 1 instance — FIXED
-
-**Rule:** `package_managers.dependabot.dependabot-missing-cooldown`
-**File:** `.github/dependabot.yml`
-**Fix applied:** Added `cooldown: default-days: 7` to both `bun` and `github-actions` ecosystems. Verified 0 findings post-fix.
-
-### Finding 3: github-actions-mutable-action-tag (MEDIUM) — ~25 instances
-
-**Rule:** `yaml.github-actions.security.github-actions-mutable-action-tag`
-**Files:** `.github/workflows/ci.yml`, `.github/workflows/sync-generated-output.yml`
-**Actions affected:** `actions/checkout@v7`, `actions/setup-node@v6`, `oven-sh/setup-bun@v2`, `actions/upload-artifact@v7`, `actions/cache@v6`
-**Note:** Mutable tags in CI workflows. These are upstream repo files; pinning here would create merge conflicts on next `origin/main` sync. Upstream responsibility.
-
----
-
-## Trivy — Dependencies, secrets, IaC
-
-**Summary:** 0 vulnerabilities, 0 secrets. bun.lock clean.
-
-```
-Report Summary
-Target: bun.lock (bun)
-Vulnerabilities: 0
-Secrets: -
+10:05AM INF 987 commits scanned.
+10:05AM INF scanned ~60921411 bytes (60.92 MB) in 8.02s
+10:05AM INF no leaks found
 ```
 
 ---
@@ -101,60 +38,114 @@ Secrets: -
 
 **CONFIDENTIAL** — No verified or unverified secrets detected.
 
-**Summary:** 0 verified secrets, 0 unverified secrets. 52,367 chunks, 61.8 MB scanned.
-
 ```
-chunks: 52367
-bytes: 61815823
+chunks: 52807
+bytes: 61983665
 verified_secrets: 0
 unverified_secrets: 0
-scan_duration: 6.42s
+scan_duration: 6.78s
 ```
 
 ---
 
-## mcps-audit — MCP skill/tool permission audit
+## Trivy — Dependencies, secrets, IaC
 
-**Summary:** Risk score 100/100. 1,333 findings (CRITICAL: 409, HIGH: 147, MEDIUM: 555, LOW: 222). Majority are false positives for a CLI tool.
-
-**Context:** `impeccable` is a CLI tool. `execSync`, JS `delete` operators, and interactive key handling are expected operations, not vulnerabilities. OWASP Agentic AI rules are calibrated for MCP server contexts, not CLI tools.
+**Summary:** 0 vulnerabilities, 0 secrets. `bun.lock` clean (dev deps suppressed by default).
 
 ```
-OWASP MCP Top 10
-  FAIL MCP-01  Rug Pulls
-  -    MCP-02  Tool Poisoning
-  FAIL MCP-03  Privilege Escalation via Tool Composition
-  FAIL MCP-04  Cross-Server Request Forgery
-  -    MCP-05  Sampling Manipulation
-  PASS MCP-06  Indirect Prompt Injection via MCP
-  PASS MCP-07  Resource Exhaustion & DoS
-  PASS MCP-08  Insufficient Logging & Audit
-  PASS MCP-09  Insecure MCP-to-MCP Communication
-  PASS MCP-10  Context Window Pollution
-  Coverage: 5/8 mitigated
-
-Notable findings requiring manual review:
-  [CRITICAL] AS-005 cli/bin/commands/ignores.mjs:142  Known injection pattern detected
-  [CRITICAL] AS-005 cli/bin/commands/skills.mjs:1259  Known injection pattern detected
-  [CRITICAL] AS-001 cli/bin/commands/skills.mjs:11    Dangerous execution: import { execSync }
-  [MEDIUM]   AS-003 cli/bin/commands/skills.mjs:346   High-risk permission pattern: delete
-  ... and 1323 more findings (execSync, delete operator, interactive key handling)
-
-  Files: 426 | Lines: 146223 | Findings: 1333
+Target: bun.lock (bun)
+Vulnerabilities: 0
+Secrets: -
 ```
+
+---
+
+## OSV-Scanner — SCA via OSV.dev
+
+**Summary (pre-fix):** 30 known vulnerabilities across 7 transitive npm packages (0 Critical, 8 High, 21 Medium, 1 Low), all fixable.
+
+| Package | Installed | Fixed | Notable advisory | CVSS |
+|---|---|---|---|---|
+| `@protobufjs/utf8` | 1.1.0 | 1.1.1 | GHSA-q6x5-8v7m-xcrf | 5.3 |
+| `fast-uri` | 3.1.0 | 3.1.2 | GHSA-v39h-62p7-jpjc | 7.5 |
+| `hono` | 4.12.14 | 4.12.25 | GHSA-88fw-hqm2-52qc | 7.1 |
+| `ip-address` | 10.1.0 | 10.1.1 | GHSA-v2v4-37r5-5v8g | 5.3 |
+| `js-yaml` | 4.1.1 | 4.2.0 | GHSA-h67p-54hq-rp68 | 5.3 |
+| `protobufjs` | 7.5.5 | 7.6.3 | GHSA-75px-5xx7-5xc7 | 8.1 |
+| `qs` | 6.15.1 | 6.15.2 | GHSA-q8mj-m7cp-5q26 | 6.3 |
+
+**Fix applied:** Added an `overrides` block to `package.json` pinning all 7 packages to their fixed versions; ran `bun install`. Re-scan below.
+
+**Summary (post-fix):** `No issues found`.
+
+---
+
+## Semgrep — SAST (OWASP Top 10, TypeScript, secrets)
+
+**OWASP scan (pre-fix):** 1 unique rule type, 5 instances — `javascript.browser.security.wildcard-postmessage-configuration` in `extension/content/content-script.js` (lines 28, 31, 35, 38, 100). Content script bridges the extension's isolated world and the page-context detector script over the same window; a same-origin target was available and unused.
+
+```
+extension/content/content-script.js
+   28  window.postMessage({ source: 'impeccable-command', action: 'toggle-overlays' }, '*');
+   31  window.postMessage({ source: 'impeccable-command', action: 'remove' }, '*');
+   35  window.postMessage({ source: 'impeccable-command', action: 'highlight', selector: msg.selector }, '*');
+   38  window.postMessage({ source: 'impeccable-command', action: 'unhighlight' }, '*');
+  100  window.postMessage(msg, '*');
+```
+
+**Fix applied:** Replaced `'*'` with `window.location.origin` at all 5 call sites.
+
+**OWASP scan (post-fix, `extension/` only):** `0 findings` (70 rules / 6 files).
+
+**TypeScript scan:** `0 findings` (74 rules / 6 files).
+
+**Secrets scan:** `0 findings` (42 rules / 1,715 files; 38 files >300KB and 391 `.semgrepignore`-matched files skipped — see Coverage Gaps).
+
+---
+
+## security-audit (config-audit.py) — Claude config audit
+
+**Summary:** Tool audits both global `~/.claude` config and any Claude config found under the target path; only the latter is in scope for this repo.
+
+**Repo-scoped findings (informational, no fix needed):**
+- `CLAUDE.md` / `claude.md` — flagged for mentioning `.env` file access in prose (documents the evals-repo auth setup; not a live credential reference).
+- `/Users/mp3wizard/Public/Claude skill/impeccable/.claude/settings.json` — `PostToolUse` hook present (expected repo tooling, not a vulnerability).
+
+All other findings in the raw tool output (global `~/.claude/settings.json` hooks, installed plugins' `hooks.json`/`plugin.json` broad matchers) concern machine-wide Claude Code configuration outside this repo and are out of scope here.
+
+---
+
+## skill-audit — Skill file security review
+
+**Target:** `.claude/skills/impeccable/SKILL.md`
+**Summary:** Risk score **15/100 — LOW RISK**. 0 dangerous patterns, 0 prompt-injection patterns, 0 credential access, 0 network URLs, 4 file operations. Non-standard license field noted (Apache 2.0, informational). **Recommendation: APPROVE.**
+
+---
+
+## mcp-exfil-scan — MCP exfiltration scan
+
+**Summary:** Risk score **0/100 — CLEAN**. 2 MCP configs and 26 skill files scanned; no tool-description poisoning, outbound data flow, exfiltration chains, encoded payloads, env-var leaking, or source-trust issues detected.
 
 ---
 
 ## Cross-Tool Observations
 
-No cross-tool overlaps on secrets — all three secrets tools (Gitleaks, TruffleHog, Trivy) returned clean.
+All three secrets tools (Gitleaks, TruffleHog, Semgrep secrets) returned clean — no cross-tool overlap on secrets.
 
-Semgrep and mcps-audit both surface concerns in `live-browser.js` (wildcard postMessage / injection patterns in bundled scripts), but neither is a critical finding in context.
+skill-audit and mcp-exfil-scan agree: no prompt-injection or exfiltration indicators in this repo's skill/MCP surface.
 
 ## Coverage Gaps
 
 - **CodeQL**: No workflow present; deep semantic SAST not run.
-- **Business logic**: Not covered by automated tools.
-- **Runtime behavior**: Static analysis only; no dynamic testing.
-- **IDOR**: Not covered by tools run.
-- **21 files >500KB**: Skipped by Semgrep (large bundled `live-browser.js` copies). The source `skill/scripts/live-browser.js` is the canonical file; downstream copies are generated artifacts.
+- **Business logic / IDOR / runtime behavior**: Not covered by static tools run this cycle.
+- **Semgrep secrets scan**: 38 files >300KB and 391 `.semgrepignore`-matched files skipped (mostly generated `dist/`/`build/` provider-permutation copies and binary assets).
+- **mcp-scan / skillspector LLM mode**: Opt-in, not exercised (requires explicit consent per tool's privacy gate).
+
+## Fixes Applied
+
+- `package.json`: added `overrides` for `@protobufjs/utf8@1.1.1`, `fast-uri@3.1.2`, `hono@4.12.25`, `ip-address@10.1.1`, `js-yaml@4.2.0`, `protobufjs@7.6.3`, `qs@6.15.2`; ran `bun install`, regenerated `bun.lock`. Verified via OSV-Scanner re-scan (0 issues).
+- `extension/content/content-script.js`: replaced wildcard `postMessage` target origin (`'*'`) with `window.location.origin` at 5 call sites. Verified via Semgrep re-scan (0 findings).
+
+## Known Remaining Issues
+
+None outstanding from this cycle.

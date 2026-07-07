@@ -25,17 +25,17 @@
       injectAndScan();
       sendResponse({ ok: true });
     } else if (msg.action === 'toggle-overlays') {
-      window.postMessage({ source: 'impeccable-command', action: 'toggle-overlays' }, '*');
+      window.postMessage({ source: 'impeccable-command', action: 'toggle-overlays' }, window.location.origin);
       sendResponse({ ok: true });
     } else if (msg.action === 'remove') {
-      window.postMessage({ source: 'impeccable-command', action: 'remove' }, '*');
+      window.postMessage({ source: 'impeccable-command', action: 'remove' }, window.location.origin);
       injected = false;
       sendResponse({ ok: true });
     } else if (msg.action === 'highlight') {
-      window.postMessage({ source: 'impeccable-command', action: 'highlight', selector: msg.selector }, '*');
+      window.postMessage({ source: 'impeccable-command', action: 'highlight', selector: msg.selector }, window.location.origin);
       sendResponse({ ok: true });
     } else if (msg.action === 'unhighlight') {
-      window.postMessage({ source: 'impeccable-command', action: 'unhighlight' }, '*');
+      window.postMessage({ source: 'impeccable-command', action: 'unhighlight' }, window.location.origin);
       sendResponse({ ok: true });
     }
     return true;
@@ -97,7 +97,7 @@
   function sendScanCommand() {
     const msg = { source: 'impeccable-command', action: 'scan' };
     if (scanConfig) msg.config = scanConfig;
-    window.postMessage(msg, '*');
+    window.postMessage(msg, window.location.origin);
   }
 
   function injectAndScan() {
