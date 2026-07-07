@@ -377,7 +377,7 @@ Last audited: **2026-07-07** | Tools run: 8 (Gitleaks 8.30.1, TruffleHog 3.95.6,
 
 **Findings summary:** 0 secrets. OSV-Scanner: 30 transitive dependency CVEs (0 Critical, 8 High, 21 Medium, 1 Low) across `@protobufjs/utf8`, `fast-uri`, `hono`, `ip-address`, `js-yaml`, `protobufjs`, `qs`. Semgrep: 1 unique type, 5 instances of wildcard `postMessage` in the browser extension content script. skill-audit: 15/100 (LOW RISK). mcp-exfil-scan: 0/100 (CLEAN).
 
-**Fixes applied (2026-07-07):** Pinned all 7 vulnerable transitive packages via `overrides` in `package.json` and ran `bun install` — re-scan confirms 0 issues. Replaced the wildcard `postMessage` target origin (`'*'`) with `window.location.origin` at all 5 call sites in `extension/content/content-script.js` — re-scan confirms 0 findings.
+**Fixes applied (2026-07-07):** Pinned all 7 vulnerable transitive packages via `overrides` in `package.json` and ran `bun install` (re-scan confirms 0 issues). Replaced the wildcard `postMessage` target origin (`'*'`) with `window.location.origin` at all 5 call sites in `extension/content/content-script.js` (re-scan confirms 0 findings).
 
 **Known remaining issues:** None outstanding from this cycle.
 
