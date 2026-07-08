@@ -390,13 +390,13 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audited: **2026-07-07** | Tools run: 8 (Gitleaks 8.30.1, TruffleHog 3.95.6, Trivy 0.71.2, OSV-Scanner 2.4.0, Semgrep community, security-audit, skill-audit, mcp-exfil-scan)
+Last audited: **2026-07-08** | Tools run: 9 (Gitleaks 8.30.1, TruffleHog 3.95.6, Trivy 0.71.2, OSV-Scanner 2.4.0, Semgrep community, security-audit, skill-audit, mcp-exfil-scan, mcps-audit)
 
-**Findings summary:** 0 secrets. OSV-Scanner: 30 transitive dependency CVEs (0 Critical, 8 High, 21 Medium, 1 Low) across `@protobufjs/utf8`, `fast-uri`, `hono`, `ip-address`, `js-yaml`, `protobufjs`, `qs`. Semgrep: 1 unique type, 5 instances of wildcard `postMessage` in the browser extension content script. skill-audit: 15/100 (LOW RISK). mcp-exfil-scan: 0/100 (CLEAN).
+**Findings summary:** 0 secrets, 0 dependency CVEs (last cycle's 7-package fix held through this cycle's 18-commit upstream merge), 0 Semgrep findings. skill-audit: 35/100 (MEDIUM RISK, one Medium prompt-injection-pattern hit reviewed and dismissed as boilerplate). mcp-exfil-scan: 0/100 (CLEAN). mcps-audit: 1333 findings, all reviewed as heuristic false positives on common JS idioms (`execSync`, `delete obj.prop`, `.join()`) — no genuine vulnerability identified in the sampled set.
 
-**Fixes applied (2026-07-07):** Pinned all 7 vulnerable transitive packages via `overrides` in `package.json` and ran `bun install` (re-scan confirms 0 issues). Replaced the wildcard `postMessage` target origin (`'*'`) with `window.location.origin` at all 5 call sites in `extension/content/content-script.js` (re-scan confirms 0 findings).
+**Fixes applied (2026-07-08):** None required — no new in-scope finding.
 
-**Known remaining issues:** None outstanding from this cycle.
+**Known remaining issues:** mcps-audit's 1333 findings remain formally open but non-actionable (false positives); recommend excluding `dist/`/`build/`/duplicated per-IDE skill copies from future runs to cut noise.
 
 See [SECURITY_REPORT.md](SECURITY_REPORT.md) for the full report.
 

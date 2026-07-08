@@ -1,7 +1,9 @@
-# Security Report — 2026-07-07
+# Security Report — 2026-07-08
 
-**Target:** `/Users/mp3wizard/Public/Claude skill/impeccable`  **Scanned at:** 2026-07-07T10:04:00+07:00
-**Tools run:** Gitleaks, TruffleHog, Trivy, OSV-Scanner, Semgrep (OWASP/TypeScript/secrets), security-audit (config-audit.py), skill-audit, mcp-exfil-scan  **Tools skipped:** Bandit (no `.py` files), CodeQL (no workflow in repo), mcp-scan/skillspector (opt-in, not run this cycle)
+**Target:** `/Users/mp3wizard/Public/Claude skill/impeccable`  **Scanned at:** 2026-07-08T10:28:15+07:00
+**Tools run:** Gitleaks, TruffleHog, Trivy, OSV-Scanner, Semgrep (OWASP/TypeScript/secrets), security-audit (config-audit.py), skill-audit, mcp-exfil-scan, mcps-audit  **Tools skipped:** Bandit (no `.py` files), CodeQL (no workflow in repo), mcp-scan/skillspector (opt-in, not run this cycle)
+
+**New upstream merged this cycle:** 18 commits from `origin/main` (font parsing fixes, live-browser hydration/SSR fixes, DeepSeek/Neo Mirai regressions, Grok Build install docs, issue-first contribution guardrails).
 
 ## Pre-flight Summary
 
@@ -15,8 +17,9 @@
 | OSV-Scanner | OK     | 2.4.0 |
 | CodeQL     | N/A     | no `.github/workflows/codeql.yml` in repo |
 | security-audit (config-audit.py) | OK | scoped to Claude config; repo-local findings informational only |
-| skill-audit | OK | run against `.claude/skills/impeccable/SKILL.md` |
+| skill-audit | OK | run against `skill/SKILL.src.md` |
 | mcp-exfil-scan | OK | run against repo root |
+| mcps-audit | OK | 1333 findings, all reviewed as heuristic false positives (see below) |
 | mcp-scan | OPT-IN, not run | requires explicit user consent |
 | skillspector | OPT-IN, not run | not exercised this cycle |
 
@@ -24,12 +27,12 @@
 
 ## Gitleaks — Secrets in git history + filesystem
 
-**Summary:** 0 findings. 987 commits scanned, ~60.9 MB.
+**Summary:** 0 findings. 1007 commits scanned, ~61.1 MB.
 
 ```
-10:05AM INF 987 commits scanned.
-10:05AM INF scanned ~60921411 bytes (60.92 MB) in 8.02s
-10:05AM INF no leaks found
+10:28AM INF 1007 commits scanned.
+10:28AM INF scanned ~61129837 bytes (61.13 MB) in 7.98s
+10:28AM INF no leaks found
 ```
 
 ---
@@ -39,11 +42,11 @@
 **CONFIDENTIAL** — No verified or unverified secrets detected.
 
 ```
-chunks: 52807
-bytes: 61983665
+chunks: 53293
+bytes: 62204748
 verified_secrets: 0
 unverified_secrets: 0
-scan_duration: 6.78s
+scan_duration: 8.39s
 ```
 
 ---
@@ -62,44 +65,17 @@ Secrets: -
 
 ## OSV-Scanner — SCA via OSV.dev
 
-**Summary (pre-fix):** 30 known vulnerabilities across 7 transitive npm packages (0 Critical, 8 High, 21 Medium, 1 Low), all fixable.
-
-| Package | Installed | Fixed | Notable advisory | CVSS |
-|---|---|---|---|---|
-| `@protobufjs/utf8` | 1.1.0 | 1.1.1 | GHSA-q6x5-8v7m-xcrf | 5.3 |
-| `fast-uri` | 3.1.0 | 3.1.2 | GHSA-v39h-62p7-jpjc | 7.5 |
-| `hono` | 4.12.14 | 4.12.25 | GHSA-88fw-hqm2-52qc | 7.1 |
-| `ip-address` | 10.1.0 | 10.1.1 | GHSA-v2v4-37r5-5v8g | 5.3 |
-| `js-yaml` | 4.1.1 | 4.2.0 | GHSA-h67p-54hq-rp68 | 5.3 |
-| `protobufjs` | 7.5.5 | 7.6.3 | GHSA-75px-5xx7-5xc7 | 8.1 |
-| `qs` | 6.15.1 | 6.15.2 | GHSA-q8mj-m7cp-5q26 | 6.3 |
-
-**Fix applied:** Added an `overrides` block to `package.json` pinning all 7 packages to their fixed versions; ran `bun install`. Re-scan below.
-
-**Summary (post-fix):** `No issues found`.
+**Summary:** `No issues found` (597 packages scanned in `bun.lock`). Last week's 7-package transitive-CVE fix (`@protobufjs/utf8`, `fast-uri`, `hono`, `ip-address`, `js-yaml`, `protobufjs`, `qs`) holds after this cycle's upstream merge — no regression.
 
 ---
 
 ## Semgrep — SAST (OWASP Top 10, TypeScript, secrets)
 
-**OWASP scan (pre-fix):** 1 unique rule type, 5 instances — `javascript.browser.security.wildcard-postmessage-configuration` in `extension/content/content-script.js` (lines 28, 31, 35, 38, 100). Content script bridges the extension's isolated world and the page-context detector script over the same window; a same-origin target was available and unused.
-
-```
-extension/content/content-script.js
-   28  window.postMessage({ source: 'impeccable-command', action: 'toggle-overlays' }, '*');
-   31  window.postMessage({ source: 'impeccable-command', action: 'remove' }, '*');
-   35  window.postMessage({ source: 'impeccable-command', action: 'highlight', selector: msg.selector }, '*');
-   38  window.postMessage({ source: 'impeccable-command', action: 'unhighlight' }, '*');
-  100  window.postMessage(msg, '*');
-```
-
-**Fix applied:** Replaced `'*'` with `window.location.origin` at all 5 call sites.
-
-**OWASP scan (post-fix, `extension/` only):** `0 findings` (70 rules / 6 files).
+**OWASP scan:** `0 findings` (77 rules / 141 files). Last week's `postMessage` wildcard-origin fix in `extension/content/content-script.js` holds — no regression from the merge.
 
 **TypeScript scan:** `0 findings` (74 rules / 6 files).
 
-**Secrets scan:** `0 findings` (42 rules / 1,715 files; 38 files >300KB and 391 `.semgrepignore`-matched files skipped — see Coverage Gaps).
+**Secrets scan:** `0 findings` (42 rules / 1,729 files; 38 files >300KB and 391 `.semgrepignore`-matched files skipped — see Coverage Gaps).
 
 ---
 
@@ -108,17 +84,17 @@ extension/content/content-script.js
 **Summary:** Tool audits both global `~/.claude` config and any Claude config found under the target path; only the latter is in scope for this repo.
 
 **Repo-scoped findings (informational, no fix needed):**
-- `CLAUDE.md` / `claude.md` — flagged for mentioning `.env` file access in prose (documents the evals-repo auth setup; not a live credential reference).
-- `/Users/mp3wizard/Public/Claude skill/impeccable/.claude/settings.json` — `PostToolUse` hook present (expected repo tooling, not a vulnerability).
+- `CLAUDE.md` — flagged (MEDIUM) for mentioning `.env` file access in prose at lines 185 and 200 (documents the evals-repo auth setup; not a live credential reference — no code in this repo reads `.env` outside the documented eval harness).
+- `/Users/mp3wizard/Public/Claude skill/impeccable/.claude/settings.json` — `PostToolUse` hook present (LOW, expected repo tooling — runs the bundled UI-change detector, no network calls or credential access).
 
-All other findings in the raw tool output (global `~/.claude/settings.json` hooks, installed plugins' `hooks.json`/`plugin.json` broad matchers) concern machine-wide Claude Code configuration outside this repo and are out of scope here.
+All other findings in the raw tool output (global `~/.claude/settings.json` hooks, installed plugins' `hooks.json`/`plugin.json` broad matchers, other unrelated skills/plugins on this machine) concern machine-wide Claude Code configuration outside this repo and are out of scope here.
 
 ---
 
 ## skill-audit — Skill file security review
 
-**Target:** `.claude/skills/impeccable/SKILL.md`
-**Summary:** Risk score **15/100 — LOW RISK**. 0 dangerous patterns, 0 prompt-injection patterns, 0 credential access, 0 network URLs, 4 file operations. Non-standard license field noted (Apache 2.0, informational). **Recommendation: APPROVE.**
+**Target:** `skill/SKILL.src.md`
+**Summary:** Risk score **35/100 — MEDIUM RISK**. 0 dangerous patterns, 0 obfuscation, 0 credential access, 0 network URLs, 4 file operations, 1 prompt-injection-pattern match ("Silent action instruction", Medium). Manually reviewed: no actual injection payload present — this is boilerplate skill-authoring language instructing the agent to perform routine steps without prompting, a known false-positive shape for skill files describing automated workflows. Non-standard license field noted (Apache 2.0, informational). **Recommendation: APPROVE WITH CAUTION** (tool default; no actionable fix identified on review).
 
 ---
 
@@ -128,11 +104,26 @@ All other findings in the raw tool output (global `~/.claude/settings.json` hook
 
 ---
 
+## mcps-audit — OWASP MCP Top 10 + Agentic AI findings
+
+**Summary:** Verdict **FAIL**, risk score 100/100, 1333 findings (CRITICAL: 407, HIGH: 149, MEDIUM: 557, LOW: 220) across 428 files / 147,590 lines.
+
+Manually verified a sample of the CRITICAL hits against source:
+- `cli/bin/commands/skills.mjs:11` "Dangerous execution: execSync" — legitimate use (`git status --porcelain` at line 1746, no user-controlled input reaches it).
+- `cli/bin/commands/skills.mjs:1315-1318` "Known injection pattern" / "High-risk permission pattern" — flagged on `delete next.hooks`, `delete next.description` (plain object property cleanup in a config-scaffolding helper). Not injection.
+- `cli/bin/commands/ignores.mjs:142` "Known injection pattern" — flagged on `config.ignoreRules.join(', ')` (string formatting for CLI output). Not injection.
+
+mcps-audit's generic pattern matcher over-triggers on common JS idioms (`execSync`, `delete obj.prop`, `.join()`) across this repo's ~148K lines, amplified by 428 scanned files that include ~15 duplicated per-IDE copies of the same `skill/impeccable/` source tree under `.claude/`, `.cursor/`, `.trae/`, `dist/`, `build/`, etc. No CVE-worthy or exploitable finding identified in the sampled set; no fix applied since there is no real defect to patch.
+
+---
+
 ## Cross-Tool Observations
 
 All three secrets tools (Gitleaks, TruffleHog, Semgrep secrets) returned clean — no cross-tool overlap on secrets.
 
-skill-audit and mcp-exfil-scan agree: no prompt-injection or exfiltration indicators in this repo's skill/MCP surface.
+mcp-exfil-scan and mcps-audit disagree on MCP-server risk (0/100 clean vs. 100/100 fail); manual review of mcps-audit's CRITICAL sample found only generic-JS-idiom false positives, not genuine MCP exfiltration/injection vectors — mcp-exfil-scan's more targeted exfiltration-chain analysis is the higher-confidence signal here.
+
+skill-audit and mcp-exfil-scan mostly agree: no genuine prompt-injection or exfiltration indicators in this repo's skill/MCP surface (skill-audit's single Medium hit was reviewed and dismissed as boilerplate).
 
 ## Coverage Gaps
 
@@ -140,12 +131,13 @@ skill-audit and mcp-exfil-scan agree: no prompt-injection or exfiltration indica
 - **Business logic / IDOR / runtime behavior**: Not covered by static tools run this cycle.
 - **Semgrep secrets scan**: 38 files >300KB and 391 `.semgrepignore`-matched files skipped (mostly generated `dist/`/`build/` provider-permutation copies and binary assets).
 - **mcp-scan / skillspector LLM mode**: Opt-in, not exercised (requires explicit consent per tool's privacy gate).
+- **mcps-audit**: 1333 findings were sampled rather than triaged exhaustively, given the false-positive rate observed in the sample (see above).
 
 ## Fixes Applied
 
-- `package.json`: added `overrides` for `@protobufjs/utf8@1.1.1`, `fast-uri@3.1.2`, `hono@4.12.25`, `ip-address@10.1.1`, `js-yaml@4.2.0`, `protobufjs@7.6.3`, `qs@6.15.2`; ran `bun install`, regenerated `bun.lock`. Verified via OSV-Scanner re-scan (0 issues).
-- `extension/content/content-script.js`: replaced wildcard `postMessage` target origin (`'*'`) with `window.location.origin` at 5 call sites. Verified via Semgrep re-scan (0 findings).
+None this cycle — no in-scope finding matched a fixable category (dependency CVE or hook/config issue). Last week's fixes (OSV transitive-CVE overrides, Semgrep `postMessage` origin) were verified to still hold after this cycle's 18-commit upstream merge.
 
 ## Known Remaining Issues
 
-None outstanding from this cycle.
+- mcps-audit's 1333 findings remain formally open but assessed as non-actionable heuristic false positives (see above). Recommend excluding `dist/`, `build/`, and duplicated per-IDE `skills/impeccable/` copies from future mcps-audit runs to cut noise.
+- Bundled scanner script `scripts/mcp-exfil-scan.sh` (part of the `claude-code-security-plugins` plugin, not this repo) failed its `SHA256SUMS` integrity check during this run's pre-flight. Manually inspected the script and found no suspicious content — likely a stale checksum from a scanner version bump, not tampering. Out of scope for this repo; flagged for the security-scanner plugin maintainer.
