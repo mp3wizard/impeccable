@@ -25,6 +25,23 @@ Sub-command reference files add a short `## Register` section near the top *only
 
 **a11y lives in `audit.md`**, not in SKILL.md, `brand.md`, or `product.md`. Models over-cautious themselves into safe, underdesigned output when reminded about accessibility at design time. The audit command is the dedicated place for that check.
 
+### Platform (web / ios / android / adaptive)
+
+A second axis, **orthogonal to register**. Register answers "does design IS or SERVES the product"; platform answers "what's the delivery target and which native conventions apply":
+
+- **web** — a website or web app (including responsive mobile web). The default. No extra rulebook and no reference file: the General rules in SKILL.md and the register reference cover it.
+- **ios** — a native iOS / iPadOS app. Loads `reference/ios.md` (Apple HIG distilled) on top of the register reference.
+- **android** — a native Android app. Loads `reference/android.md` (Material Design 3 distilled) on top of the register reference.
+- **adaptive** — a cross-platform app shipping both iOS and Android from one codebase (Flutter, React Native, KMP) that adapts per OS. Loads **both** `reference/ios.md` and `reference/android.md`. A Flutter/RN app that uses one look on both platforms (Material-everywhere is the Flutter default) is not adaptive; it takes that single platform's value.
+
+PRODUCT.md carries a `## Platform` section with a bare value (`web` / `ios` / `android` / `adaptive`). It's parsed by `extractPlatform()` in `skill/scripts/context.mjs` (mirroring `extractRegister()`); a **missing field defaults to `web`** so legacy projects are unaffected. A line that names both native targets (e.g. `ios, android`) is also read as `adaptive`; any other unrecognized value falls back to web **and** the `context.mjs` CLI prints a WARNING directive naming the bad value, so a toolchain name or typo never silently gets web guidance. `context.mjs` appends a NEXT STEP directive to read the native reference(s) when the value is `ios`, `android`, or `adaptive` (both). `init` (Step 3) asks platform right after register.
+
+`ios.md` and `android.md` are distilled from the MIT-licensed [ehmo/platform-design-skills](https://github.com/ehmo/platform-design-skills); attribution is in `NOTICE.md`.
+
+Where a command's native guidance diverges too much to share a file, it gets a **native variant**: `reference/<command>.native.md`, listed in SKILL.md's Commands table and routed **instead of** the web file when `setup.platform` is native (Setup step 2). One variant covers ios, android, and adaptive; per-OS specifics stay in the platform refs, which Setup loads regardless. Variants today: `audit.native.md`, `adapt.native.md` (their web files carry a one-line web-only guard that redirects stray native readers). `audit.native.md` mirrors `audit.md`'s report skeleton; change the skeleton in both together. Commands whose divergence the platform refs already cover (`animate`, `layout`) carry nothing extra; don't add in-file translation notes, they make native runs pay for web content.
+
+**Live mode, the `detect` CLI, and the design hook are web-only.** They operate on a browser / HTML rules, so SKILL.md's routing skips live and `detect.mjs` for any native (`ios` / `android` / `adaptive`) project, and the hook (`hook-lib.mjs` `resolveProjectPlatform` / `isNativePlatform`, also used by `hook-before-edit.mjs`) skips its scan when PRODUCT.md declares a native platform — a React Native project is made of exactly the `.tsx` / `.ts` / `.js` files the hook watches.
+
 ## CSS
 
 Plain hand-written CSS, no Tailwind. Imported into Astro pages/layouts via frontmatter `import` statements; Vite resolves `@import` chains automatically.
@@ -184,7 +201,7 @@ IMPECCABLE_SKILL_BEHAVIOR_VERBOSE=1 bun run test:skill-behavior          # dump 
 
 **Auth** lives in repo-root `.env` (copied from `~/code/impeccable-evals/.env`, gitignored). Providers skip cleanly when their key is unset; they don't fail.
 
-**Nine scenarios:**
+**Fifteen scenarios:**
 1. empty workspace → agent loads `reference/init.md`
 2. PRODUCT.md only → loads `brand.md`
 3. PRODUCT.md + DESIGN.md → loads `brand.md` + consults the design system
@@ -194,6 +211,12 @@ IMPECCABLE_SKILL_BEHAVIOR_VERBOSE=1 bun run test:skill-behavior          # dump 
 7. `/impeccable audit` → loads `reference/audit.md`
 8. existing SvelteKit project → agent reads at least one project code file
 9. `context.mjs` emits `UPDATE_AVAILABLE` (seeded newer version) → agent surfaces it but does **not** auto-run `npx impeccable skills update`
+10. scoped command with no PRODUCT.md → proceeds without forcing init
+11. `/impeccable shape` with no PRODUCT.md → diverts into `reference/init.md`
+12. natural-language build intent with no PRODUCT.md → diverts into `reference/init.md`
+13. `/impeccable teach` → diverts into `reference/init.md` (alias)
+14. PRODUCT.md with `## Platform: ios` → `context.mjs` emits the native NEXT STEP and the agent loads `reference/ios.md`
+15. same iOS fixture, `/impeccable audit` → agent loads `reference/audit.native.md` (route-instead variant)
 
 **Baseline.** The 21-22 / 24 baseline (with stable gpt scenario 6/7 failures) was measured on the old cheap tier (`claude-haiku-4-5` / `gpt-5.4-mini`). It needs re-measuring on the current `claude-sonnet-4-6` / `gpt-5.5` lineup; the production-tier models are expected to do better on the sub-command routing scenarios the old gpt tier failed. See `tests/skill-behavior/README.md`.
 
