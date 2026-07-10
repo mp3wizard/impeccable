@@ -390,13 +390,13 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audited: **2026-07-08** | Tools run: 9 (Gitleaks 8.30.1, TruffleHog 3.95.6, Trivy 0.71.2, OSV-Scanner 2.4.0, Semgrep community, security-audit, skill-audit, mcp-exfil-scan, mcps-audit)
+Last audited: **2026-07-10** | Tools run: 9 (Gitleaks 8.30.1, TruffleHog 3.95.6, Trivy 0.71.2, OSV-Scanner 2.4.0, Semgrep community, security-audit, skill-audit, mcp-exfil-scan, mcps-audit)
 
-**Findings summary:** 0 secrets, 0 dependency CVEs (last cycle's 7-package fix held through this cycle's 18-commit upstream merge), 0 Semgrep findings. skill-audit: 35/100 (MEDIUM RISK, one Medium prompt-injection-pattern hit reviewed and dismissed as boilerplate). mcp-exfil-scan: 0/100 (CLEAN). mcps-audit: 1333 findings, all reviewed as heuristic false positives on common JS idioms (`execSync`, `delete obj.prop`, `.join()`); no genuine vulnerability identified in the sampled set.
+**Findings summary:** 0 secrets, 0 dependency CVEs, 0 Semgrep findings. skill-audit: all 65 scanned `SKILL.md` files LOW/MEDIUM (max 35/100), no HIGH/CRITICAL. mcp-exfil-scan: 0/100 (CLEAN). mcps-audit: 1360 findings, all reviewed as heuristic false positives on common JS idioms (`execSync`, `delete obj.prop`, `.join()`); no genuine vulnerability identified in the sampled set.
 
-**Fixes applied (2026-07-08):** None required; no new in-scope finding.
+**Fixes applied (2026-07-10):** None required; no new in-scope finding.
 
-**Known remaining issues:** mcps-audit's 1333 findings remain formally open but non-actionable (false positives); recommend excluding `dist/`/`build/`/duplicated per-IDE skill copies from future runs to cut noise.
+**Known remaining issues:** mcps-audit's 1360 findings remain formally open but non-actionable (false positives); recommend excluding `dist/`/`build/`/duplicated per-IDE skill copies from future runs to cut noise.
 
 See [SECURITY_REPORT.md](SECURITY_REPORT.md) for the full report.
 
