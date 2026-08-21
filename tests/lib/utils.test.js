@@ -614,7 +614,7 @@ describe('replacePlaceholders', () => {
     expect(result).toBe('STOP and call the AskUserQuestion tool to clarify.');
 
     const cursorResult = replacePlaceholders('{{ask_instruction}}', 'cursor');
-    expect(cursorResult).toBe('ask the user directly to clarify what you cannot infer.');
+    expect(cursorResult).toBe('Ask the user directly to clarify what you cannot infer.');
   });
 
   test('should replace {{available_commands}} with command list', () => {
@@ -676,17 +676,19 @@ describe('replacePlaceholders', () => {
 });
 
 describe('replaceScriptProviderMarker', () => {
-  test('renders only the explicit command-prefix declaration', () => {
+  test('renders only the explicit provider declarations', () => {
     const source = [
       "export const IMPECCABLE_COMMAND_PREFIX = '/'; // @impeccable-provider-command-prefix",
+      "export const IMPECCABLE_PROVIDER_ID = 'source'; // @impeccable-provider-id",
       'const regex = /impeccable\\b/gi;',
       "const runtime = '/src/lib/impeccable/__runtime.js';",
       "const text = 'Run /impeccable audit';",
     ].join('\n');
 
-    const result = replaceScriptProviderMarker(source, 'codex');
+    const result = replaceScriptProviderMarker(source, 'codex', 'agents');
 
     expect(result).toContain('export const IMPECCABLE_COMMAND_PREFIX = "$";');
+    expect(result).toContain('export const IMPECCABLE_PROVIDER_ID = "agents";');
     expect(result).toContain('const regex = /impeccable\\b/gi;');
     expect(result).toContain("const runtime = '/src/lib/impeccable/__runtime.js';");
     expect(result).toContain("const text = 'Run /impeccable audit';");

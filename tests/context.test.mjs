@@ -21,7 +21,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
-import { loadContext, resolveContextDir, resolveProjectRoot, extractRegister, extractPlatform } from '../skill/scripts/context.mjs';
+import { loadContext, resolveContextDir, resolveProjectRoot, extractPlatform, hasVisualImplementation } from '../skill/scripts/context.mjs';
 
 import { fileURLToPath } from 'node:url';
 const SCRIPT_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'skill', 'scripts', 'context.mjs');
@@ -46,6 +46,27 @@ function write(rel, body = '# placeholder\n') {
   fs.mkdirSync(path.dirname(abs), { recursive: true });
   fs.writeFileSync(abs, body);
   return abs;
+}
+
+// Stage a runnable copy of context.mjs plus its whole lib/ directory.
+// The bundle tests used to enumerate the helpers they needed, which turned
+// every new import in context.mjs into a mysterious non-zero exit here.
+// Copying the directory keeps them honest about what the real script loads.
+function stageContextBundle(scriptsDir, { providerId } = {}) {
+  const libSrc = path.join(path.dirname(SCRIPT_PATH), 'lib');
+  const libDest = path.join(scriptsDir, 'lib');
+  fs.mkdirSync(scriptsDir, { recursive: true });
+  fs.copyFileSync(SCRIPT_PATH, path.join(scriptsDir, 'context.mjs'));
+  fs.cpSync(libSrc, libDest, { recursive: true });
+  if (providerId) {
+    const providerPath = path.join(libDest, 'provider.mjs');
+    fs.writeFileSync(
+      providerPath,
+      fs.readFileSync(providerPath, 'utf8')
+        .replace("IMPECCABLE_PROVIDER_ID = 'source'", `IMPECCABLE_PROVIDER_ID = '${providerId}'`),
+    );
+  }
+  return path.join(scriptsDir, 'context.mjs');
 }
 
 function parseTargetSelection(stdout) {
@@ -278,11 +299,12 @@ describe('loadContext (monorepo project context)', () => {
 
   it('does not reuse stale project resolution after workspace markers change', () => {
     write('PRODUCT.md', '# Root product\n');
-    write('apps/dashboard/PRODUCT.md', '# Dashboard product\n');
+    write('apps/dashboard/package.json', JSON.stringify({ name: 'dashboard' }, null, 2));
     write('apps/dashboard/src/App.jsx', 'export default null;\n');
 
     const before = loadContext(scratch, { targetPath: 'apps/dashboard/src/App.jsx' });
     assert.equal(before.projectRoot, scratch);
+    assert.equal(before.isMonorepo, false);
     assert.match(before.product, /Root product/);
 
     write('package.json', JSON.stringify({
@@ -292,7 +314,77 @@ describe('loadContext (monorepo project context)', () => {
 
     const after = loadContext(scratch, { targetPath: 'apps/dashboard/src/App.jsx' });
     assert.equal(after.projectRoot, path.join(scratch, 'apps', 'dashboard'));
-    assert.match(after.product, /Dashboard product/);
+    assert.equal(after.isMonorepo, true);
+    assert.match(after.product, /Root product/);
+  });
+
+  it('resolves an explicit target onto a nested product context in a non-monorepo repo', () => {
+    write('nested/product/PRODUCT.md', '# Nested product\n');
+    write('nested/product/DESIGN.md', '# Nested design\n');
+    write('nested/product/file.ts', 'export const x = 1;\n');
+
+    const ctx = loadContext(scratch, { targetPath: 'nested/product/file.ts' });
+    assert.equal(ctx.isMonorepo, false);
+    assert.equal(ctx.projectRoot, path.join(scratch, 'nested', 'product'));
+    assert.equal(ctx.repoRoot, scratch);
+    assert.match(ctx.product, /Nested product/);
+    assert.match(ctx.design, /Nested design/);
+    assert.equal(ctx.productPath, path.join('nested', 'product', 'PRODUCT.md'));
+    assert.equal(ctx.designPath, path.join('nested', 'product', 'DESIGN.md'));
+  });
+
+  it('resolves a nested target whose context lives in .agents/context/', () => {
+    write('nested/product/.agents/context/PRODUCT.md', '# Nested product\n');
+    write('nested/product/file.ts', 'export const x = 1;\n');
+
+    const ctx = loadContext(scratch, { targetPath: 'nested/product/file.ts' });
+    assert.equal(ctx.isMonorepo, false);
+    assert.equal(ctx.projectRoot, path.join(scratch, 'nested', 'product'));
+    assert.match(ctx.product, /Nested product/);
+    assert.equal(ctx.productPath, path.join('nested', 'product', '.agents', 'context', 'PRODUCT.md'));
+  });
+
+  it('resolves a nested target whose context lives in docs/', () => {
+    write('nested/product/docs/DESIGN.md', '# Nested design\n');
+    write('nested/product/file.ts', 'export const x = 1;\n');
+
+    const ctx = loadContext(scratch, { targetPath: 'nested/product/file.ts' });
+    assert.equal(ctx.isMonorepo, false);
+    assert.equal(ctx.projectRoot, path.join(scratch, 'nested', 'product'));
+    assert.match(ctx.design, /Nested design/);
+    assert.equal(ctx.designPath, path.join('nested', 'product', 'docs', 'DESIGN.md'));
+  });
+
+  it('does not treat the root fallback context dirs as a nested product', () => {
+    write('.agents/context/PRODUCT.md', '# Root product\n');
+    write('.agents/context/notes/file.md', '# Notes\n');
+
+    const ctx = loadContext(scratch, { targetPath: '.agents/context/notes/file.md' });
+    assert.equal(ctx.projectRoot, scratch);
+    assert.match(ctx.product, /Root product/);
+  });
+
+  it('inherits missing root context per-file for a nested target in a non-monorepo repo', () => {
+    write('DESIGN.md', '# Root design\n');
+    write('nested/product/PRODUCT.md', '# Nested product\n');
+    write('nested/product/file.ts', 'export const x = 1;\n');
+
+    const ctx = loadContext(scratch, { targetPath: 'nested/product/file.ts' });
+    assert.equal(ctx.projectRoot, path.join(scratch, 'nested', 'product'));
+    assert.match(ctx.product, /Nested product/);
+    assert.match(ctx.design, /Root design/);
+    assert.equal(ctx.designPath, 'DESIGN.md');
+  });
+
+  it('keeps the repo root project for targets without nearby context files', () => {
+    write('PRODUCT.md', '# Root product\n');
+    write('src/App.jsx', 'export default null;\n');
+
+    const ctx = loadContext(scratch, { targetPath: 'src/App.jsx' });
+    assert.equal(ctx.isMonorepo, false);
+    assert.equal(ctx.projectRoot, scratch);
+    assert.match(ctx.product, /Root product/);
+    assert.equal(ctx.productPath, 'PRODUCT.md');
   });
 
   it('does not escape a nested git repo to an ancestor workspace', () => {
@@ -408,7 +500,7 @@ describe('loadContext (monorepo project context)', () => {
     const res = spawnSync(process.execPath, [SCRIPT_PATH], {
       cwd: scratch,
       encoding: 'utf8',
-      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1' },
+      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1', IMPECCABLE_NO_STALENESS_CHECK: '1' },
     });
     assert.equal(res.status, 0);
     const selection = parseTargetSelection(res.stdout);
@@ -439,7 +531,7 @@ describe('loadContext (monorepo project context)', () => {
     const res = spawnSync(process.execPath, [SCRIPT_PATH], {
       cwd: scratch,
       encoding: 'utf8',
-      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1' },
+      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1', IMPECCABLE_NO_STALENESS_CHECK: '1' },
     });
     assert.equal(res.status, 0);
     assert.doesNotMatch(res.stdout, /MONOREPO_TARGET_REQUIRED/);
@@ -447,12 +539,12 @@ describe('loadContext (monorepo project context)', () => {
 
   it('supports --target in the CLI', async () => {
     writeMonorepo();
-    write('apps/dashboard/PRODUCT.md', '# Dashboard product\n\n## Register\n\nproduct\n');
+    write('apps/dashboard/PRODUCT.md', '# Dashboard product\n\n## Platform\n\nweb\n');
     const { spawnSync } = await import('node:child_process');
     const res = spawnSync(process.execPath, [SCRIPT_PATH, '--target', 'apps/dashboard/src/App.jsx'], {
       cwd: scratch,
       encoding: 'utf8',
-      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1' },
+      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1', IMPECCABLE_NO_STALENESS_CHECK: '1' },
     });
     assert.equal(res.status, 0);
     assert.match(res.stdout, /# Dashboard product/);
@@ -461,7 +553,7 @@ describe('loadContext (monorepo project context)', () => {
     assert.match(res.stdout, /"targetPath": "apps\/dashboard\/src\/App\.jsx"/);
     assert.match(res.stdout, /"productPath": "apps\/dashboard\/PRODUCT\.md"/);
     assert.match(res.stdout, /"designPath": "DESIGN\.md"/);
-    assert.match(res.stdout, /NEXT STEP: This project's register is `product`\./);
+    assert.doesNotMatch(res.stdout, /REGISTER:/);
   });
 
   it('asks for an app when the CLI runs from a monorepo root without selection', () => {
@@ -469,7 +561,7 @@ describe('loadContext (monorepo project context)', () => {
     const res = spawnSync(process.execPath, [SCRIPT_PATH], {
       cwd: scratch,
       encoding: 'utf8',
-      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1' },
+      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1', IMPECCABLE_NO_STALENESS_CHECK: '1' },
     });
     assert.equal(res.status, 0);
     assert.match(res.stdout, /TARGET_SELECTION_REQUIRED:/);
@@ -494,7 +586,7 @@ describe('loadContext (monorepo project context)', () => {
     const res = spawnSync(process.execPath, [SCRIPT_PATH], {
       cwd: scratch,
       encoding: 'utf8',
-      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1' },
+      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1', IMPECCABLE_NO_STALENESS_CHECK: '1' },
     });
     assert.equal(res.status, 0);
     const selection = parseTargetSelection(res.stdout);
@@ -555,7 +647,7 @@ describe('loadContext (monorepo project context)', () => {
     const res = spawnSync(process.execPath, [SCRIPT_PATH], {
       cwd: scratch,
       encoding: 'utf8',
-      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1' },
+      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1', IMPECCABLE_NO_STALENESS_CHECK: '1' },
     });
     assert.equal(res.status, 0);
     const selection = parseTargetSelection(res.stdout);
@@ -577,7 +669,7 @@ describe('loadContext (monorepo project context)', () => {
     const res = spawnSync(process.execPath, [SCRIPT_PATH], {
       cwd: scratch,
       encoding: 'utf8',
-      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1' },
+      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1', IMPECCABLE_NO_STALENESS_CHECK: '1' },
     });
     assert.equal(res.status, 0);
     assert.match(res.stdout, /TARGET_SELECTION_REQUIRED:/);
@@ -594,7 +686,7 @@ describe('loadContext (monorepo project context)', () => {
     const res = spawnSync(process.execPath, [SCRIPT_PATH], {
       cwd: scratch,
       encoding: 'utf8',
-      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1' },
+      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1', IMPECCABLE_NO_STALENESS_CHECK: '1' },
     });
     assert.equal(res.status, 0);
     const selection = parseTargetSelection(res.stdout);
@@ -611,7 +703,7 @@ describe('loadContext (monorepo project context)', () => {
     const res = spawnSync(process.execPath, [SCRIPT_PATH], {
       cwd: scratch,
       encoding: 'utf8',
-      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1' },
+      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1', IMPECCABLE_NO_STALENESS_CHECK: '1' },
     });
     assert.equal(res.status, 0);
     assert.doesNotMatch(res.stdout, /TARGET_SELECTION_REQUIRED/);
@@ -623,7 +715,7 @@ describe('loadContext (monorepo project context)', () => {
     const res = spawnSync(process.execPath, [SCRIPT_PATH, '--target', '.'], {
       cwd: scratch,
       encoding: 'utf8',
-      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1' },
+      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1', IMPECCABLE_NO_STALENESS_CHECK: '1' },
     });
     assert.equal(res.status, 0);
     assert.match(res.stdout, /# PRODUCT\.md\n\n# Root product/);
@@ -637,7 +729,7 @@ describe('loadContext (monorepo project context)', () => {
     const res = spawnSync(process.execPath, [SCRIPT_PATH, '--target', '--help'], {
       cwd: scratch,
       encoding: 'utf8',
-      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1' },
+      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1', IMPECCABLE_NO_STALENESS_CHECK: '1' },
     });
     assert.equal(res.status, 1);
     assert.match(res.stderr, /--target requires a path value/);
@@ -656,7 +748,7 @@ describe('loadContext (monorepo project context)', () => {
     ], {
       cwd: scratch,
       encoding: 'utf8',
-      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1' },
+      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1', IMPECCABLE_NO_STALENESS_CHECK: '1' },
     });
     assert.equal(res.status, 0, res.stderr);
     assert.match(res.stdout, /# Dashboard product/);
@@ -669,7 +761,7 @@ describe('loadContext (monorepo project context)', () => {
     const res = spawnSync(process.execPath, [SCRIPT_PATH, '--target', 'apps/dashboard/routes/pricing'], {
       cwd: scratch,
       encoding: 'utf8',
-      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1' },
+      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1', IMPECCABLE_NO_STALENESS_CHECK: '1' },
     });
 
     assert.equal(res.status, 0, res.stderr);
@@ -689,12 +781,174 @@ describe('loadContext (monorepo project context)', () => {
     const res = spawnSync(process.execPath, [SCRIPT_PATH], {
       cwd: scratch,
       encoding: 'utf8',
-      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1' },
+      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1', IMPECCABLE_NO_STALENESS_CHECK: '1' },
     });
     assert.equal(res.status, 0);
     assert.match(res.stdout, /TARGET_SELECTION_REQUIRED:/);
     assert.match(res.stdout, /"path": "apps\/dashboard"/);
     assert.doesNotMatch(res.stdout, /^NO_PRODUCT_MD:/);
+  });
+});
+
+describe('loadContext (impeccable projectRoots config)', () => {
+  function writeSkinsConfig(extra = {}) {
+    write('.impeccable/config.json', JSON.stringify({ projectRoots: ['docs/design/skins/*'], ...extra }, null, 2));
+    write('PRODUCT.md', '# Root product\n');
+    write('DESIGN.md', '# Root design\n');
+  }
+
+  it('treats a config-declared context root as a monorepo with no package-manager files', () => {
+    writeSkinsConfig();
+    write('docs/design/skins/neon-seoul/DESIGN.md', '# Neon Seoul design\n');
+
+    const ctx = loadContext(scratch, { targetPath: 'docs/design/skins/neon-seoul' });
+    assert.equal(ctx.isMonorepo, true);
+    assert.equal(ctx.projectRoot, path.join(scratch, 'docs', 'design', 'skins', 'neon-seoul'));
+    assert.equal(ctx.repoRoot, scratch);
+    // The skin uses its own DESIGN.md and inherits the root PRODUCT.md per file.
+    assert.match(ctx.design, /Neon Seoul design/);
+    assert.match(ctx.product, /Root product/);
+    assert.equal(ctx.designPath, path.join('docs', 'design', 'skins', 'neon-seoul', 'DESIGN.md'));
+    assert.equal(ctx.productPath, 'PRODUCT.md');
+  });
+
+  it('resolves a config-declared child from cwd inside the folder', () => {
+    writeSkinsConfig();
+    write('docs/design/skins/marble/DESIGN.md', '# Marble design\n');
+
+    const skinDir = path.join(scratch, 'docs', 'design', 'skins', 'marble');
+    const ctx = loadContext(skinDir);
+    assert.equal(ctx.isMonorepo, true);
+    assert.equal(ctx.projectRoot, skinDir);
+    assert.match(ctx.design, /Marble design/);
+    assert.match(ctx.product, /Root product/);
+  });
+
+  it('extends shared projectRoots with config.local.json', () => {
+    write('.impeccable/config.json', JSON.stringify({ projectRoots: ['docs/design/skins/*'] }, null, 2));
+    write('.impeccable/config.local.json', JSON.stringify({ projectRoots: ['experiments/*'] }, null, 2));
+    write('PRODUCT.md', '# Root product\n');
+    write('DESIGN.md', '# Root design\n');
+    write('experiments/wip/DESIGN.md', '# WIP design\n');
+
+    const ctx = loadContext(scratch, { targetPath: 'experiments/wip' });
+    assert.equal(ctx.projectRoot, path.join(scratch, 'experiments', 'wip'));
+    assert.match(ctx.design, /WIP design/);
+    assert.match(ctx.product, /Root product/);
+  });
+
+  it('does not treat an .impeccable config without projectRoots as a monorepo', () => {
+    write('.impeccable/config.json', JSON.stringify({ hook: { consent: 'accepted' } }, null, 2));
+    write('PRODUCT.md', '# Root product\n');
+    write('docs/design/skins/marble/DESIGN.md', '# Marble design\n');
+
+    const ctx = loadContext(scratch, { targetPath: 'docs/design/skins/marble' });
+    assert.equal(ctx.isMonorepo, false);
+  });
+
+  it('asks for app selection from a config-declared monorepo root', () => {
+    write('.impeccable/config.json', JSON.stringify({ projectRoots: ['docs/design/skins/*'] }, null, 2));
+    write('PRODUCT.md', '# Root product\n');
+    write('DESIGN.md', '# Root design\n');
+    write('docs/design/skins/neon-seoul/DESIGN.md', '# Neon Seoul\n');
+    write('docs/design/skins/marble/DESIGN.md', '# Marble\n');
+
+    const res = spawnSync(process.execPath, [SCRIPT_PATH], {
+      cwd: scratch,
+      encoding: 'utf8',
+      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1', IMPECCABLE_NO_STALENESS_CHECK: '1' },
+    });
+    assert.equal(res.status, 0);
+    const selection = parseTargetSelection(res.stdout);
+    const paths = selection.targetCandidates.map((candidate) => candidate.path).sort();
+    assert.deepEqual(paths, ['docs/design/skins/marble', 'docs/design/skins/neon-seoul']);
+  });
+
+  // Composition with package-manager workspaces: a path matched by any
+  // projectRoots pattern (positive or negated) is governed by the impeccable
+  // config alone; package-manager patterns fill in the paths it does not match.
+  describe('composition with package-manager workspaces', () => {
+    function selectionPaths() {
+      const res = spawnSync(process.execPath, [SCRIPT_PATH], {
+        cwd: scratch,
+        encoding: 'utf8',
+        env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1', IMPECCABLE_NO_STALENESS_CHECK: '1' },
+      });
+      assert.equal(res.status, 0, res.stderr);
+      const selection = parseTargetSelection(res.stdout);
+      return selection.targetCandidates.map((candidate) => candidate.path).sort();
+    }
+
+    it('lets an impeccable negation exclude a package-manager workspace', () => {
+      write('package.json', JSON.stringify({ private: true, workspaces: ['apps/*'] }, null, 2));
+      write('.impeccable/config.json', JSON.stringify({ projectRoots: ['!apps/internal'] }, null, 2));
+      write('PRODUCT.md', '# Root product\n');
+      write('apps/dashboard/PRODUCT.md', '# Dashboard product\n');
+      write('apps/internal/PRODUCT.md', '# Internal product\n');
+
+      const ctx = loadContext(scratch, { targetPath: 'apps/internal' });
+      assert.equal(ctx.isMonorepo, true);
+      assert.equal(ctx.projectRoot, scratch);
+      assert.match(ctx.product, /Root product/);
+      assert.deepEqual(selectionPaths(), ['apps/dashboard']);
+    });
+
+    it('keeps a package-manager negation scoped to its own source', () => {
+      write('package.json', JSON.stringify({
+        private: true,
+        workspaces: ['apps/*', '!docs/design/skins/marble'],
+      }, null, 2));
+      write('.impeccable/config.json', JSON.stringify({ projectRoots: ['docs/design/skins/*'] }, null, 2));
+      write('PRODUCT.md', '# Root product\n');
+      write('apps/dashboard/PRODUCT.md', '# Dashboard product\n');
+      write('docs/design/skins/marble/DESIGN.md', '# Marble design\n');
+
+      const ctx = loadContext(scratch, { targetPath: 'docs/design/skins/marble' });
+      assert.equal(ctx.projectRoot, path.join(scratch, 'docs', 'design', 'skins', 'marble'));
+      assert.match(ctx.design, /Marble design/);
+      assert.deepEqual(selectionPaths(), ['apps/dashboard', 'docs/design/skins/marble']);
+    });
+
+    it('gives a broad impeccable pattern the boundary over a deeper package workspace', () => {
+      write('package.json', JSON.stringify({ private: true, workspaces: ['apps/web/packages/ui'] }, null, 2));
+      write('.impeccable/config.json', JSON.stringify({ projectRoots: ['apps/*'] }, null, 2));
+      write('PRODUCT.md', '# Root product\n');
+      write('apps/web/PRODUCT.md', '# Web product\n');
+      write('apps/web/packages/ui/PRODUCT.md', '# UI product\n');
+      write('apps/web/packages/ui/src/Button.jsx', 'export default null;\n');
+
+      const ctx = loadContext(scratch, { targetPath: 'apps/web/packages/ui/src/Button.jsx' });
+      assert.equal(ctx.projectRoot, path.join(scratch, 'apps', 'web'));
+      assert.match(ctx.product, /Web product/);
+      // The subsumed package workspace must not appear as its own pick:
+      // choosing it would silently resolve to apps/web.
+      assert.deepEqual(selectionPaths(), ['apps/web']);
+    });
+
+    it('falls through to package workspaces for paths impeccable does not match', () => {
+      write('package.json', JSON.stringify({ private: true, workspaces: ['apps/*'] }, null, 2));
+      write('.impeccable/config.json', JSON.stringify({ projectRoots: ['docs/design/skins/*'] }, null, 2));
+      write('PRODUCT.md', '# Root product\n');
+      write('apps/dashboard/PRODUCT.md', '# Dashboard product\n');
+      write('docs/design/skins/marble/DESIGN.md', '# Marble design\n');
+
+      const ctx = loadContext(scratch, { targetPath: 'apps/dashboard' });
+      assert.equal(ctx.projectRoot, path.join(scratch, 'apps', 'dashboard'));
+      assert.match(ctx.product, /Dashboard product/);
+    });
+
+    it('resolves other workspaces normally when impeccable config only negates', () => {
+      write('package.json', JSON.stringify({ private: true, workspaces: ['apps/*'] }, null, 2));
+      write('.impeccable/config.json', JSON.stringify({ projectRoots: ['!apps/internal'] }, null, 2));
+      write('PRODUCT.md', '# Root product\n');
+      write('apps/dashboard/PRODUCT.md', '# Dashboard product\n');
+      write('apps/internal/PRODUCT.md', '# Internal product\n');
+
+      const ctx = loadContext(scratch, { targetPath: 'apps/dashboard' });
+      assert.equal(ctx.isMonorepo, true);
+      assert.equal(ctx.projectRoot, path.join(scratch, 'apps', 'dashboard'));
+      assert.match(ctx.product, /Dashboard product/);
+    });
   });
 });
 
@@ -765,9 +1019,6 @@ describe('extractPlatform', () => {
     // `## Platform notes` must not be mistaken for the `## Platform` field.
     const product = '## Platform notes\n\nsome prose here\n\n## Platform\n\nios\n';
     assert.equal(extractPlatform(product), 'ios');
-    // Same precision for the register heading.
-    const reg = '## Register guidelines\n\nblah\n\n## Register\n\nbrand\n';
-    assert.equal(extractRegister(reg), 'brand');
   });
 
   it('reads the first non-empty line after the heading', () => {
@@ -779,13 +1030,6 @@ describe('extractPlatform', () => {
     // (which would surface a nonsense "value `## Product Purpose` is not
     // recognized" warning from the CLI).
     assert.equal(extractPlatform('## Platform\n\n## Product Purpose\n\nAn app.\n'), null);
-    assert.equal(extractRegister('## Register\n\n## Users\n\nAnglers.\n'), null);
-  });
-
-  it('is independent of the register field', () => {
-    const product = '# P\n\n## Register\n\nproduct\n\n## Platform\n\nandroid\n';
-    assert.equal(extractRegister(product), 'product');
-    assert.equal(extractPlatform(product), 'android');
   });
 });
 
@@ -796,6 +1040,8 @@ describe('context.mjs CLI', () => {
     assert.equal(res.status, 0);
     assert.match(res.stdout, /^NO_PRODUCT_MD:/);
     assert.match(res.stdout, /reference\/init\.md/);
+    assert.match(res.stdout, /structured simulated-user interview/);
+    assert.match(res.stdout, /PRODUCT_INIT_REQUIRED:/);
   });
 
   it('prints a PRODUCT.md markdown block when only PRODUCT.md exists', async () => {
@@ -806,8 +1052,206 @@ describe('context.mjs CLI', () => {
     assert.match(res.stdout, /^# PRODUCT\.md/);
     assert.match(res.stdout, /# Acme/);
     assert.equal(res.stdout.includes('# DESIGN.md'), false);
-    // The NEXT STEP directive is always appended after `---`.
-    assert.match(res.stdout, /\n---\n\nNEXT STEP:/);
+    // Directives are appended after `---`; missing visual authority now
+    // routes to new-work rather than back through product init.
+    assert.match(res.stdout, /\n---\n\n/);
+    assert.match(res.stdout, /WORLD_DISCOVERY_REQUIRED: PRODUCT\.md exists but no DESIGN\.md/);
+    assert.match(res.stdout, /MANUAL_DETECTOR_REQUIRED:/);
+    assert.match(res.stdout, /detect\.mjs --json <changed targets>/);
+  });
+
+  // The build-path preference rides the unified config beside hook and
+  // detector settings. The local file wins because whether a machine can
+  // generate images is a property of that machine, not of the committed
+  // default the rest of the team shares.
+  describe('BUILD_PATH_DEFAULT', () => {
+    const run = () => spawnSync(process.execPath, [SCRIPT_PATH], {
+      cwd: scratch,
+      encoding: 'utf8',
+      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1', IMPECCABLE_NO_STALENESS_CHECK: '1' },
+    });
+
+    it('reports a recorded preference from the shared config', () => {
+      write('PRODUCT.md', '# Acme\n');
+      write('.impeccable/config.json', JSON.stringify({ buildPath: 'code' }));
+      assert.match(run().stdout, /BUILD_PATH_DEFAULT: code \(from \.impeccable\/config\.json\)/);
+    });
+
+    it('lets the gitignored local config win over the committed one', () => {
+      write('PRODUCT.md', '# Acme\n');
+      write('.impeccable/config.json', JSON.stringify({ buildPath: 'comp' }));
+      write('.impeccable/config.local.json', JSON.stringify({ buildPath: 'code' }));
+      assert.match(run().stdout, /BUILD_PATH_DEFAULT: code \(from \.impeccable\/config\.local\.json\)/);
+    });
+
+    it('stays silent when nothing is recorded, leaving new-work its own default', () => {
+      write('PRODUCT.md', '# Acme\n');
+      assert.equal(run().stdout.includes('BUILD_PATH_DEFAULT'), false);
+    });
+
+    it('stays silent on a value nothing reads rather than guessing at it', () => {
+      write('PRODUCT.md', '# Acme\n');
+      write('.impeccable/config.json', JSON.stringify({ buildPath: 'code-first' }));
+      assert.equal(run().stdout.includes('BUILD_PATH_DEFAULT'), false);
+    });
+
+    // A monorepo commits the preference once at the repo root for every app in
+    // it. Reading only projectRoot left the staleness finding (which does read
+    // both) silent while the directive never named the value.
+    describe('in a monorepo', () => {
+      const writeWorkspace = () => {
+        write('package.json', JSON.stringify({ private: true, workspaces: ['apps/*'] }));
+        write('turbo.json', JSON.stringify({ tasks: {} }));
+        write('PRODUCT.md', '# Root product\n');
+        write('apps/dashboard/src/App.jsx', 'export default function App() { return "d"; }\n');
+      };
+      const runFromWorkspace = () => spawnSync(process.execPath, [SCRIPT_PATH, '--target', 'apps/dashboard/src/App.jsx'], {
+        cwd: scratch,
+        encoding: 'utf8',
+        env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1', IMPECCABLE_NO_STALENESS_CHECK: '1' },
+      });
+
+      it('falls back to the repo-root value for a workspace that sets none', () => {
+        writeWorkspace();
+        write('.impeccable/config.json', JSON.stringify({ buildPath: 'code' }));
+        assert.match(runFromWorkspace().stdout, /BUILD_PATH_DEFAULT: code/);
+      });
+
+      it('lets the workspace override the repo root, nearest root first', () => {
+        writeWorkspace();
+        write('.impeccable/config.json', JSON.stringify({ buildPath: 'code' }));
+        write('apps/dashboard/.impeccable/config.json', JSON.stringify({ buildPath: 'comp' }));
+        assert.match(runFromWorkspace().stdout, /BUILD_PATH_DEFAULT: comp/);
+      });
+
+      // Running from one workspace while targeting another must not hand the
+      // target the caller's preference. The invoking directory is not evidence
+      // about the project being worked on.
+      it('does not let the invoking workspace lend its value to the target', () => {
+        writeWorkspace();
+        write('apps/marketing/src/App.jsx', 'export default function App() { return "m"; }\n');
+        write('.impeccable/config.json', JSON.stringify({ buildPath: 'code' }));
+        write('apps/marketing/.impeccable/config.json', JSON.stringify({ buildPath: 'comp' }));
+        // Absolute, so the target actually resolves onto dashboard. A relative
+        // path would be read against the caller's cwd, which resolves the
+        // project back to marketing and tests nothing.
+        const res = spawnSync(process.execPath, [SCRIPT_PATH, '--target', path.join(scratch, 'apps', 'dashboard', 'src', 'App.jsx')], {
+          cwd: path.join(scratch, 'apps', 'marketing'),
+          encoding: 'utf8',
+          env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1', IMPECCABLE_NO_STALENESS_CHECK: '1' },
+        });
+        // The repo-root default, not marketing's comp.
+        assert.match(res.stdout, /BUILD_PATH_DEFAULT: code/);
+      });
+    });
+  });
+
+  it('keeps the manual-detector directive out of early context when the current provider hook is active', () => {
+    const scripts = path.join(scratch, 'bundle', 'skills', 'impeccable', 'scripts');
+    stageContextBundle(scripts, { providerId: 'codex' });
+
+    const project = path.join(scratch, 'project');
+    fs.mkdirSync(path.join(project, '.codex'), { recursive: true });
+    fs.writeFileSync(path.join(project, 'PRODUCT.md'), '# Acme\n');
+    fs.writeFileSync(path.join(project, '.codex', 'hooks.json'), JSON.stringify({
+      hooks: { Stop: [{ hooks: [{ command: 'node .agents/skills/impeccable/scripts/hook.mjs' }] }] },
+    }));
+
+    const res = spawnSync(process.execPath, [path.join(scripts, 'context.mjs')], {
+      cwd: project,
+      encoding: 'utf8',
+      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1', IMPECCABLE_NO_STALENESS_CHECK: '1' },
+    });
+    assert.equal(res.status, 0, res.stderr);
+    assert.doesNotMatch(res.stdout, /MANUAL_DETECTOR_REQUIRED:/);
+
+    fs.mkdirSync(path.join(project, '.impeccable'), { recursive: true });
+    fs.writeFileSync(path.join(project, '.impeccable', 'config.json'), JSON.stringify({ hook: { enabled: false } }));
+    const disabled = spawnSync(process.execPath, [path.join(scripts, 'context.mjs')], {
+      cwd: project,
+      encoding: 'utf8',
+      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1', IMPECCABLE_NO_STALENESS_CHECK: '1' },
+    });
+    assert.equal(disabled.status, 0, disabled.stderr);
+    assert.match(disabled.stdout, /MANUAL_DETECTOR_REQUIRED:/);
+    assert.match(disabled.stdout, /detect\.mjs --json <changed targets>/);
+  });
+
+  it('adds no detector directive when a per-edit-only hook is active', () => {
+    const scripts = path.join(scratch, 'bundle', 'skills', 'impeccable', 'scripts');
+    stageContextBundle(scripts, { providerId: 'cursor' });
+
+    const project = path.join(scratch, 'project');
+    fs.mkdirSync(path.join(project, '.cursor'), { recursive: true });
+    fs.writeFileSync(path.join(project, 'PRODUCT.md'), '# Acme\n');
+    fs.writeFileSync(path.join(project, '.cursor', 'hooks.json'), JSON.stringify({
+      hooks: { preToolUse: [{ command: 'node .cursor/skills/impeccable/scripts/hook-before-edit.mjs' }] },
+    }));
+
+    const res = spawnSync(process.execPath, [path.join(scripts, 'context.mjs')], {
+      cwd: project,
+      encoding: 'utf8',
+      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1', IMPECCABLE_NO_STALENESS_CHECK: '1' },
+    });
+    assert.equal(res.status, 0, res.stderr);
+    assert.doesNotMatch(res.stdout, /MANUAL_DETECTOR_REQUIRED:/);
+    assert.doesNotMatch(res.stdout, /detect\.mjs --json <changed targets>/);
+  });
+
+  it('treats tokenized code as incumbent design authority when DESIGN.md is missing', () => {
+    write('PRODUCT.md', '# Acme\n');
+    write('src/app.css', ':root { --color-brand: red; --color-surface: white; --color-text: black; }\nbody { font-family: system-ui; background: var(--color-surface); color: var(--color-text); }\n');
+    assert.equal(hasVisualImplementation(scratch), true);
+    const res = spawnSync(process.execPath, [SCRIPT_PATH], { cwd: scratch, encoding: 'utf8', env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1' } });
+    assert.equal(res.status, 0);
+    assert.match(res.stdout, /INCUMBENT_WORLD_UNDOCUMENTED:/);
+    assert.match(res.stdout, /For shape or a new-surface\/redesign request, load reference\/new-work\.md/);
+    assert.doesNotMatch(res.stdout, /WORLD_DISCOVERY_REQUIRED:/);
+    assert.match(res.stdout, /"hasVisualImplementation": true/);
+  });
+
+  it('does not mistake the empty Astro eval scaffold for an incumbent identity', () => {
+    write('src/styles/global.css', '@import "tailwindcss";\n');
+    write('src/pages/index.astro', `---\nimport "../styles/global.css";\n---\n<!doctype html><html><head><title>Eval Workspace</title></head><body></body></html>\n`);
+    assert.equal(hasVisualImplementation(scratch), false);
+  });
+
+  it('recognizes one substantive authored Astro surface', () => {
+    write('src/pages/index.astro', `<main class="shell"><h1>Field notes for the night shift</h1><p>Specific authored content.</p></main>\n<style>\n:root { --ink: #111; --paper: #fff; --accent: #c40; }\n.shell { color: var(--ink); background-color: var(--paper); border-color: var(--accent); font-family: serif; padding: 4rem; min-height: 100vh; }\n</style>\n`);
+    assert.equal(hasVisualImplementation(scratch), true);
+  });
+
+  it('does not let irrelevant or vendored files exhaust or satisfy the visual scan', () => {
+    for (let i = 0; i < 300; i++) write(`src/data/item-${String(i).padStart(3, '0')}.txt`, 'not visual\n');
+    write('public/vendor/framework.min.css', ':root { --a: 1; --b: 2; --c: 3; } body { color: red; background: blue; border-color: green; font-family: sans-serif; }\n');
+    write('styles/z-theme.css', ':root { --brand: #124; --surface: #fff; --text: #111; } main { color: var(--text); background-color: var(--surface); border-color: var(--brand); }\n');
+    assert.equal(hasVisualImplementation(scratch), true);
+  });
+
+  it('routes new surfaces through init but keeps narrow refinements non-blocking when visual code exists without PRODUCT.md', () => {
+    write('styles/theme.css', ':root { --brand: #124; --surface: #fff; --text: #111; }\nmain { color: var(--text); background-color: var(--surface); border-color: var(--brand); }\n');
+    const res = spawnSync(process.execPath, [SCRIPT_PATH], { cwd: scratch, encoding: 'utf8', env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1' } });
+    assert.equal(res.status, 0);
+    assert.match(res.stdout, /^NO_PRODUCT_MD:/);
+    assert.match(res.stdout, /EXISTING_VISUAL_SYSTEM:/);
+    assert.match(res.stdout, /BUILD_INIT_REQUIRED:/);
+    assert.match(res.stdout, /SCOPED_EXISTING_ALLOWED:/);
+    assert.match(res.stdout, /proceed without blocking/);
+    assert.match(res.stdout, /For `init`, `teach`, `shape`, or any request to create a new surface/);
+    assert.match(res.stdout, /For a redesign\/rebrand.*old look only as evidence and anti-reference/s);
+    assert.doesNotMatch(res.stdout, /WORLD_DISCOVERY_REQUIRED:/);
+  });
+
+  it('prints DESIGN.md even when PRODUCT.md is missing', () => {
+    // The skill resumes after init writes PRODUCT.md without rerunning this
+    // script, so a DESIGN.md withheld from the no-PRODUCT.md branch is never
+    // seen at all. Emit incumbent visual authority on both branches.
+    write('DESIGN.md', '# Acme design\n\nUNIQUE_DESIGN_MARKER\n');
+    const res = spawnSync(process.execPath, [SCRIPT_PATH], { cwd: scratch, encoding: 'utf8', env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1' } });
+    assert.equal(res.status, 0);
+    assert.match(res.stdout, /^NO_PRODUCT_MD:/);
+    assert.match(res.stdout, /# DESIGN\.md\n\n# Acme design/);
+    assert.match(res.stdout, /UNIQUE_DESIGN_MARKER/);
   });
 
   it('concatenates PRODUCT.md and DESIGN.md with a --- separator', async () => {
@@ -819,7 +1263,98 @@ describe('context.mjs CLI', () => {
     assert.match(res.stdout, /^# PRODUCT\.md/);
     assert.match(res.stdout, /\n---\n/);
     assert.match(res.stdout, /# DESIGN\.md\n\n# Acme design/);
-    assert.match(res.stdout, /NEXT STEP:/);
+    assert.equal(res.stdout.includes('WORLD_DISCOVERY_REQUIRED:'), false);
+  });
+
+  it('loads the only persisted surface brief as current task context', () => {
+    write('PRODUCT.md', '# Acme product\n');
+    write('DESIGN.md', '# Acme design\n');
+    write('.impeccable/surfaces/src-pages-pricing-astro.md', `---
+version: 1
+slug: "src-pages-pricing-astro"
+primary_target: "src/pages/pricing.astro"
+related_targets: []
+---
+
+# Surface brief: Pricing
+
+## Product strategy
+Make plan tradeoffs legible before asking for a trial.
+`);
+    const res = spawnSync(process.execPath, [SCRIPT_PATH], {
+      cwd: scratch,
+      encoding: 'utf8',
+      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1', IMPECCABLE_NO_STALENESS_CHECK: '1' },
+    });
+    assert.equal(res.status, 0);
+    assert.match(res.stdout, /# SURFACE BRIEF \(\.impeccable\/surfaces\/src-pages-pricing-astro\.md\)/);
+    assert.match(res.stdout, /Make plan tradeoffs legible/);
+    assert.match(res.stdout, /"surfaceBriefReason": "only-brief"/);
+  });
+
+  it('selects a surface brief by an exact primary or related target', () => {
+    write('PRODUCT.md', '# Acme product\n');
+    write('DESIGN.md', '# Acme design\n');
+    write('src/pages/pricing.astro', '<main>Pricing</main>\n');
+    write('.impeccable/surfaces/src-pages-pricing-astro.md', `---
+version: 1
+slug: "src-pages-pricing-astro"
+primary_target: "src/pages/pricing.astro"
+related_targets: ["src/components/PricingTable.astro"]
+---
+
+# Surface brief: Pricing
+
+PRICING_STRATEGY_SENTINEL
+`);
+    write('.impeccable/surfaces/src-pages-home-astro.md', `---
+version: 1
+slug: "src-pages-home-astro"
+primary_target: "src/pages/home.astro"
+related_targets: []
+---
+
+# Surface brief: Home
+
+HOME_STRATEGY_SENTINEL
+`);
+    const res = spawnSync(process.execPath, [SCRIPT_PATH, '--target', 'src/pages/pricing.astro'], {
+      cwd: scratch,
+      encoding: 'utf8',
+      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1', IMPECCABLE_NO_STALENESS_CHECK: '1' },
+    });
+    assert.equal(res.status, 0);
+    assert.match(res.stdout, /PRICING_STRATEGY_SENTINEL/);
+    assert.doesNotMatch(res.stdout, /HOME_STRATEGY_SENTINEL/);
+  });
+
+  it('lists candidates instead of guessing when several surface briefs exist', () => {
+    write('PRODUCT.md', '# Acme product\n');
+    write('DESIGN.md', '# Acme design\n');
+    for (const [slug, target] of [
+      ['src-pages-pricing-astro', 'src/pages/pricing.astro'],
+      ['src-pages-home-astro', 'src/pages/home.astro'],
+    ]) {
+      write(`.impeccable/surfaces/${slug}.md`, `---
+version: 1
+slug: "${slug}"
+primary_target: "${target}"
+related_targets: []
+---
+
+# Surface brief: ${slug}
+`);
+    }
+    const res = spawnSync(process.execPath, [SCRIPT_PATH], {
+      cwd: scratch,
+      encoding: 'utf8',
+      env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1', IMPECCABLE_NO_STALENESS_CHECK: '1' },
+    });
+    assert.equal(res.status, 0);
+    assert.match(res.stdout, /SURFACE_CONTEXT_AVAILABLE:/);
+    assert.match(res.stdout, /src\/pages\/pricing\.astro/);
+    assert.match(res.stdout, /src\/pages\/home\.astro/);
+    assert.doesNotMatch(res.stdout, /# SURFACE BRIEF \(/);
   });
 
   it('reads from a fallback dir when cwd is clean', async () => {
@@ -831,44 +1366,36 @@ describe('context.mjs CLI', () => {
     assert.match(res.stdout, /# fallback product/);
   });
 
-  it('names the register-specific reference when PRODUCT.md declares one', async () => {
+  it('ignores a legacy Register field because visitor mode is task-scoped', async () => {
     write('PRODUCT.md', '# Acme\n\n## Register\n\nbrand\n');
     const { spawnSync } = await import('node:child_process');
     const res = spawnSync(process.execPath, [SCRIPT_PATH], { cwd: scratch, encoding: 'utf8', env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1' } });
     assert.equal(res.status, 0);
-    assert.match(res.stdout, /NEXT STEP: This project's register is `brand`\./);
-    assert.match(res.stdout, /read `reference\/brand\.md`/);
+    assert.doesNotMatch(res.stdout, /REGISTER:/);
+    assert.match(res.stdout, /WORLD_DISCOVERY_REQUIRED: PRODUCT\.md exists but no DESIGN\.md/);
   });
 
-  it('falls back to a generic register directive when no register field is present', async () => {
-    write('PRODUCT.md', '# Acme\n\n(no register field)\n');
+  it('loads the native platform reference for an ios project', async () => {
+    write('PRODUCT.md', '# Acme\n\n## Platform\n\nios\n');
     const { spawnSync } = await import('node:child_process');
     const res = spawnSync(process.execPath, [SCRIPT_PATH], { cwd: scratch, encoding: 'utf8', env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1' } });
     assert.equal(res.status, 0);
-    assert.match(res.stdout, /NEXT STEP: You MUST now read the matching register reference/);
-    assert.match(res.stdout, /reference\/brand\.md.*reference\/product\.md/);
+    assert.match(res.stdout, /# NATIVE PLATFORM REFERENCE: IOS \(reference\/ios\.md\)/);
+    assert.match(res.stdout, /Apple Human Interface Guidelines|iOS/i);
+    assert.doesNotMatch(res.stdout, /NEXT STEP:.*reference\/ios\.md/);
   });
 
-  it('appends a native platform directive for an ios project', async () => {
-    write('PRODUCT.md', '# Acme\n\n## Register\n\nproduct\n\n## Platform\n\nios\n');
+  it('loads both native platform references for an adaptive project', async () => {
+    write('PRODUCT.md', '# Acme\n\n## Platform\n\nadaptive\n');
     const { spawnSync } = await import('node:child_process');
     const res = spawnSync(process.execPath, [SCRIPT_PATH], { cwd: scratch, encoding: 'utf8', env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1' } });
     assert.equal(res.status, 0);
-    assert.match(res.stdout, /This project targets `ios`\./);
-    assert.match(res.stdout, /read `reference\/ios\.md`/);
-  });
-
-  it('appends both native directives for an adaptive project', async () => {
-    write('PRODUCT.md', '# Acme\n\n## Register\n\nproduct\n\n## Platform\n\nadaptive\n');
-    const { spawnSync } = await import('node:child_process');
-    const res = spawnSync(process.execPath, [SCRIPT_PATH], { cwd: scratch, encoding: 'utf8', env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1' } });
-    assert.equal(res.status, 0);
-    assert.match(res.stdout, /targets `adaptive` \(both iOS and Android\)/);
-    assert.match(res.stdout, /reference\/ios\.md` and `reference\/android\.md`/);
+    assert.match(res.stdout, /# NATIVE PLATFORM REFERENCE: IOS \(reference\/ios\.md\)/);
+    assert.match(res.stdout, /# NATIVE PLATFORM REFERENCE: ANDROID \(reference\/android\.md\)/);
   });
 
   it('appends no native platform directive for a web project', async () => {
-    write('PRODUCT.md', '# Acme\n\n## Register\n\nproduct\n\n## Platform\n\nweb\n');
+    write('PRODUCT.md', '# Acme\n\n## Platform\n\nweb\n');
     const { spawnSync } = await import('node:child_process');
     const res = spawnSync(process.execPath, [SCRIPT_PATH], { cwd: scratch, encoding: 'utf8', env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1' } });
     assert.equal(res.status, 0);
@@ -876,20 +1403,20 @@ describe('context.mjs CLI', () => {
     assert.equal(res.stdout.includes('reference/ios.md'), false);
   });
 
-  it('appends a native platform directive for an android project', async () => {
-    write('PRODUCT.md', '# Acme\n\n## Register\n\nproduct\n\n## Platform\n\nandroid\n');
+  it('loads the native platform reference for an android project', async () => {
+    write('PRODUCT.md', '# Acme\n\n## Platform\n\nandroid\n');
     const { spawnSync } = await import('node:child_process');
     const res = spawnSync(process.execPath, [SCRIPT_PATH], { cwd: scratch, encoding: 'utf8', env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1' } });
     assert.equal(res.status, 0);
-    assert.match(res.stdout, /This project targets `android`\./);
-    assert.match(res.stdout, /read `reference\/android\.md`/);
+    assert.match(res.stdout, /# NATIVE PLATFORM REFERENCE: ANDROID \(reference\/android\.md\)/);
+    assert.match(res.stdout, /Material Design|Android/i);
   });
 
   it('warns on an unrecognized platform value instead of silently defaulting to web', async () => {
     // The likeliest misconfiguration is a toolchain name where the target
     // belongs. Silent fallback to web would give web guidance to the exact
     // projects that tried to declare themselves native.
-    write('PRODUCT.md', '# Acme\n\n## Register\n\nproduct\n\n## Platform\n\nflutter\n');
+    write('PRODUCT.md', '# Acme\n\n## Platform\n\nflutter\n');
     const { spawnSync } = await import('node:child_process');
     const res = spawnSync(process.execPath, [SCRIPT_PATH], { cwd: scratch, encoding: 'utf8', env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1' } });
     assert.equal(res.status, 0);
@@ -899,7 +1426,7 @@ describe('context.mjs CLI', () => {
   });
 
   it('emits no warning for an empty Platform section', async () => {
-    write('PRODUCT.md', '# Acme\n\n## Register\n\nproduct\n\n## Platform\n\n## Users\n\nAnglers.\n');
+    write('PRODUCT.md', '# Acme\n\n## Platform\n\n## Users\n\nAnglers.\n');
     const { spawnSync } = await import('node:child_process');
     const res = spawnSync(process.execPath, [SCRIPT_PATH], { cwd: scratch, encoding: 'utf8', env: { ...process.env, IMPECCABLE_NO_UPDATE_CHECK: '1' } });
     assert.equal(res.status, 0);
@@ -918,16 +1445,7 @@ describe('context.mjs update check', () => {
   const cachePath = () => path.join(scratch, 'update-check.json');
 
   function setup(cacheObj, { disable = false, host } = {}) {
-    const skillScript = path.join(scratch, 'skill', 'scripts', 'context.mjs');
-    fs.mkdirSync(path.dirname(skillScript), { recursive: true });
-    fs.copyFileSync(SCRIPT_PATH, skillScript);
-    const targetArgsSrc = path.join(path.dirname(SCRIPT_PATH), 'lib', 'target-args.mjs');
-    const targetArgsDest = path.join(path.dirname(skillScript), 'lib', 'target-args.mjs');
-    fs.mkdirSync(path.dirname(targetArgsDest), { recursive: true });
-    fs.copyFileSync(targetArgsSrc, targetArgsDest);
-    const providerSrc = path.join(path.dirname(SCRIPT_PATH), 'lib', 'provider.mjs');
-    const providerDest = path.join(path.dirname(skillScript), 'lib', 'provider.mjs');
-    fs.copyFileSync(providerSrc, providerDest);
+    const skillScript = stageContextBundle(path.join(scratch, 'skill', 'scripts'));
     fs.writeFileSync(
       path.join(scratch, 'skill', 'SKILL.md'),
       `---\nname: impeccable\nversion: ${LOCAL_VERSION}\n---\n\nbody\n`,
@@ -940,6 +1458,10 @@ describe('context.mjs update check', () => {
       ...process.env,
       IMPECCABLE_UPDATE_CACHE: cachePath(),
       IMPECCABLE_NO_UPDATE_CHECK: disable ? '1' : '',
+      // This suite asserts on the update directive alone. Staleness findings
+      // are a separate directive with their own tests, and leaving the check on
+      // would also write notice state into the developer's home dir.
+      IMPECCABLE_NO_STALENESS_CHECK: '1',
       ...(host ? { IMPECCABLE_UPDATE_HOST: host } : {}),
     };
     return { skillScript, project, env };
@@ -977,6 +1499,18 @@ describe('context.mjs update check', () => {
     assert.match(res.stdout, /npx impeccable update/);
     // It must come after the real context, never replace it.
     assert.match(res.stdout, /^# PRODUCT\.md/);
+  });
+
+  // The directive used to say "ask once" and "if they agree, run it" while also
+  // saying to continue without waiting. Nothing gated the run on an answer that
+  // could not arrive, so the command read as the next step. It now forbids
+  // running in this turn outright, whatever the answer.
+  it('forbids running the update in the same turn, on any answer', () => {
+    const { stdout } = run({ lastCheck: Date.now(), latestVersion: '2.0.0' });
+    assert.match(stdout, /Do not run `npx impeccable update` in this turn, whatever the user answers/);
+    assert.match(stdout, /only after the user has asked for it in their own words/);
+    // The conditional that made the command look reachable must be gone.
+    assert.equal(/If they agree, run/.test(stdout), false);
   });
 
   it('stays silent when the cached latest version is not newer', () => {
