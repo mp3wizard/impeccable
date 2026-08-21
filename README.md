@@ -434,13 +434,13 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audited: **2026-07-15** | Tools run: 9 (Gitleaks 8.30.1, TruffleHog 3.95.6, Trivy 0.71.2, OSV-Scanner 2.4.0, Semgrep community, security-audit, skill-audit, mcp-exfil-scan, mcps-audit)
+Last audited: **2026-08-21** | Tools run: 9 (Gitleaks 8.30.1, TruffleHog 3.95.9, Trivy 0.72.0, OSV-Scanner 2.4.0, Semgrep community, security-audit, skill-audit, mcp-exfil-scan, mcps-audit)
 
-**Findings summary:** 0 secrets, 0 dependency CVEs, 0 Semgrep findings. skill-audit: all 65 scanned `SKILL.md` files LOW/MEDIUM (max 35/100), no HIGH/CRITICAL. mcp-exfil-scan: 0/100 (CLEAN). mcps-audit: 1360 findings, all reviewed as heuristic false positives on common JS idioms (`execSync`, `delete obj.prop`, `.join()`); no genuine vulnerability identified in the sampled set.
+**Findings summary:** 0 secrets, 0 Semgrep findings. OSV-Scanner found 34 dependency CVEs (0 Critical / 10 High / 21 Medium / 3 Low) in transitive `bun.lock` packages. skill-audit: canonical `impeccable` SKILL.md scored LOW RISK (15/100), APPROVE. mcp-exfil-scan: 0/100 (CLEAN). mcps-audit: 1832 findings, assessed as heuristic false positives on this repo's own legitimate CLI code (`execSync`, config-object `delete`) — the same pattern noted in the prior audit. config-audit: 5 MEDIUM, all confirmed false positives against source text (doc prose mentioning `.env`/hooks/test-skip, not actual bypass instructions).
 
-**Fixes applied (2026-07-15):** None required; no new in-scope finding. `bun install` re-synced `bun.lock` after merging upstream's 10-package bun-minor-and-patch bump (no CVEs introduced).
+**Fixes applied (2026-08-21):** Added/bumped `package.json` `overrides` for `@hono/node-server`, `body-parser`, `brace-expansion`, `fast-uri`, `hono`, `ip-address`; ran `bun install` to regenerate `bun.lock`. Re-scan confirmed 0 remaining OSV issues.
 
-**Known remaining issues:** mcps-audit's 1360 findings remain formally open but non-actionable (false positives); recommend excluding `dist/`/`build/`/duplicated per-IDE skill copies from future runs to cut noise.
+**Known remaining issues:** mcps-audit's 1832 findings remain formally open but non-actionable (false positives, same class as prior audits); recommend excluding `dist/`/`build/`/duplicated per-provider skill copies from future runs to cut noise.
 
 See [SECURITY_REPORT.md](SECURITY_REPORT.md) for the full report.
 

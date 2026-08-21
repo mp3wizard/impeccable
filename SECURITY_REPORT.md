@@ -1,44 +1,67 @@
-# Security Report — 2026-07-15
+# Security Report — 2026-08-21
 
-**Target:** `/Users/mp3wizard/Public/Claude skill/impeccable`  **Scanned at:** 2026-07-15T10:05:06+07:00  **Git HEAD:** `994509ea`
-**Tools run:** Gitleaks, TruffleHog, Trivy, OSV-Scanner, Semgrep (OWASP/TypeScript/secrets), security-audit (config-audit.py), skill-audit, mcp-exfil-scan, mcps-audit  **Tools skipped:** Bandit (no `.py` files), CodeQL (no workflow in repo), mcp-scan/skillspector-LLM (opt-in, not run — unattended scheduled run, no user available to consent)
-
-**New upstream merged this cycle:** 3 commits from `origin/main` — Fix light-mode command demo contrast (#370), chore(deps) bun-minor-and-patch group bump ×10 (#368), Base sheriff stale clock on blocker age (#364).
+**Target:** `/Users/mp3wizard/Public/Claude skill/impeccable`
+**Git HEAD:** `5ffa561f` (merge of `upstream/main`, 665 commits, into `mp3wizard/main`)
 
 ## Tools Run
 
 | Tool | Status | Finding count |
-|------|--------|----------------|
-| Gitleaks   | OK      | 0 |
-| Bandit     | SKIPPED | no `.py` files in repo |
-| Semgrep (OWASP)     | OK | 0 |
-| Semgrep (TypeScript) | OK | 0 |
-| Semgrep (secrets)    | OK | 0 |
-| Trivy      | OK      | 0 |
-| TruffleHog | OK      | 0 |
-| OSV-Scanner | OK     | 0 |
-| CodeQL     | N/A     | no `.github/workflows/codeql.yml` in repo |
-| security-audit (config-audit.py) | OK | repo-scoped findings: 3 MEDIUM (informational, see below) |
-| skill-audit | OK | 0/100–35/100 across all copies, MEDIUM ceiling, no HIGH/CRITICAL |
-| mcp-exfil-scan | OK | 0/100 — CLEAN |
-| mcps-audit | OK | 1360 findings (415 CRITICAL, 151 HIGH, 564 MEDIUM, 230 LOW) — assessed as heuristic false positives, see below |
+|---|---|---|
+| Gitleaks | OK | 0 |
+| TruffleHog | OK | 0 |
+| Trivy (fs) | OK | 0 |
+| OSV-Scanner | OK | 34 (before fix) → 0 (after fix, verified) |
+| Semgrep (OWASP Top 10) | OK | 0 |
+| Semgrep (TypeScript) | OK | 0 (no `.ts`/`.tsx` files matched) |
+| Semgrep (secrets) | OK | 0 |
+| Bandit | SKIPPED | no `.py` files in target |
+| CodeQL | SKIPPED | no CodeQL workflow in `.github/workflows/` |
+| mcps-audit (skill/plugin heuristic scanner) | OK | 1832 (686 CRITICAL / 172 HIGH / 702 MEDIUM / 272 LOW) — see note below |
+| skill-audit.sh (canonical `impeccable` SKILL.md) | OK | LOW RISK, 15/100, APPROVE |
+| mcp-exfil-scan.sh | OK | CLEAN, 0/100 |
+| config-audit.py (Claude config/instruction-file audit) | OK | 5 MEDIUM (repo-scoped) — all false positives, see below |
 
 ## Findings
 
-No CVEs, no secrets, no dependency vulnerabilities. Repo-scoped config-audit MEDIUM findings (informational, same as prior cycles):
-- `CLAUDE.md` / `claude.md` — "hook bypass instruction" pattern match on prose describing that live mode/`detect.mjs` skip native projects (a routing rule, not a bypass); ".env file access" match on the documented, gitignored evals-repo auth setup.
-- `.claude/settings.json` — `PostToolUse` hook present (expected repo tooling, the bundled UI-change detector).
+### OSV-Scanner — 34 vulnerabilities (fixed, see Fixes Applied)
+0 Critical / 10 High / 21 Medium / 3 Low, all in `bun.lock`, all transitive:
 
-skill-audit: 65 `SKILL.md` copies scanned (source + per-IDE generated). MEDIUM-risk copies are duplicated instances of skills (`taste`, `wizard`, `handoff`, `notebooklm-cli`, `migrate-to-shoehorn`) whose descriptions legitimately mention credentials/cookies/`.env` as part of their function. No injection payload identified.
+| Package | Found | Fixed to |
+|---|---|---|
+| `@hono/node-server` | 1.19.14 | 1.19.15 |
+| `body-parser` | 2.2.2 | 2.3.0 |
+| `brace-expansion` | 5.0.6 | 5.0.9 |
+| `fast-uri` | 3.1.0 | 3.1.5 |
+| `hono` | 4.12.14 | 4.12.34 |
+| `ip-address` | 10.1.0 | 10.3.1 |
+| `qs` | 6.15.1 | 6.15.2 (already overridden, lockfile was stale) |
 
-mcps-audit: verdict FAIL, 100/100 risk score, 1360 findings across 436 files/150,702 lines — unchanged shape from prior cycles. Sampled CRITICAL hits: `cli/bin/commands/skills.mjs:11` (`execSync` import — legitimate use by the CLI's own skill-installer, no unsanitized user input reaches it), `cli/bin/commands/skills.mjs:1315-1318` ("known injection pattern" / "high-risk permission pattern" — flagged on plain `delete next.hooks`/`delete next.description` object-property cleanup), `cli/bin/commands/ignores.mjs:142` ("known injection pattern" — flagged on `.join()` string formatting for CLI output). The scanner's generic pattern matcher over-triggers on common JS idioms (`execSync`, `delete obj.prop`, `.join()`), amplified by the ~436 scanned files including a dozen duplicated per-IDE copies of the same `skill/impeccable/` source tree. No exploitable finding identified in the sampled set.
+Highest-severity individual CVEs: `brace-expansion` GHSA-3jxr-9vmj-r5cp (7.7), `ip-address` GHSA-mwp4-54f8-5fhr (7.7), `hono` GHSA-88fw-hqm2-52qc (7.1).
+
+### mcps-audit — FAIL, 100/100, 1832 findings
+Scans `impeccable`'s own CLI/skill source (491 files, 212,630 lines) for dangerous-execution and injection patterns. Top CRITICAL hits: `AS-001 Dangerous execution` on `execSync` imports in `cli/bin/commands/skills.mjs` and `cli/bin/commands/ignores.mjs`; `AS-005 Known injection pattern` at the same files.
+
+**Assessed as high false-positive rate.** `impeccable` is itself a CLI/skill-authoring tool: `execSync`, `delete` on config objects, and similar patterns are the tool's own legitimate implementation (build scripts, hook installers, skill-file editing), not evidence of injected or malicious code. This generic scanner has no allowlist for "tool that legitimately manipulates other tools' config/skill files." Not actioned — no fix exists that doesn't gut the CLI's core functionality. Flagged here per audit policy; recommend the maintainer's own security review over relying on this scanner's raw score for this repo.
+
+### config-audit.py — 5 MEDIUM (repo-scoped), all false positives
+- `.claude/settings.json → Stop[0]`: broad hook matcher `''` — matches design intent (runs on every Stop), not a vulnerability.
+- `CLAUDE.md`, `claude.md` (×2, duplicate doc): "instruction to skip verification" — pattern match on prose describing which test suites are opt-in vs. default, not an instruction to an agent.
+- `CLAUDE.md`, `claude.md`: "hook bypass instruction" — pattern match on prose describing that live-mode CLI routing skips native (iOS/Android) projects; unrelated to hooks/security bypass.
+- `CLAUDE.md`, `claude.md`, `AGENTS.md`: ".env file access" — pattern match on doc text naming where eval-suite provider API keys live (`.env`, gitignored); no code reads secrets insecurely.
+- `AGENTS.md`: "password-related access" — pattern match on a note about 1Password SSH-agent signing failures in a sandboxed shell; unrelated to credential handling.
+
+No fix needed for any of the above — confirmed false positives against source text.
+
+### Coverage note — semgrep
+`.semgrepignore` and the 300KB size cap exclude several hundred files per run (mostly `dist/`, `build/_data/`, `node_modules/`, vendored/generated provider output). Findings are 0 across all three configs on the ~81–2788 files actually in scope.
 
 ## Fixes Applied
 
-None — no in-scope finding matched a fixable category (dependency CVE or hook/config issue). `bun install` run after merge to sync `bun.lock` (10 deps updated via upstream's bun-minor-and-patch bump); no CVEs introduced.
+- `package.json` `overrides`: added `@hono/node-server@1.19.15`, `body-parser@2.3.0`, `brace-expansion@5.0.9`; bumped `fast-uri` 3.1.2→3.1.5, `hono` 4.12.25→4.12.34, `ip-address` 10.1.1→10.3.1.
+- Ran `bun install` to regenerate `bun.lock` (the lockfile was stale relative to `package.json`'s existing overrides — likely from the upstream merge's `--theirs` conflict resolution on `bun.lock`).
+- Re-ran `osv-scanner` post-fix: **0 issues found**.
 
 ## Known Remaining Issues
 
-- 31 of 65 scanned `SKILL.md` copies score MEDIUM (25-35/100) under skill-audit purely because their descriptions legitimately mention credential/cookie/`.env` access as part of what the skill does. Not a defect; flagged for awareness only (recurring across cycles).
-- mcps-audit's 1360 findings remain formally open but assessed as non-actionable heuristic false positives (see above), consistent across three consecutive cycles now. Recommend excluding `dist/`, `build/`, and duplicated per-IDE `skills/impeccable/` copies from future mcps-audit runs to cut noise.
-- `mcps-audit-report.pdf` regenerated at repo root by this run's `npx mcps-audit` invocation (untracked, matches prior-cycle behavior).
+- mcps-audit's 1832 findings against this repo's own CLI source are not actioned (see assessment above) — believed to be scanner false positives specific to a tool that manipulates other tools' skill/config files as its core function, not a real vulnerability. Worth a manual review by someone unfamiliar with the codebase to confirm, since this session did not deeply audit each of the 1832 individual findings.
+- `mcps-audit-report.pdf` was written to the repo root by the scanner as a side effect; left untracked (not staged/committed).

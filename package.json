@@ -85,10 +85,13 @@
     "puppeteer": "^25.1.0"
   },
   "overrides": {
+    "@hono/node-server": "1.19.15",
     "@protobufjs/utf8": "1.1.1",
-    "fast-uri": "3.1.2",
-    "hono": "4.12.25",
-    "ip-address": "10.1.1",
+    "body-parser": "2.3.0",
+    "brace-expansion": "5.0.9",
+    "fast-uri": "3.1.5",
+    "hono": "4.12.34",
+    "ip-address": "10.3.1",
     "js-yaml": "4.2.0",
     "protobufjs": "7.6.3",
     "qs": "6.15.2"
