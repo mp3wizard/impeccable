@@ -118,7 +118,7 @@ Codex users should open `/hooks` after install or update and approve the project
 For teams that want to keep Impeccable vendored and updated through Git, add this repo as a submodule and link the compiled provider build into your harness folders:
 
 ```bash
-git submodule add https://github.com/pbakaus/impeccable .impeccable
+git submodule add https://github.com/mp3wizard/impeccable .impeccable
 npx impeccable link --source=.impeccable --providers=claude,cursor
 git add .gitmodules .impeccable .claude .cursor
 git commit -m "Add Impeccable skills"
@@ -137,14 +137,14 @@ npx impeccable link --source=.impeccable --providers=claude,cursor
 
 **Claude Code:**
 ```bash
-/plugin marketplace add pbakaus/impeccable
+/plugin marketplace add mp3wizard/impeccable
 ```
 
 > Claude Code only. After adding the marketplace, open `/plugin` and install Impeccable from the list.
 
 **Grok Build:**
 ```bash
-grok plugin install pbakaus/impeccable#plugin --trust
+grok plugin install mp3wizard/impeccable#plugin --trust
 ```
 
 > Grok Build only. The `#plugin` suffix installs the slim plugin package (skills, agents, and hooks) instead of the full monorepo. Then run `/impeccable init` in a Grok session. Project-scoped installs via `npx impeccable install --providers=grok` also work and write `.grok/skills/` plus `.grok/hooks/impeccable.json`.
@@ -268,7 +268,7 @@ cp -r dist/grok/.grok your-project/
 cp -r dist/grok/.grok/skills/* ~/.grok/skills/
 ```
 
-> Prefer `npx impeccable install --providers=grok` or `grok plugin install pbakaus/impeccable#plugin --trust` so the design hook installs too. Project hooks need `/hooks-trust` (or `--trust`) once per folder.
+> Prefer `npx impeccable install --providers=grok` or `grok plugin install mp3wizard/impeccable#plugin --trust` so the design hook installs too. Project hooks need `/hooks-trust` (or `--trust`) once per folder.
 
 **Google Antigravity:**
 ```bash
@@ -436,7 +436,7 @@ Join the community and ecosystem conversations:
 
 Last audited: **2026-08-21** | Tools run: 9 (Gitleaks 8.30.1, TruffleHog 3.95.9, Trivy 0.72.0, OSV-Scanner 2.4.0, Semgrep community, security-audit, skill-audit, mcp-exfil-scan, mcps-audit)
 
-**Findings summary:** 0 secrets, 0 Semgrep findings. OSV-Scanner found 34 dependency CVEs (0 Critical / 10 High / 21 Medium / 3 Low) in transitive `bun.lock` packages. skill-audit: canonical `impeccable` SKILL.md scored LOW RISK (15/100), APPROVE. mcp-exfil-scan: 0/100 (CLEAN). mcps-audit: 1832 findings, assessed as heuristic false positives on this repo's own legitimate CLI code (`execSync`, config-object `delete`) — the same pattern noted in the prior audit. config-audit: 5 MEDIUM, all confirmed false positives against source text (doc prose mentioning `.env`/hooks/test-skip, not actual bypass instructions).
+**Findings summary:** 0 secrets, 0 Semgrep findings. OSV-Scanner found 34 dependency CVEs (0 Critical / 10 High / 21 Medium / 3 Low) in transitive `bun.lock` packages. skill-audit: canonical `impeccable` SKILL.md scored LOW RISK (15/100), APPROVE. mcp-exfil-scan: 0/100 (CLEAN). mcps-audit: 1832 findings, assessed as heuristic false positives on this repo's own legitimate CLI code (`execSync`, config-object `delete`), the same pattern noted in the prior audit. config-audit: 5 MEDIUM, all confirmed false positives against source text (doc prose mentioning `.env`/hooks/test-skip, not actual bypass instructions).
 
 **Fixes applied (2026-08-21):** Added/bumped `package.json` `overrides` for `@hono/node-server`, `body-parser`, `brace-expansion`, `fast-uri`, `hono`, `ip-address`; ran `bun install` to regenerate `bun.lock`. Re-scan confirmed 0 remaining OSV issues.
 
