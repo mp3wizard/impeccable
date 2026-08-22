@@ -438,7 +438,7 @@ Last audited: **2026-08-22** | Tools run: 9 (Gitleaks 8.30.1, TruffleHog 3.95.9,
 
 **Findings summary:** 0 secrets, 0 Semgrep findings, 0 OSV-Scanner CVEs (last week's `package.json` overrides carried cleanly through this week's 21-commit upstream merge, re-verified clean). skill-audit: all 82 authored `SKILL.md` files scored LOW RISK, APPROVE; 3 vendored `node_modules/playwright-core` SKILL.md files flagged MEDIUM/CRITICAL (third-party, not this repo's source). mcp-exfil-scan: 0/100 (CLEAN). mcps-audit: 1796 findings, assessed as heuristic false positives on this repo's own legitimate CLI code (`execSync`, config-object `delete`), same pattern as prior audits. config-audit: 5 MEDIUM, all confirmed false positives against source text (doc prose mentioning `.env`/hooks/test-skip, not actual bypass instructions).
 
-**Fixes applied (2026-08-22):** None needed — no new dependency CVEs or secrets from this week's upstream merge.
+**Fixes applied (2026-08-22):** None needed (no new dependency CVEs or secrets from this week's upstream merge).
 
 **Known remaining issues:** mcps-audit's 1796 findings remain formally open but non-actionable (false positives, same class as prior audits). Vendored `playwright-core` skill docs flagged by skill-audit are third-party and out of scope.
 
