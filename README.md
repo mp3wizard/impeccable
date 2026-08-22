@@ -434,13 +434,13 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audited: **2026-08-21** | Tools run: 9 (Gitleaks 8.30.1, TruffleHog 3.95.9, Trivy 0.72.0, OSV-Scanner 2.4.0, Semgrep community, security-audit, skill-audit, mcp-exfil-scan, mcps-audit)
+Last audited: **2026-08-22** | Tools run: 9 (Gitleaks 8.30.1, TruffleHog 3.95.9, Trivy 0.72.0, OSV-Scanner 2.4.0, Semgrep community, config-audit, skill-audit, mcp-exfil-scan, mcps-audit)
 
-**Findings summary:** 0 secrets, 0 Semgrep findings. OSV-Scanner found 34 dependency CVEs (0 Critical / 10 High / 21 Medium / 3 Low) in transitive `bun.lock` packages. skill-audit: canonical `impeccable` SKILL.md scored LOW RISK (15/100), APPROVE. mcp-exfil-scan: 0/100 (CLEAN). mcps-audit: 1832 findings, assessed as heuristic false positives on this repo's own legitimate CLI code (`execSync`, config-object `delete`), the same pattern noted in the prior audit. config-audit: 5 MEDIUM, all confirmed false positives against source text (doc prose mentioning `.env`/hooks/test-skip, not actual bypass instructions).
+**Findings summary:** 0 secrets, 0 Semgrep findings, 0 OSV-Scanner CVEs (last week's `package.json` overrides carried cleanly through this week's 21-commit upstream merge, re-verified clean). skill-audit: all 82 authored `SKILL.md` files scored LOW RISK, APPROVE; 3 vendored `node_modules/playwright-core` SKILL.md files flagged MEDIUM/CRITICAL (third-party, not this repo's source). mcp-exfil-scan: 0/100 (CLEAN). mcps-audit: 1796 findings, assessed as heuristic false positives on this repo's own legitimate CLI code (`execSync`, config-object `delete`), same pattern as prior audits. config-audit: 5 MEDIUM, all confirmed false positives against source text (doc prose mentioning `.env`/hooks/test-skip, not actual bypass instructions).
 
-**Fixes applied (2026-08-21):** Added/bumped `package.json` `overrides` for `@hono/node-server`, `body-parser`, `brace-expansion`, `fast-uri`, `hono`, `ip-address`; ran `bun install` to regenerate `bun.lock`. Re-scan confirmed 0 remaining OSV issues.
+**Fixes applied (2026-08-22):** None needed — no new dependency CVEs or secrets from this week's upstream merge.
 
-**Known remaining issues:** mcps-audit's 1832 findings remain formally open but non-actionable (false positives, same class as prior audits); recommend excluding `dist/`/`build/`/duplicated per-provider skill copies from future runs to cut noise.
+**Known remaining issues:** mcps-audit's 1796 findings remain formally open but non-actionable (false positives, same class as prior audits). Vendored `playwright-core` skill docs flagged by skill-audit are third-party and out of scope.
 
 See [SECURITY_REPORT.md](SECURITY_REPORT.md) for the full report.
 
