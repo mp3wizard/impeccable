@@ -1787,7 +1787,7 @@ if (IS_BROWSER) {
       findings: serializeFindings(allFindings),
       count: allFindings.length,
       ...scanResultMeta(options),
-    }, '*');
+    }, window.location.origin);
   }
 
   function postExtensionError(err) {
@@ -1795,7 +1795,7 @@ if (IS_BROWSER) {
     window.postMessage({
       source: 'impeccable-error',
       message: err?.message || String(err),
-    }, '*');
+    }, window.location.origin);
   }
 
   function reportVisualContrastError(err, detail = {}) {
@@ -1930,7 +1930,7 @@ if (IS_BROWSER) {
         findings: serializeFindings(allFindings),
         count: allFindings.length,
         ...scanResultMeta(options),
-      }, '*');
+      }, window.location.origin);
     }
 
     // After this scan completes, all subsequent reveals are instant (no stagger, no animation)
@@ -2000,7 +2000,7 @@ if (IS_BROWSER) {
       if (e.data.action === 'toggle-overlays') {
         const visible = !document.body.classList.contains('impeccable-hidden');
         document.body.classList.toggle('impeccable-hidden', visible);
-        window.postMessage({ source: 'impeccable-overlays-toggled', visible: !visible }, '*');
+        window.postMessage({ source: 'impeccable-overlays-toggled', visible: !visible }, window.location.origin);
       }
       if (e.data.action === 'remove') {
         clearOverlays();
@@ -2042,7 +2042,7 @@ if (IS_BROWSER) {
         }
       }
     });
-    window.postMessage({ source: 'impeccable-ready' }, '*');
+    window.postMessage({ source: 'impeccable-ready' }, window.location.origin);
   } else {
     if (window.__IMPECCABLE_CONFIG__?.autoScan !== false) {
       const runAutoScan = () => {
