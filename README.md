@@ -437,13 +437,13 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audited: **2026-08-24** | Tools run: 9 (Gitleaks 8.30.1, TruffleHog 3.95.9, Trivy 0.72.0, OSV-Scanner 2.4.0, Semgrep community, config-audit, skill-audit, mcp-exfil-scan, mcps-audit)
+Last audited: **2026-08-25** | Tools run: 9 (Gitleaks 8.30.1, TruffleHog 3.95.9, Trivy 0.72.0, OSV-Scanner 2.4.0, Semgrep community, config-audit, skill-audit, mcp-exfil-scan, mcps-audit)
 
-**Findings summary:** 0 secrets, 0 Semgrep findings, 0 OSV-Scanner CVEs (prior weeks' `package.json` overrides carried cleanly through this week's 41-commit upstream merge, re-verified clean). skill-audit: 30 unique authored `SKILL.md` variants (deduped from 78 per-harness copies) scored LOW RISK, APPROVE. mcp-exfil-scan: 0/100 (CLEAN). mcps-audit: 1811 findings, assessed as heuristic false positives on this repo's own legitimate CLI code (`execSync`, config-object `delete`), same pattern as prior audits. config-audit: 11 MEDIUM/LOW, all confirmed false positives against source text (doc prose mentioning `.env`/hooks/test-skip, not actual bypass instructions).
+**Findings summary:** 0 secrets (full 1978-commit git history + working tree), 0 Semgrep findings, 0 OSV-Scanner CVEs (this week's 15-commit upstream merge stays clean). skill-audit: every `SKILL.md` copy scored LOW RISK (0-15/100). mcp-exfil-scan: 0/100 (CLEAN). mcps-audit: 1818 findings, assessed as heuristic false positives on this repo's own legitimate CLI code (`execSync`, config-object `delete`), same pattern as prior audits. config-audit: 8 in-repo MEDIUM/LOW, all confirmed false positives against source text (doc prose mentioning `.env`/hooks/test-skip, not actual bypass instructions); the tool's remaining findings are from its whole-machine scan and out of this repo's scope.
 
-**Fixes applied (2026-08-24):** None needed (no new dependency CVEs or secrets from this week's upstream merge).
+**Fixes applied (2026-08-25):** None needed (no new dependency CVEs or secrets from this week's upstream merge).
 
-**Known remaining issues:** mcps-audit's 1811 findings remain formally open but non-actionable (false positives, same class as prior audits).
+**Known remaining issues:** mcps-audit's 1818 findings remain formally open but non-actionable (false positives, same class as prior audits).
 
 See [SECURITY_REPORT.md](SECURITY_REPORT.md) for the full report.
 
