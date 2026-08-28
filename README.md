@@ -437,13 +437,13 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audited: **2026-08-27** | Tools run: 10 (Gitleaks 8.30.1, TruffleHog 3.95.9, Trivy 0.72.0, OSV-Scanner 2.4.0, Semgrep community, config-audit, skill-audit, skillspector 2.3.13, mcp-exfil-scan, mcps-audit)
+Last audited: **2026-08-28** | Tools run: 10 (Gitleaks 8.30.1, TruffleHog 3.95.9, Trivy 0.72.0, OSV-Scanner 2.4.0, Semgrep community, config-audit, skill-audit, skillspector 2.3.13, mcp-exfil-scan, mcps-audit)
 
-**Findings summary:** 0 secrets verified (full 1987-commit git history + working tree; TruffleHog's 3 unverified hits are the URL-credential-detection test's own `example.com`/`host.com` fixtures), 0 Semgrep findings, 0 OSV-Scanner CVEs (this week's 6-commit upstream merge stays clean). skill-audit: LOW RISK (15/100). skillspector (local-only): LOW (7/100), 2 MEDIUM unpinned-MCP-version hardening suggestions. mcp-exfil-scan: 0/100 (CLEAN). mcps-audit: 1818 findings, assessed as heuristic false positives on this repo's own legitimate CLI code (`execSync`, config-object `delete`), same pattern as prior audits. config-audit: ~10 in-repo MEDIUM/LOW, all confirmed false positives against source text (doc prose mentioning `.env`/hooks/test-skip, not actual bypass instructions); the tool's remaining findings are from its whole-machine scan and out of this repo's scope.
+**Findings summary:** 0 secrets verified (git history + working tree; TruffleHog's 9 unverified hits are the URL-credential-detection test's own `example.com`/`host.com` fixtures, plus the prior report quoting them), 0 OSV-Scanner CVEs (this week's 15-commit upstream merge stays clean, clean auto-merge no conflicts). Semgrep OWASP: 23 findings, all false positives against already-guarded CORS reflection (loopback/token check) and same-window `postMessage`. skill-audit: LOW RISK (15/100). skillspector (local-only): LOW (7/100), 2 MEDIUM findings misclassifying a Bash-tool allowlist entry as an unpinned MCP server. mcp-exfil-scan: 0/100 (CLEAN). mcps-audit: 1841 findings, assessed as heuristic false positives on this repo's own legitimate CLI code (`execSync`, config-object `delete`, a function named `highlight`), same pattern as prior audits. config-audit: ~15 in-repo LOW "hooks configuration found" notices, expected/by design; the tool's remaining findings are from its whole-machine scan and out of this repo's scope.
 
-**Fixes applied (2026-08-27):** None needed (no new dependency CVEs or secrets from this week's upstream merge).
+**Fixes applied (2026-08-28):** None needed (no new dependency CVEs or secrets from this week's upstream merge).
 
-**Known remaining issues:** mcps-audit's 1818 findings remain formally open but non-actionable (false positives, same class as prior audits).
+**Known remaining issues:** mcps-audit's 1841 findings and Semgrep's 23 CORS/postMessage findings remain formally open but non-actionable (false positives, same class as prior audits).
 
 See [SECURITY_REPORT.md](SECURITY_REPORT.md) for the full report.
 
