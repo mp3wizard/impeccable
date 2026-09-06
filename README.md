@@ -468,13 +468,13 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audited: **2026-09-06** | Tools run: 9 (Gitleaks 8.30.1, TruffleHog 3.95.9, Trivy 0.72.0, OSV-Scanner 2.4.0, Semgrep community, config-audit, skill-audit, mcp-exfil-scan, mcps-audit skipped — no MCP config in repo)
+Last audited: **2026-09-06** | Tools run: 9 (Gitleaks 8.30.1, TruffleHog 3.95.9, Trivy 0.72.0, OSV-Scanner 2.4.0, Semgrep community, config-audit, skill-audit, mcp-exfil-scan, mcps-audit skipped: no MCP config in repo)
 
-**Findings summary:** 0 secrets verified (git history + working tree; TruffleHog's 20 unverified hits are this report's own past write-ups quoting `example.com`/`host.com` placeholder credentials). This week's 12-commit upstream merge (CLI 4.0.3 signed-Windows-engine release) merged clean, no conflicts. OSV-Scanner initially found 38 transitive npm CVEs (0 Critical/12 High/23 Medium/3 Low across `@hono/node-server`, `body-parser`, `brace-expansion`, `fast-uri`, `hono`, `ip-address`, `qs`) — all fixed. Semgrep OWASP found 7 wildcard-`postMessage`-target-origin findings in `browser-bundle/50-scan.js` — fixed. skill-audit: both canonical skill files LOW RISK (15/100, 5/100). mcp-exfil-scan: 0/100 (CLEAN). config-audit: 15 LOW findings, all informational hook-configuration presence.
+**Findings summary:** 0 secrets verified (git history + working tree; TruffleHog's 20 unverified hits are this report's own past write-ups quoting `example.com`/`host.com` placeholder credentials). This week's 12-commit upstream merge (CLI 4.0.3 signed-Windows-engine release) merged clean, no conflicts. OSV-Scanner initially found 38 transitive npm CVEs (0 Critical, 12 High, 23 Medium, 3 Low across `@hono/node-server`, `body-parser`, `brace-expansion`, `fast-uri`, `hono`, `ip-address`, `qs`), all fixed. Semgrep OWASP found 7 wildcard-`postMessage`-target-origin findings in `browser-bundle/50-scan.js`, fixed. skill-audit: both canonical skill files LOW RISK (15/100, 5/100). mcp-exfil-scan: 0/100 (CLEAN). config-audit: 15 LOW findings, all informational hook-configuration presence.
 
 **Fixes applied (2026-09-06):** Bumped `fast-uri` override to 3.1.6 and `qs` override to 6.16.0, ran `bun install` to apply the full override set to `bun.lock` (OSV-Scanner re-run: 0 issues). Patched `browser-bundle/50-scan.js`'s 7 `postMessage` calls to target `window.location.origin` instead of `'*'` (Semgrep re-run: 0 findings).
 
-**Known remaining issues:** `browser-bundle/50-scan.js`'s generated counterpart (`crates/live/assets/detect-antipatterns-browser.js`) was not rebuilt this cycle (no Rust toolchain available) — needs a `cargo xtask bundle` pass before the next engine release to pick up the postMessage fix.
+**Known remaining issues:** `browser-bundle/50-scan.js`'s generated counterpart (`crates/live/assets/detect-antipatterns-browser.js`) was not rebuilt this cycle, no Rust toolchain available; needs a `cargo xtask bundle` pass before the next engine release to pick up the postMessage fix.
 
 See [SECURITY_REPORT.md](SECURITY_REPORT.md) for the full report.
 
