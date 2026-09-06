@@ -1,39 +1,36 @@
-# Security Report — 2026-08-29
+# Security Report — 2026-09-06
 
 ## Tools Run
 
 | Tool | Status | Finding count |
 |---|---|---|
-| Gitleaks 8.30.1 (SARIF + plain, git history, 2042 commits, ~208 MB) | OK | 0 |
-| TruffleHog 3.95.9 (git history) | OK | 0 verified, 12 unverified (test fixtures) |
-| Trivy 0.72.0 (fs + bun.lock SCA, 237 packages) | OK | 0 |
-| OSV-Scanner 2.4.0 | OK | 0 |
-| Semgrep (OWASP Top Ten) | OK | 0 |
-| Semgrep (TypeScript) | OK | 0 (no `.ts` sources tracked by git) |
+| Gitleaks 8.30.1 | OK | 0 |
+| Bandit | N/A (no `.py` files) | — |
+| Semgrep (OWASP top-ten) | OK | 7 (fixed) |
+| Semgrep (TypeScript) | OK (0 `.ts`/`.tsx` files) | 0 |
 | Semgrep (secrets) | OK | 0 |
-| Bandit | N/A | no `.py` files in repo |
-| config-audit.py | OK | 137 total (global `~/.claude` scan, not repo-scoped); in-repo hits are heuristic base64+`.env`-access false positives on legitimate key-loading code (`generate-image.mjs`, `detect-url.mjs`) |
-| skill-audit.sh (`.claude/skills/impeccable/SKILL.md`, representative of all provider copies) | OK | LOW RISK (15/100) |
-| mcp-exfil-scan.sh | OK | 0/100, CLEAN |
-| mcps-audit | OK | 1840 findings, same heuristic false positives as prior audits (own CLI code: `execSync` in a skill/hook manager, `delete` on config objects, a function named `highlight`) |
-| skillspector, mcp-scan LLM mode | SKIPPED | opt-in, third-party data send — not enabled for unattended runs |
+| Trivy 0.72.0 (fs) | OK | 0 |
+| TruffleHog 3.95.9 (git) | OK | 20 unverified, 0 verified |
+| OSV-Scanner 2.4.0 | OK | 38 (all fixed) |
+| mcps-audit | SKIPPED (no MCP config files in repo) | — |
+| config-audit.py | OK | 15 LOW (hooks-configuration presence, informational) |
+| skill-audit.sh | OK | 2 canonical skill files scanned, both LOW RISK |
+| mcp-exfil-scan.sh | OK | 0/100 CLEAN |
 
 ## Findings
 
-**No CVEs, no verified secrets, no exfiltration.** Gitleaks, Trivy, OSV-Scanner, and all three Semgrep configs report zero findings across the merged upstream code (77 commits this week, clean fast-forward-style merge with no conflicts) and the full git history.
-
-**TruffleHog** flags 12 unverified results, all `https://user:pass@example.com` / `http://:secret@host.com` style placeholders in `tests/detect-url-launch.test.mjs` (URL-credential-detection test fixtures) and `SECURITY_REPORT.md` quoting the same fixtures from prior reports. 0 verified secrets.
-
-**config-audit.py** scans the whole local Claude Code install (global settings, all installed skills/plugins across the machine), not just this repo. The handful of in-repo hits are its base64+`.env`-access heuristic firing on `impeccable/scripts/generate-image.mjs` and `detect-url.mjs` reading an API key to call an image/detection API — legitimate use, cross-checked clean by the more precise `mcp-exfil-scan.sh` on the same files (0/100).
-
-**mcps-audit** reports 1840 findings against this repo's `cli/` directory — this is impeccable's own CLI tool (a skill/hook manager and DOM anti-pattern detector), so `execSync`, hook-file `delete`, and a function literally named `highlight` are its documented job, not injected malicious code. Same false-positive class flagged in every prior audit of this repo.
+- **OSV-Scanner — 38 transitive dependency CVEs** (0 Critical, 12 High, 23 Medium, 3 Low) across 7 npm packages pulled in via `bun.lock`: `@hono/node-server` (GHSA-frvp-7c67-39w9), `body-parser` (GHSA-v422-hmwv-36x6), `brace-expansion` (GHSA-3jxr-9vmj-r5cp, GHSA-mh99-v99m-4gvg, GHSA-rgw5-rvv9-x895), `fast-uri` (7 advisories, GHSA-4c8g-83qw-93j6 et al.), `hono` (18 advisories), `ip-address` (GHSA-mwp4-54f8-5fhr, GHSA-v2v4-37r5-5v8g), `qs` (GHSA-4mjr-xmp4-gh2g, GHSA-q8mj-m7cp-5q26, GHSA-x5fp-wj9c-mxmx). None are direct dependencies of this repo; all reach it through devDependencies' transitive tree.
+- **Semgrep OWASP — `javascript.browser.security.wildcard-postmessage-configuration`** (7 call sites, `browser-bundle/50-scan.js`). The in-page extension bridge's `window.postMessage` calls used `'*'` as target origin, letting any same-window listener (including an unrelated script sharing the page) receive scan results/commands.
+- **TruffleHog — 20 unverified "secrets"**: all are placeholder credential URLs (`http://:secret@host.com`, `https://user:pass@example.com`) quoted inside `SECURITY_REPORT.md`'s own findings write-ups from prior audit cycles — a self-referential false positive, not a live credential. 0 verified.
+- **config-audit.py — 15 LOW findings**: hook-configuration presence in various plugin `hooks.json`/`plugin.json` files (SessionStart, PreToolUse, etc.). Informational; no injection or exfiltration pattern flagged.
 
 ## Fixes Applied
 
-None needed — no dependency CVEs, no verified secrets, no confirmed hook/config vulnerabilities in this week's 77-commit upstream merge.
+- Bumped `package.json` `overrides`: `fast-uri` 3.1.5 → 3.1.6, `qs` 6.15.2 → 6.16.0 (the two overrides that didn't yet cover the highest-numbered advisory in their chain).
+- Ran `bun install` to regenerate `bun.lock` against the full override set (also picked up `@hono/node-server`, `body-parser`, `brace-expansion`, `hono`, `ip-address` fixes that were already declared in `overrides` but not yet applied to the lockfile). Re-ran OSV-Scanner: **0 issues found**.
+- Patched `browser-bundle/50-scan.js`: replaced all 7 `window.postMessage(..., '*')` calls with `window.postMessage(..., window.location.origin)`. Sender and listener are the same window (`e.source !== window` is already checked on receipt), so scoping the target origin to the page's own origin closes the wildcard-broadcast without changing behavior. Re-ran Semgrep on the file: **0 findings**.
 
 ## Known Remaining Issues
 
-- mcps-audit's 1840 findings remain formally open but non-actionable (heuristic false positives on this repo's own CLI primitives — same class as every prior audit).
-- config-audit's global-scope findings (anysearch, other installed skills/plugins) are unrelated to this repo and out of scope for this report.
-- mcp-scan and skillspector's LLM-assisted mode remain opt-in and were not run in this unattended scheduled task (both require asking a human first per the security-scanner skill's privacy gate).
+- `browser-bundle/50-scan.js` is source for a generated in-page bundle (`crates/live/assets/detect-antipatterns-browser.js`, produced by `cargo xtask bundle`). This scan/fix cycle did not have a working Rust toolchain available in time to rebuild and verify the generated bundle picked up the source fix — flag for a follow-up `cargo xtask bundle` + `bun run test` pass before the next engine release.
+- TruffleHog's 20 unverified hits are permanent noise from this report's own past write-ups quoting example credential URLs; no action needed unless TruffleHog starts reporting a verified hit.

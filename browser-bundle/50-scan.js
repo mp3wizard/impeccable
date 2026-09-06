@@ -35,9 +35,9 @@ if (IS_BROWSER && !__impeccable) {
   if (EXTENSION_MODE) {
     window.addEventListener('message', (e) => {
       if (e.source !== window || !e.data || e.data.source !== 'impeccable-command') return;
-      if (e.data.action === 'scan') window.postMessage({ source: 'impeccable-error', message }, '*');
+      if (e.data.action === 'scan') window.postMessage({ source: 'impeccable-error', message }, window.location.origin);
     });
-    window.postMessage({ source: 'impeccable-ready' }, '*');
+    window.postMessage({ source: 'impeccable-ready' }, window.location.origin);
   }
 } else if (IS_BROWSER) {
   // Detect extension mode via the script tag's data attribute or the document element fallback.
@@ -190,7 +190,7 @@ if (IS_BROWSER && !__impeccable) {
       findings: serializeFindings(allFindings),
       count: allFindings.length,
       ...scanResultMeta(options),
-    }, '*');
+    }, window.location.origin);
   }
 
   function postExtensionError(err) {
@@ -198,7 +198,7 @@ if (IS_BROWSER && !__impeccable) {
     window.postMessage({
       source: 'impeccable-error',
       message: err?.message || String(err),
-    }, '*');
+    }, window.location.origin);
   }
 
   function reportVisualContrastError(err, detail = {}) {
@@ -332,7 +332,7 @@ if (IS_BROWSER && !__impeccable) {
         findings: serializeFindings(allFindings),
         count: allFindings.length,
         ...scanResultMeta(options),
-      }, '*');
+      }, window.location.origin);
     }
 
     // After this scan completes, all subsequent reveals are instant (no stagger, no animation)
@@ -400,7 +400,7 @@ if (IS_BROWSER && !__impeccable) {
       }
       if (e.data.action === 'toggle-overlays') {
         const visible = ui.toggleOverlays();
-        window.postMessage({ source: 'impeccable-overlays-toggled', visible }, '*');
+        window.postMessage({ source: 'impeccable-overlays-toggled', visible }, window.location.origin);
       }
       if (e.data.action === 'remove') {
         clearOverlays();
@@ -413,7 +413,7 @@ if (IS_BROWSER && !__impeccable) {
         ui.unspotlight();
       }
     });
-    window.postMessage({ source: 'impeccable-ready' }, '*');
+    window.postMessage({ source: 'impeccable-ready' }, window.location.origin);
   } else {
     if (window.__IMPECCABLE_CONFIG__?.autoScan !== false) {
       const runAutoScan = () => {
