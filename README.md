@@ -184,6 +184,18 @@ cp -r dist/claude-code/.claude/* ~/.claude/
 cp -r dist/opencode/.opencode your-project/
 ```
 
+**DeepSeek Harness:**
+```bash
+# Project-specific
+cp -r dist/dsh/.dsh your-project/
+
+# Or global (applies to all projects)
+mkdir -p "${DSH_HOME:-$HOME/.dsh}/skills"
+cp -r dist/dsh/.dsh/skills/* "${DSH_HOME:-$HOME/.dsh}/skills/"
+```
+
+The CLI honors `DSH_HOME` only when it resolves inside your home directory (or to home itself); otherwise it uses `~/.dsh`. An outside-home manual copy is not managed by `impeccable install/update`.
+
 **Hermes Agent:**
 ```bash
 # Global (applies to all projects; uses the active profile, or ~/.hermes by default)
@@ -385,6 +397,8 @@ Installed hook surfaces:
 
 Every command goes through the launcher shipped in the skill's `scripts/` directory (`impeccable`, or `impeccable.cmd` on Windows), guarded so a missing launcher is a silent no-op. The launcher runs the engine binary that ships next to it, or downloads the pinned version once into `~/.impeccable/bin/`. No Node or other runtime is required for the hook or the skill.
 
+In Claude Code, installed command hooks run independently of model-tool approval. The first edit or Stop event can therefore download and cache the engine even if the session denies the model's launcher command. Review installed hooks before unattended runs; to disable all Claude Code hooks for a run, pass `--settings '{"disableAllHooks": true}'`. See [Claude Code's hook security guidance](https://code.claude.com/docs/en/hooks#security-considerations).
+
 The installer preserves unrelated hook entries and settings. If a hook manifest is malformed, install/update aborts by default; rerun with `--force` to back up the malformed file as `.bak` and replace it.
 
 On an interactive `install`/`update`, Impeccable explains the hook and offers to install it (default yes). Your choice is remembered per-developer in the gitignored `.impeccable/config.local.json`, so you are not asked again; `--no-hooks` skips it for that run without recording anything. Hook lifecycle settings live under the `hook` key of `.impeccable/config.json`; detector ignores live under `detector`, shared by `/impeccable hooks` and `npx impeccable detect`.
@@ -407,12 +421,22 @@ Codex requires one platform step that Impeccable cannot safely skip: open `/hook
 
 Full hook docs: [impeccable.style/docs/hooks](https://impeccable.style/docs/hooks).
 
+The Stop pass suppresses confirmed pre-existing findings when a verified before-edit baseline is available (currently Claude Edit/Write results for text scans). Other findings are marked new or attribution unknown; unknown is not evidence that your session caused the problem. Explicit `detect` scans remain unchanged.
+
 Manual copy commands are fallback/debug instructions. The normal path is:
 
 ```bash
 npx impeccable install
 npx impeccable update
 ```
+
+## Live mode and production sites
+
+Live mode edits a local checkout through a development server or local static HTML. Injecting its localhost HTTP helper into a deployed production site, including an HTTPS site, is not supported. Do not disable browser security or weaken production CSP to make it work.
+
+Use live mode only in projects you trust to run locally. Applying copy edits automatically runs `package.json`'s optional `scripts["impeccable:manual-edit-validate"]` command in a shell, with your user permissions; review that script before using live mode in an unfamiliar checkout.
+
+For production inspection, use `npx impeccable detect https://example.com` or the browser extension. These inspect the rendered page; they do not provide live variant editing or write changes back to your source.
 
 ## CLI
 
@@ -444,6 +468,7 @@ Full detector docs: [impeccable.style/docs/detector](https://impeccable.style/do
 - [Cursor](https://cursor.com)
 - [Claude Code](https://claude.ai/code)
 - [GitHub Copilot](https://github.com/features/copilot)
+- [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
 - [Gemini CLI](https://github.com/google-gemini/gemini-cli)
 - [Codex CLI](https://github.com/openai/codex)
 - [Grok Build](https://x.ai/cli)

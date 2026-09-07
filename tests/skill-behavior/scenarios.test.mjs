@@ -27,6 +27,7 @@ import {
   ENGINE_MISSING_MESSAGE,
 } from './harness.mjs';
 import { detectProvider, getModel, hasKey, resolveModelList, PROVIDERS } from './providers.mjs';
+import { assertPlanningFallbackWarning, LAUNCHER_FAILURE_WARNING } from './assertions.mjs';
 import {
   PRODUCT_MD_SAMPLE,
   PRODUCT_MD_SAMPLE_NO_REGISTER,
@@ -647,6 +648,76 @@ for (const modelId of resolveModelList()) {
         assert.ok(readsMatching(trace, 'reference/critique.md').length, 'comparison consults the critique contract');
         assert.ok(readsMatching(trace, 'reference/polish.md').length, 'comparison consults the polish contract');
         assertAdviceOnly(trace, text);
+      } finally {
+        cleanupWorkspace(workspace);
+      }
+    });
+
+    for (const denyBash of [true, false]) {
+      it(`scenario 19: ${denyBash ? 'denied launcher' : 'successful launcher control'} loads context and references before editing`, async () => {
+        const workspace = prepareWorkspace({ files: {
+          'PRODUCT.md': PRODUCT_MD_SAMPLE,
+          'DESIGN.md': DESIGN_MD_SAMPLE,
+          'index.html': '<!doctype html><html lang="en"><head><title>Fieldnotes</title><style>body{font:16px system-ui;margin:32px}button{padding:2px 4px}</style></head><body><main><h1>Fieldnotes</h1><p>A calmer place for your notes.</p><button>New note</button></main></body></html>',
+        } });
+        try {
+          const { trace, stepTexts, finishReason, responseMessages } = await runTurn({
+            workspace,
+            model,
+            userPrompt: '/impeccable polish index.html. Keep this pass small: improve the button spacing only, preserving the page content and structure.',
+            maxSteps: 12,
+            denyBash,
+            contextOnlyBash: !denyBash,
+          });
+          const allText = stepTexts.join('\n');
+          logTrace('S19', denyBash ? 'denied-launcher' : 'successful-launcher', modelId, trace, { finishReason, text: allText });
+          assert.notEqual(finishReason, 'length', 'a truncated response is not a completed fallback');
+          if (denyBash) {
+            assert.ok(trace.toolCalls.some((call) => call.name === 'bash' && call.denied && /impeccable\s+context\b/.test(call.input.command)), 'must encounter an actual denied context attempt');
+          } else {
+            assert.ok(trace.bashOutputs.some((out) => out.startsWith('exit=0\n')), 'the control must execute the real context loader successfully');
+          }
+          const writeIndex = trace.toolCalls.findIndex((call) => call.mutatedPaths.includes('index.html'));
+          assert.ok(writeIndex >= 0, 'must continue to the requested edit, not just load references');
+          for (const filename of [...(denyBash ? ['PRODUCT.md', 'DESIGN.md'] : []), 'reference/polish.md', 'reference/craft-floor.md']) {
+            const readIndex = trace.toolCalls.findIndex((call) => call.name === 'read' && call.succeeded && (call.input.path === filename || call.input.path.endsWith(`/${filename}`)));
+            assert.ok(readIndex >= 0 && readIndex < writeIndex, `${filename} must actually be read before editing`);
+          }
+          const assistantBlocks = responseMessages.filter((message) => message.role === 'assistant')
+            .flatMap((message) => typeof message.content === 'string' ? [{ type: 'text', text: message.content }] : message.content);
+          const warningIndex = assistantBlocks.findIndex((block) => block.type === 'text' && LAUNCHER_FAILURE_WARNING.test(block.text));
+          const writeBlockIndex = assistantBlocks.findIndex((block) => block.type === 'tool-call' && block.toolName === 'write');
+          if (denyBash) assert.ok(warningIndex >= 0 && writeBlockIndex > warningIndex, 'must disclose the failed context launcher before editing, not only in the final summary');
+          assert.ok(!trace.toolCalls.some((call) => call.mutatedPaths.some((p) => /(?:^|\/)(?:PRODUCT|DESIGN)\.md$/.test(p))), 'must not fabricate or replace project context');
+        } finally {
+          cleanupWorkspace(workspace);
+        }
+      });
+    }
+
+    it('scenario 19: denied launcher keeps planning-only work read-only without craft-floor', async () => {
+      const workspace = prepareWorkspace({ files: {
+        'PRODUCT.md': PRODUCT_MD_SAMPLE,
+        'DESIGN.md': DESIGN_MD_SAMPLE,
+        'index.html': '<!doctype html><html><body><button style="padding:2px 4px">New note</button></body></html>',
+      } });
+      try {
+        const { trace, text, stepTexts, finishReason, responseMessages } = await runTurn({
+          workspace,
+          model,
+          userPrompt: '/impeccable polish index.html. Inspect the button spacing and propose a short plan only. Do not edit any files or implement the plan yet.',
+          maxSteps: 12,
+          denyBash: true,
+        });
+        logTrace('S19', 'denied-launcher-planning', modelId, trace, { finishReason, text: stepTexts.join('\n') });
+        assert.notEqual(finishReason, 'length', 'a truncated response is not a completed plan');
+        assert.ok(trace.toolCalls.some((call) => call.name === 'bash' && call.denied && /impeccable\s+context\b/.test(call.input.command)), 'must encounter an actual denied context attempt');
+        assert.deepEqual(readsMatching(trace, 'craft-floor.md'), [], 'planning-only work must not load the editing floor');
+        assertAdviceOnly(trace, text);
+        assertPlanningFallbackWarning(responseMessages);
+        for (const filename of ['PRODUCT.md', 'DESIGN.md', 'index.html', 'reference/polish.md']) {
+          assert.ok(trace.toolCalls.some((call) => call.name === 'read' && call.succeeded && (call.input.path === filename || call.input.path.endsWith(`/${filename}`))), `${filename} must actually be read`);
+        }
       } finally {
         cleanupWorkspace(workspace);
       }
