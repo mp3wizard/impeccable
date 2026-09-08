@@ -509,7 +509,7 @@ Last audited: **2026-09-08** | Tools run: 10 (Gitleaks 8.30.1, TruffleHog 3.97.4
 
 **Fixes applied (2026-09-08):** None required, no exploitable or fixable findings this cycle.
 
-**Known remaining issues:** `mcp-exfil-scan.sh` skipped this cycle — the security-scanner plugin's bundled copy fails its own `SHA256SUMS` integrity check; reinstall/update the plugin to restore MCP-exfiltration coverage. mcps-audit's raw risk score is not reliable as-is due to its high false-positive rate on generated JS bundles containing ordinary function syntax.
+**Known remaining issues:** `mcp-exfil-scan.sh` skipped this cycle: the security-scanner plugin's bundled copy fails its own `SHA256SUMS` integrity check; reinstall/update the plugin to restore MCP-exfiltration coverage. mcps-audit's raw risk score is not reliable as-is due to its high false-positive rate on generated JS bundles containing ordinary function syntax.
 
 See [SECURITY_REPORT.md](SECURITY_REPORT.md) for the full report.
 
