@@ -503,13 +503,13 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audited: **2026-09-08** | Tools run: 10 (Gitleaks 8.30.1, TruffleHog 3.97.4, Trivy 0.74.0, OSV-Scanner 2.5.1, Semgrep 1.176.1, config-audit, skill-audit, mcps-audit; mcp-exfil-scan skipped: bundled-script checksum mismatch)
+Last audited: **2026-09-09** | Tools run: 10 (Gitleaks 8.30.1, TruffleHog 3.97.4, Trivy 0.74.0, OSV-Scanner 2.5.1, Semgrep 1.176.1, config-audit, skill-audit, mcp-exfil-scan, mcps-audit)
 
-**Findings summary:** 0 secrets verified (git history, 2329 commits, + working tree; TruffleHog's 25 unverified hits are placeholder credential URLs in test fixtures and a prior security report). This week's 11-commit upstream merge (Cursor plugin packaging, VS Code skill extension, Windows CSP/prompt fixes, per-app design resolution fix) merged clean, no conflicts. OSV-Scanner, Trivy, Gitleaks, and Semgrep (OWASP/TypeScript/secrets) all found 0 issues. skill-audit.sh ran clean this cycle across all 37 content-unique skill files (LOW RISK, 0-15/100). mcps-audit reported 530 findings/100 risk score; manual spot-check confirmed these are pattern-matcher false positives (flagging standard `function(){}` / IIFE syntax in the generated browser-bundle as "dangerous execution"), not real issues. config-audit: 15 MEDIUM/LOW findings, all keyword-pattern false positives on developer-documentation prose, no real issue.
+**Findings summary:** 0 secrets verified (git history + working tree; TruffleHog's 28 unverified hits are placeholder credential URLs in a URL-detector test fixture). This week's 11-commit upstream merge (CI workflow, comp-verbs/context/hook-marker engine work, skill-behavior/workflow test suite expansion) merged clean, no conflicts. Gitleaks, Semgrep (OWASP/TypeScript/secrets), Trivy, and mcp-exfil-scan all found 0 issues. skill-audit.sh: LOW RISK (5/100, 15/100) on the canonical SKILL.md files. OSV-Scanner found one fixable issue: `hono` 4.12.34 had 3 medium-severity CVEs. config-audit: 13 in-scope findings (11 MEDIUM, 2 LOW), all keyword-pattern false positives on developer-documentation prose (the other 121 findings it surfaced were scoped to unrelated globally-installed plugins, out of scope for this repo). mcps-audit reported 531 findings/100 risk score; manual spot-check confirmed these are pattern-matcher false positives (flagging standard `function(){}` / IIFE syntax in the generated browser-bundle as "dangerous execution"), not real issues.
 
-**Fixes applied (2026-09-08):** None required, no exploitable or fixable findings this cycle.
+**Fixes applied (2026-09-09):** Bumped `hono` 4.12.34 → 4.13.5, resolving `GHSA-crvj-82cr-hjcx`, `GHSA-g6gw-c38x-mqfc`, `GHSA-gqvv-2mrq-wpjv`. Verified clean with a follow-up OSV-Scanner run.
 
-**Known remaining issues:** `mcp-exfil-scan.sh` skipped this cycle: the security-scanner plugin's bundled copy fails its own `SHA256SUMS` integrity check; reinstall/update the plugin to restore MCP-exfiltration coverage. mcps-audit's raw risk score is not reliable as-is due to its high false-positive rate on generated JS bundles containing ordinary function syntax.
+**Known remaining issues:** mcps-audit's raw risk score is not reliable as-is due to its high false-positive rate on generated JS bundles containing ordinary function syntax. `mcp-scan` and skillspector LLM mode were not run (opt-in, require interactive user consent).
 
 See [SECURITY_REPORT.md](SECURITY_REPORT.md) for the full report.
 
