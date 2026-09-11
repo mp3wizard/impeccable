@@ -1,17 +1,17 @@
-# Security Report — 2026-09-09
+# Security Report — 2026-09-11
 
 ## Tools Run
 
 | Tool | Status | Finding count |
 |---|---|---|
-| Gitleaks 8.30.1 (sarif + text, full git history) | OK | 0 |
+| Gitleaks 8.30.1 (sarif + text, full git history, 2368 commits) | OK | 0 |
 | TruffleHog 3.97.4 (git mode) | OK | 28 unverified, 0 verified |
 | Trivy 0.74.0 (fs) | OK | 0 |
-| OSV-Scanner 2.5.1 | OK | 3 (1 package, `hono`) |
+| OSV-Scanner 2.5.1 (Cargo.lock, bun.lock) | OK | 0 |
 | Semgrep 1.176.1 (OWASP top ten, TypeScript, secrets) | OK | 0 |
 | Bandit | N/A — no `.py` files in target | — |
-| config-audit.py (Claude config/hooks/CLAUDE.md audit) | OK | 13 in-scope (0 critical/high; rest is global-install noise, out of scope) |
-| skill-audit.sh (canonical SKILL.md files) | OK | 0 — LOW RISK (5/100, 15/100) |
+| config-audit.py (Claude config/hooks/CLAUDE.md audit) | OK | 13 in-scope (0 critical/high) |
+| skill-audit.sh (canonical `skill/SKILL.src.md`) | OK | LOW RISK, 15/100 |
 | mcp-exfil-scan.sh | OK | 0/100 — CLEAN |
 | mcps-audit (npx) | OK | 531 — heuristic false positives (see below) |
 | mcp-scan | SKIPPED (opt-in, no user present to consent) | — |
@@ -20,18 +20,17 @@
 
 ## Findings
 
-**OSV-Scanner — `hono` 4.12.34 (npm, via `bun.lock`), CVSS 5.3–6.5, Medium:**
-- `GHSA-crvj-82cr-hjcx`, `GHSA-g6gw-c38x-mqfc`, `GHSA-gqvv-2mrq-wpjv` — fixed in `hono` 4.13.5.
+**OSV-Scanner:** clean. `Cargo.lock`/`bun.lock` were untouched by this merge (the `hono` fix from the prior audit is still in place).
 
-**TruffleHog — 28 unverified, 0 verified:** all in `tests/detect-url-launch.test.mjs`, a test fixture that deliberately embeds credential-shaped URLs (`user:p%40ss@example.com`, `:secret@host.com`) to test the project's own URL-credential detector rule. No real secret.
+**TruffleHog — 28 unverified, 0 verified:** all in `tests/detect-url-launch.test.mjs`, a test fixture deliberately embedding credential-shaped URLs (`user:p%40ss@example.com`, `:secret@host.com`) to exercise the project's own URL-credential detector rule. No real secret.
 
-**config-audit.py — 13 in-scope findings (11 MEDIUM, 2 LOW), 0 CRITICAL/HIGH:** `CLAUDE.md`/`claude.md`/`AGENTS.md` keyword matches on ordinary developer-documentation prose ("skip" in a test-suite description, ".env" mentioned in an unrelated architecture note, "password" in an example). Two LOW findings are informational (repo declares `Stop`/`PostToolUse` hooks in `.claude/settings.json`, expected for a skill repo). The scanner also surfaced 121 findings scoped to *other* globally-installed plugins/skills (ponytail, caveman, anysearch, security-scanner itself, other impeccable install copies under `~/.claude`) — out of scope for this target per APTS Scope Enforcement, not counted above.
+**config-audit.py — 13 in-scope findings (11 MEDIUM, 2 LOW), 0 CRITICAL/HIGH:** `CLAUDE.md`/`claude.md`/`AGENTS.md` keyword matches on ordinary developer-documentation prose (test-suite descriptions containing "skip", an architecture note mentioning `.env`, a project-structure note mentioning "password"). Two LOW findings are informational (`.claude/settings.json` declares `Stop`/`PostToolUse` hooks, expected for a skill repo). ~121 additional findings scoped to other globally-installed plugins/skills under `~/.claude` (ponytail, caveman, anysearch, this scanner itself) are out of scope per APTS Scope Enforcement and not counted here.
 
-**mcps-audit — 531 findings, risk score 100/100:** Spot-checked top findings; all are the tool's generic pattern matcher flagging ordinary `function(){}` / IIFE syntax in `browser-bundle/*.js` (the project's own shipped browser-scanning code) as "Dangerous execution" (AS-001) and "Known injection pattern" (AS-005). No actual code-injection or exfiltration mechanism found on manual review. Consistent with last week's characterization of this tool's false-positive rate on generated JS bundles.
+**mcps-audit — 531 findings, risk score 100/100:** spot-checked; all are the generic pattern matcher flagging ordinary `function(){}` / IIFE syntax in `browser-bundle/*.js` (this project's own shipped browser anti-pattern scanner) as "Dangerous execution" (AS-001) / "Known injection pattern" (AS-005). No actual code-injection or exfiltration mechanism on manual review. Consistent with the prior audit's characterization of this tool's false-positive rate on generated JS bundles.
 
 ## Fixes Applied
 
-- Bumped `hono` from `^4.12.x` to `4.13.5`+ via `package.json` override, then `bun install`. *(see commit)*
+None required — no CVEs, no verified secrets, no hook/config issues introduced by this merge's 6 upstream commits (placeholder-contrast detection, live-poll `--reply` JSON output, carbonize diagnostic cleanup, touch-gesture verification).
 
 ## Known Remaining Issues
 
