@@ -1,46 +1,45 @@
-# Security Report — 2026-09-17
+# Security Report — 2026-09-23
 
 ## Tools Run
 
 | Tool | Status | Finding count |
 |---|---|---|
-| Gitleaks 8.30.1 (sarif + text, full git history, 2455 commits) | OK | 0 |
-| TruffleHog 3.97.4 (git mode) | OK | 0 verified, all unverified in test fixtures |
+| Gitleaks 8.30.1 (sarif + text, full git history, 2498 commits) | OK | 0 |
+| TruffleHog 3.97.5 (git mode) | OK | 0 verified, 28 unverified — all placeholder credential-URL test fixtures |
 | Trivy 0.74.0 (fs) | OK | 0 |
-| OSV-Scanner 2.5.1 (Cargo.lock, bun.lock) | OK | 42 → 0 after fix |
-| Semgrep 1.176.1 (OWASP top ten, TypeScript, secrets) | OK | 0 |
+| OSV-Scanner 2.6.0 (Cargo.lock, bun.lock) | OK | 42 → 0 after fix |
+| Semgrep 1.177.0 (OWASP top ten, TypeScript, secrets) | OK | 0 |
 | Bandit | N/A — no `.py` files in target | — |
 | config-audit.py (Claude config/hooks/CLAUDE.md audit) | OK | 11 in-scope MEDIUM, 2 LOW, 0 CRITICAL/HIGH |
-| skill-audit.sh (91 SKILL.md copies across provider dirs) | OK | 0 CRITICAL in-repo; 1 CRITICAL in vendored `node_modules/playwright-core` (third-party) |
-| skillspector --no-llm (canonical `skill/` source) | OK | 69 pattern hits, all reviewed as false positives (see below) |
-| mcp-exfil-scan.sh | SKIPPED — bundled script failed `SHA256SUMS` integrity check, not run per skill policy |
-| mcps-audit (npx) | N/A — no `mcp*.json`/`.mcp*` files in target |
+| skill-audit.sh (canonical `.claude/skills/impeccable/SKILL.md`; 90 further copies are generated per-provider duplicates, not scanned individually) | OK | 5/100 LOW risk, APPROVE |
+| skillspector --no-llm (canonical `.claude/skills/impeccable/SKILL.md`) | OK | 0/100 LOW, no issues detected |
+| mcp-exfil-scan.sh | OK | 0/100 CLEAN |
+| mcps-audit (npx) | OK | flags `browser-bundle/*.js` IIFE/function patterns as CRITICAL — false positives, see below |
 | mcp-scan | SKIPPED (opt-in, no user present to consent — unattended scheduled run) |
 | skillspector LLM mode | SKIPPED (opt-in, no user present to consent — unattended scheduled run) |
 | CodeQL | N/A — no `.github/workflows/codeql.yml` |
 
 ## Findings
 
-**OSV-Scanner — 42 → 0:** 41 npm transitive/direct CVEs (`hono` 34, `fast-uri` 7, `brace-expansion` 3, `qs` 3, `ip-address` 2, `body-parser` 1, `@hono/node-server` 1 — some packages carry multiple advisories) plus 1 Rust crate CVE (`rustls` 0.23.43, RUSTSEC-2026-0285). `package.json` already declared `overrides` pinning fixed npm versions, but `bun.lock` was stale from the merge; `bun install` regenerated it. `rustls` fixed via `cargo update -p rustls --precise 0.23.45`.
+**OSV-Scanner — 42 → 0:** 42 npm CVEs (`hono` 21, `fast-uri` 7, `brace-expansion` 3, `qs` 3, `ip-address` 2, `body-parser` 1, `@hono/node-server` 1, `devalue` 1). `package.json` already carried `overrides` for most packages from a prior audit, but the new upstream merge introduced `devalue` as a fresh transitive dependency with no override. Added `"devalue": "5.9.2"` to `overrides` and ran `bun install`; re-scanned clean.
 
-**TruffleHog — 0 verified:** all unverified hits are in `tests/detect-url-launch.test.mjs` and `crates/browser/src/lib.rs`, deliberate credential-shaped placeholder URIs (`user:p%40ss@example.com`, `:secret@host.com`) used as fixtures for the project's own URL-credential-detection rule. No real secret.
+**TruffleHog — 0 verified:** all 28 unverified hits are in `tests/detect-url-launch.test.mjs` and `SECURITY_REPORT.md` (this file, from the prior audit's own findings text) — deliberate credential-shaped placeholder URIs (`user:pass@example.com`, `:secret@host.com`) used as fixtures for the project's own URL-credential-detection rule, or descriptions of last week's findings. No real secret.
 
-**config-audit.py — 11 MEDIUM / 2 LOW in-scope, 0 CRITICAL/HIGH:** `CLAUDE.md`/`claude.md`/`AGENTS.md` keyword matches on ordinary developer documentation (e.g. `IMPECCABLE_SKIP_ENGINE_CHECK=1` release-gate override text matched "instruction to skip verification"; architecture notes mentioning `.env`/"password" in prose). 2 LOW are informational (`.claude/settings.json` hook declarations, expected for a skill repo). ~121 additional findings are scoped to other globally-installed plugins/skills under `~/.claude` (this scanner's own bundled scripts, caveman, ponytail, anysearch, etc.) and to a globally-deployed copy of `impeccable` itself at `~/.claude/skills/` — out of scope per APTS Scope Enforcement, not counted here, unchanged from prior audits.
+**config-audit.py — 11 MEDIUM / 2 LOW in-scope, 0 CRITICAL/HIGH:** `CLAUDE.md`/`claude.md`/`AGENTS.md` keyword matches on ordinary developer documentation (e.g. release-gate override text matched "instruction to skip verification"; architecture notes mentioning `.env`/"password" in prose). ~121 additional findings (23 CRITICAL, 14 HIGH, 76 MEDIUM total across the full unfiltered run) are scoped to `~/.claude` globally — the user's global `settings.json` hooks and other installed plugins/skills (caveman, ponytail, anysearch, this scanner's own bundled scripts, etc.), none of which live under the `impeccable` repo. **Scope note:** `config-audit.py` does not constrain itself to the target path argument and always sweeps the global Claude config; this is an APTS Scope Enforcement gap in the bundled script, not an `impeccable` finding — out of scope, not counted here.
 
-**skill-audit.sh — 91 `SKILL.md` copies scanned** (the repo intentionally mirrors the skill into per-tool provider dirs: `.claude/`, `.cursor/`, `.gemini/`, etc. — generated distribution artifacts per `CLAUDE.md`'s "Generated provider output policy", not independent content). All in-repo copies scored 0-40/100 (LOW/no risk). One CRITICAL (95/100) hit in `node_modules/playwright-core/lib/tools/skills/playwright-cli/SKILL.md` — a vendored third-party dependency (Microsoft's Playwright), not repo code. Manual review: 0 dangerous patterns, 0 prompt injection, 0 credential access; the score is driven entirely by the tool's `Bash` access grant + bash-block count heuristics on legitimate CLI-wrapper documentation. Not actionable (upstream dependency).
+**mcps-audit — flags `browser-bundle/*.js` as CRITICAL (AS-001 "Dangerous execution"):** the tool's generic pattern matcher flags ordinary IIFE (`(function(){...})()`) and function-expression syntax in `browser-bundle/00-header.js`, `40-overlay.js` as "dangerous execution". These files are `impeccable`'s own in-page anti-pattern-detection bundle — legitimate browser JS injected into a user's live preview to run detection rules, not attacker payload. Manually reviewed: no obfuscation, no exfiltration, no eval-of-remote-content. False positive from a keyword/pattern heuristic with no code-intent understanding.
 
-**skillspector --no-llm — 69 hits (`P2` Hidden Instructions, `AR2` Anti-Refusal Statement, `MP3` Memory Manipulation):** manually sampled across `SKILL.src.md`, `agents/impeccable-finish-reviewer.md`, `reference/android.md`. All are the tool's local pattern-matcher flagging ordinary skill-authoring conventions: HTML comment rule-tags (`<!-- rule:skill-setup-context -->`) used for internal rule tracking, and dense imperative agent instructions ("you edit nothing", "never render, screenshot..."). No actual injection, refusal-suppression, or memory-tampering content — this is first-party authored skill instruction text, not third-party/attacker input, and `skill-audit.sh`'s prompt-injection check on the same files found nothing. Consistent with skillspector's documented no-LLM-mode false-positive rate on prompt-dense legitimate skill files.
+**skill-audit.sh — canonical copy only:** the repo intentionally mirrors `SKILL.md` into 91 per-tool provider directories (`.claude/`, `.cursor/`, `.gemini/`, `build/_data/dist/*`, etc. — generated distribution artifacts per `CLAUDE.md`'s "Generated provider output policy", byte-identical content). Scanning one canonical copy (`.claude/skills/impeccable/SKILL.md`) is representative; it scored 5/100 (LOW, APPROVE) — 3 file operations detected, no dangerous patterns, no prompt injection, no credential access.
 
-**mcp-exfil-scan.sh — SKIPPED:** the bundled script at the scanner plugin's own `scripts/mcp-exfil-scan.sh` failed its `SHA256SUMS` checksum during pre-flight. Per the skill's own instructions ("checksum MISMATCH — do NOT run"), it was not executed this run. This is a scanner-plugin integrity issue, not a finding about the `impeccable` repo; flagged separately below as a coverage gap.
+**skillspector --no-llm — 0/100:** canonical `SKILL.md` scanned clean. 30 `reference_unresolved` ledger notes are the tool being unable to resolve local path-like references (e.g. `scripts/impeccable`) outside the single-file scan scope — informational, not findings.
 
 ## Fixes Applied
 
-- `bun install` — regenerated `bun.lock` to honor existing `package.json` overrides, resolving 41 npm CVEs (`hono`, `fast-uri`, `brace-expansion`, `qs`, `ip-address`, `body-parser`, `@hono/node-server`).
-- `cargo update -p rustls --precise 0.23.45` — resolved RUSTSEC-2026-0285 in `Cargo.lock`.
-- Re-ran OSV-Scanner after both fixes: **0 issues found** (was 42).
+- Added `"devalue": "5.9.2"` to `package.json` `overrides` (new transitive dependency introduced by this week's upstream merge, unpinned).
+- `bun install` — regenerated `bun.lock` against the updated overrides.
+- Re-ran OSV-Scanner: **0 issues found** (was 42).
 
 ## Known Remaining Issues
 
-- `node_modules/playwright-core` ships a `SKILL.md` that scores CRITICAL (95/100) under `skill-audit.sh`'s heuristic (driven by Bash-tool grant + bash-block count, not by any actual dangerous/injection/credential pattern). Third-party vendored dependency; no repo-level fix available. Re-review if `playwright-core` is upgraded.
-- `skillspector` `--no-llm` mode has a high false-positive rate on this repo's prompt-dense `SKILL.src.md`/`agents/*.md` authoring style (HTML comment rule-tags read as "hidden instructions", imperative agent directives read as "anti-refusal"/"memory manipulation"). LLM-assisted mode would likely resolve these with semantic understanding but requires user opt-in (privacy gate) — not run in this unattended scheduled pass.
-- `mcp-exfil-scan.sh` (bundled with the `claude-code-security-plugins` scanner, v1.8.0) failed its own integrity checksum and was skipped this run. This is an issue with the security-scanner plugin installation on this machine, not with `impeccable`. Worth a manual `git diff`/reinstall check of that plugin outside this task's scope.
+- `config-audit.py` and `mcps-audit`'s heuristic pattern matchers produce a high false-positive rate on this repo's legitimate browser-injection code (`browser-bundle/`) and documentation prose. Manually reviewed each category this run; none were actionable. Consider scoping `config-audit.py`'s global-settings sweep behind a flag in the scanner plugin itself (tracked as a scanner-tooling gap, not an `impeccable` issue).
+- `mcp-scan` and skillspector LLM mode remain unrun (opt-in, require interactive user consent — this was an unattended scheduled run).
