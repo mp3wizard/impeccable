@@ -503,15 +503,13 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audited: **2026-09-23** | Tools run: 9 (Gitleaks 8.30.1, TruffleHog 3.97.5, Trivy 0.74.0, OSV-Scanner 2.6.0, Semgrep 1.177.0, config-audit, skill-audit, skillspector --no-llm, mcp-exfil-scan) + mcps-audit (heuristic false positives, see below)
+Last audited: **2026-09-25** | Tools run: 8 (Gitleaks, TruffleHog, Trivy, OSV-Scanner, Semgrep, Bandit, config-audit, mcp-exfil-scan)
 
-**Findings summary:** 0 secrets verified (git history + working tree, 2498 commits; TruffleHog's unverified hits are placeholder credential URLs in a URL-detector test fixture and this file's own findings text). This week's 6-commit upstream merge had one conflict (`bun.lock`, resolved `--theirs`). Gitleaks, Semgrep (OWASP/TypeScript/secrets), Trivy, and mcp-exfil-scan found 0 issues. OSV-Scanner found 42 known-fixable npm CVEs (`hono`, `fast-uri`, `brace-expansion`, `qs`, `ip-address`, `body-parser`, `@hono/node-server`, `devalue`); all fixed (see below). skill-audit.sh and skillspector `--no-llm` on the canonical `SKILL.md`: LOW risk, no issues. config-audit: 13 in-scope findings (11 MEDIUM, 2 LOW), all keyword-pattern false positives on developer-documentation prose (~121 additional findings were scoped to the user's global `~/.claude` config and unrelated plugins, out of scope for this repo; the bundled scanner script does not constrain itself to the target path). mcps-audit flagged `browser-bundle/*.js` (this project's own in-page detector JS) as CRITICAL for ordinary IIFE/function syntax, a heuristic false positive, manually reviewed.
+**Findings summary:** 0 verified secrets and 0 known CVEs (2517 commits scanned; OSV-Scanner and Trivy clean across 431 packages). This week's 4-commit upstream merge was clean (no conflicts). Semgrep (OWASP/secrets), Bandit, and mcp-exfil-scan found 0 issues. TruffleHog's 28 unverified hits are pre-existing placeholder credentials in test fixtures. config-audit reported only LOW hook-config notes from global config, out of scope.
 
-**Fixes applied:** added `devalue` to `package.json` `overrides` (new transitive dependency from this week's upstream merge, previously unpinned) and ran `bun install`, resolving all 42 OSV-Scanner findings (re-verified clean).
+**Fixes applied:** none needed.
 
-**Known remaining issues:** config-audit.py and mcps-audit's pattern matchers have a high false-positive rate on this repo's browser-injection code and documentation prose, reviewed manually each run with none actionable so far. `mcp-scan` and skillspector LLM mode remain unrun (opt-in, require interactive user consent; this was an unattended scheduled run).
-
-See [SECURITY_REPORT.md](SECURITY_REPORT.md) for the full report.
+**Known remaining issues:** config-audit.py has a high false-positive rate and scans outside the target path; reviewed manually, none actionable. `mcp-scan` and skillspector LLM mode remain unrun (opt-in, need interactive consent).
 
 ## Contributing
 
