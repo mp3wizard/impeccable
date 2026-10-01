@@ -503,13 +503,13 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audited: **2026-09-25** | Tools run: 8 (Gitleaks, TruffleHog, Trivy, OSV-Scanner, Semgrep, Bandit, config-audit, mcp-exfil-scan)
+Last audited: **2026-10-01** | Tools run: 12 (Gitleaks, TruffleHog, Trivy, OSV-Scanner, Semgrep, Bandit, config-audit, skill-audit, mcp-exfil-scan, mcps-audit, skillspector)
 
-**Findings summary:** 0 verified secrets and 0 known CVEs (2517 commits scanned; OSV-Scanner and Trivy clean across 431 packages). This week's 4-commit upstream merge was clean (no conflicts). Semgrep (OWASP/secrets), Bandit, and mcp-exfil-scan found 0 issues. TruffleHog's 28 unverified hits are pre-existing placeholder credentials in test fixtures. config-audit reported only LOW hook-config notes from global config, out of scope.
+**Findings summary:** 0 verified secrets. OSV-Scanner found 60 transitive npm CVEs (0 Critical, 17 High, 37 Medium, 6 Low) in `bun.lock` — `hono`, `fast-uri`, `brace-expansion`, `ip-address`, `undici`, `qs`, `body-parser`, `@hono/node-server`. This week's 12-commit upstream merge was clean (no conflicts). Gitleaks, Trivy, Semgrep (OWASP/TypeScript/secrets), and mcp-exfil-scan found 0 issues. skill-audit scored the SKILL.md 15/100 LOW RISK. TruffleHog's 28 unverified hits remain pre-existing placeholder credentials in test fixtures. mcps-audit flagged 564 findings against the generated browser-bundle overlay script, which are false positives (ordinary JS function declarations misclassified by an MCP-server-focused scanner); see `SECURITY_REPORT.md` for detail.
 
-**Fixes applied:** none needed.
+**Fixes applied:** bumped `brace-expansion`, `fast-uri`, `hono`, `ip-address` overrides and added an `undici` override in `package.json`; `bun install` re-resolved `bun.lock`. Re-scan with OSV-Scanner: 0 issues (was 60).
 
-**Known remaining issues:** config-audit.py has a high false-positive rate and scans outside the target path; reviewed manually, none actionable. `mcp-scan` and skillspector LLM mode remain unrun (opt-in, need interactive consent).
+**Known remaining issues:** mcps-audit's false-positive rate against generated browser-bundle JS; config-audit's substring false positives against `CLAUDE.md`/`AGENTS.md` prose. `mcp-scan` and skillspector LLM mode remain unrun (opt-in, need interactive consent — this was an unattended scheduled run).
 
 ## Contributing
 
