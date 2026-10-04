@@ -844,7 +844,7 @@ fn resolve_hook_git_exclude_target(rt: &Runtime, cwd: &str) -> Option<GitExclude
             let git_dir = resolve_git_dir(rt, &dot_git, &dir)?;
             let rel_prefix = jsp::to_posix(&rt.relative(&dir, &start));
             return Some(GitExcludeTarget {
-                path: jsp::join(&[&git_dir, "info", "exclude"]),
+                path: impeccable_common::git::info_exclude(&git_dir),
                 pattern_prefix: if rel_prefix.is_empty() || rel_prefix == "." {
                     String::new()
                 } else {
@@ -991,6 +991,7 @@ pub fn filter_findings(findings: Vec<Finding>, config: &HookConfig) -> Vec<Findi
         ignore_values: config.ignore_values.clone(),
         design_system_enabled: None,
         advisory_rules: None,
+        extensions: vec![],
     };
     filter_detection_findings(kept, &dc)
 }
