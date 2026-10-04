@@ -503,13 +503,13 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audited: **2026-10-01** | Tools run: 12 (Gitleaks, TruffleHog, Trivy, OSV-Scanner, Semgrep, Bandit, config-audit, skill-audit, mcp-exfil-scan, mcps-audit, skillspector)
+Last audited: **2026-10-04** | Tools run: 9 (Gitleaks, TruffleHog, Trivy, OSV-Scanner, Semgrep, Bandit, config-audit, skill-audit, skillspector)
 
-**Findings summary:** 0 verified secrets. OSV-Scanner found 60 transitive npm CVEs (0 Critical, 17 High, 37 Medium, 6 Low) in `bun.lock`, across `hono`, `fast-uri`, `brace-expansion`, `ip-address`, `undici`, `qs`, `body-parser`, and `@hono/node-server`. This week's 12-commit upstream merge was clean (no conflicts). Gitleaks, Trivy, Semgrep (OWASP/TypeScript/secrets), and mcp-exfil-scan found 0 issues. skill-audit scored the SKILL.md 15/100 LOW RISK. TruffleHog's 28 unverified hits remain pre-existing placeholder credentials in test fixtures. mcps-audit flagged 564 findings against the generated browser-bundle overlay script, which are false positives (ordinary JS function declarations misclassified by an MCP-server-focused scanner); see `SECURITY_REPORT.md` for detail.
+**Findings summary:** 0 verified secrets; 0 Gitleaks leaks across 2674 commits. OSV-Scanner found 7 advisories in one direct dependency, `devalue` 5.9.2 (4 High, 2 Medium, 1 Low). Trivy, Semgrep (OWASP/secrets), and Gitleaks found 0 issues. skill-audit scored the impeccable SKILL.md 5–15/100 LOW RISK. TruffleHog's 30 unverified hits are placeholder URIs in `SECURITY_REPORT.md`. config-audit's CRITICAL/HIGH hits are heuristic matches in other plugins' caches, not this repo. skillspector reported 1062 heuristic results, mostly in generated provider copies, not yet triaged. See `SECURITY_REPORT.md` for detail.
 
-**Fixes applied:** bumped `brace-expansion`, `fast-uri`, `hono`, `ip-address` overrides and added an `undici` override in `package.json`; `bun install` re-resolved `bun.lock`. Re-scan with OSV-Scanner: 0 issues (was 60).
+**Fixes applied:** bumped `devalue` to `5.9.3` in `package.json`; `bun install` re-resolved `bun.lock`. Re-scan with OSV-Scanner: no issues (was 7).
 
-**Known remaining issues:** mcps-audit's false-positive rate against generated browser-bundle JS; config-audit's substring false positives against `CLAUDE.md`/`AGENTS.md` prose. `mcp-scan` and skillspector LLM mode remain unrun (opt-in, need interactive consent; this was an unattended scheduled run).
+**Known remaining issues:** mcp-exfil-scan not run (bundled script failed its SHA256 check, so it was skipped; reinstall the security plugin to restore). config-audit and skillspector findings need manual triage. `mcp-scan` and skillspector LLM mode remain unrun (opt-in, need interactive consent; this was an unattended scheduled run).
 
 ## Contributing
 
