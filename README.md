@@ -503,13 +503,13 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audited: **2026-10-04** | Tools run: 9 (Gitleaks, TruffleHog, Trivy, OSV-Scanner, Semgrep, Bandit, config-audit, skill-audit, skillspector)
+Last audited: **2026-10-05** | Tools run: 8 (Gitleaks, TruffleHog, Trivy, OSV-Scanner, Semgrep x2, config-audit, mcp-exfil-scan, skill-audit)
 
-**Findings summary:** 0 verified secrets; 0 Gitleaks leaks across 2674 commits. OSV-Scanner found 7 advisories in one direct dependency, `devalue` 5.9.2 (4 High, 2 Medium, 1 Low). Trivy, Semgrep (OWASP/secrets), and Gitleaks found 0 issues. skill-audit scored the impeccable SKILL.md 5–15/100 LOW RISK. TruffleHog's 30 unverified hits are placeholder URIs in `SECURITY_REPORT.md`. config-audit's CRITICAL/HIGH hits are heuristic matches in other plugins' caches, not this repo. skillspector reported 1062 heuristic results, mostly in generated provider copies, not yet triaged. See `SECURITY_REPORT.md` for detail.
+**Findings summary:** 0 findings. Gitleaks: no leaks in 2858 commits. TruffleHog: 0 verified secrets (18 unverified hits are `user:pass@example.com` placeholders in upstream fixtures). Trivy and OSV-Scanner: 0 vulnerabilities across bun.lock and Cargo.lock. Semgrep (OWASP, secrets): 0 findings. mcp-exfil-scan: 0/100 CLEAN. skill-audit: no CRITICAL/HIGH. config-audit: 6 LOW (hook configs in other plugins, not this repo). See `SECURITY_REPORT.md`.
 
-**Fixes applied:** bumped `devalue` to `5.9.3` in `package.json`; `bun install` re-resolved `bun.lock`. Re-scan with OSV-Scanner: no issues (was 7).
+**Fixes applied:** none needed.
 
-**Known remaining issues:** mcp-exfil-scan not run (bundled script failed its SHA256 check, so it was skipped; reinstall the security plugin to restore). config-audit and skillspector findings need manual triage. `mcp-scan` and skillspector LLM mode remain unrun (opt-in, need interactive consent; this was an unattended scheduled run).
+**Known remaining issues:** `mcp-scan` and skillspector LLM mode not run (opt-in, need interactive consent). Semgrep skips files over 300 KB.
 
 ## Contributing
 
