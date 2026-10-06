@@ -503,13 +503,7 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audited: **2026-10-05** | Tools run: 8 (Gitleaks, TruffleHog, Trivy, OSV-Scanner, Semgrep x2, config-audit, mcp-exfil-scan, skill-audit)
-
-**Findings summary:** 0 findings. Gitleaks: no leaks in 2858 commits. TruffleHog: 0 verified secrets (18 unverified hits are `user:pass@example.com` placeholders in upstream fixtures). Trivy and OSV-Scanner: 0 vulnerabilities across bun.lock and Cargo.lock. Semgrep (OWASP, secrets): 0 findings. mcp-exfil-scan: 0/100 CLEAN. skill-audit: no CRITICAL/HIGH. config-audit: 6 LOW (hook configs in other plugins, not this repo). See `SECURITY_REPORT.md`.
-
-**Fixes applied:** none needed.
-
-**Known remaining issues:** `mcp-scan` and skillspector LLM mode not run (opt-in, need interactive consent). Semgrep skips files over 300 KB.
+Last audit: 2026-10-06. Tools run: 7 (gitleaks, trufflehog, osv-scanner, trivy, bandit, config-audit, mcp-exfil-scan; semgrep timed out). Findings: 1 critical (proxy-addr GHSA-jqcg-44mw-7w3h). Fixes: proxy-addr pinned to 2.0.8 via overrides. See SECURITY_REPORT.md.
 
 ## Contributing
 
