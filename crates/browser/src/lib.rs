@@ -14,28 +14,45 @@
 //! a single URL uses `detect_url` (`waitUntil: 'networkidle0'`, `settleMs:
 //! 0`); several URLs share one browser through [`SharedBrowser`]
 //! (`createBrowserDetector()`: `waitUntil: 'load'`, `settleMs: 100`).
+//!
+//! Before any rule runs, the loaded page is classified ([`validity`]): a bot
+//! challenge or an HTTP error page is refused with an error instead of being
+//! scanned and reported clean.
+//!
+//! Two entry points serve measurement work rather than the CLI.
+//! [`detect_url_evidence`] runs the same scan and also returns what a
+//! reviewer needs to check the findings (the captures and hit-test answers,
+//! element rects, a screenshot). [`replay_url_scan`] re-runs the deterministic
+//! passes over a recorded capture with no browser, so a rule change can be
+//! measured against saved pages.
 
 pub mod cdp;
 pub mod response_capture;
 pub mod html_snapshot;
 pub mod discovery;
+pub mod fullpage;
 pub mod screenshot_contrast;
 pub mod snapshot_engine;
+pub mod validity;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use impeccable_core::browser::driver::{collect_browser_findings, serialize_findings};
+use impeccable_core::browser::dom::{Dom, ElId};
 use impeccable_core::browser::page_checks::measure_hidden_text_dom;
+use impeccable_core::browser::snapshot::{Facts, SnapshotDom};
 use impeccable_core::checks::measures::{check_content_hidden_at_rest, ContentHiddenInput};
 use impeccable_core::findings::{try_finding, Finding};
 use impeccable_detect::design_system::DesignSystem;
 use impeccable_detect::engines::{EngineError, ScanOptions, SharedBrowser, UrlEngine};
 use impeccable_detect::profiler::{DetectorProfile, ProfileMeta};
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 
 use cdp::{Browser, CdpError, Page, Viewport};
+pub use fullpage::ElementShot;
+use validity::{DocumentResponse, PageProbe, PageValidity};
 
 /// puppeteer's default `page.goto` timeout the JS passes explicitly.
 const NAVIGATION_TIMEOUT: Duration = Duration::from_millis(30000);
@@ -77,7 +94,7 @@ impl BrowserEngine {
     }
 
     /// `launchBrowser()`: discover, then launch headless.
-    fn launch(&self) -> Result<Browser, EngineError> {
+    pub fn launch(&self) -> Result<Browser, EngineError> {
         let exe = discovery::find_browser(&self.env).map_err(EngineError::new)?;
         Browser::launch(&exe, &self.launch_args(), self.dangerous_no_sandbox())
             .map_err(|e| EngineError::new(e.message))
@@ -230,12 +247,126 @@ pub fn serialize_design_system_for_browser(ds: Option<&DesignSystem>) -> Value {
     })
 }
 
+/// The pass that produced a finding, as [`Evidence::origins`] names it.
+pub mod origin {
+    /// The deterministic rule pass over the post-reveal capture. Replayable.
+    pub const SCAN: &str = "scan";
+    /// `content-hidden-at-rest`, over the post-reveal capture. Replayable.
+    pub const CONTENT_HIDDEN: &str = "content-hidden";
+    /// Uncaught page errors. Recorded, not replayable.
+    pub const SCRIPT_ERROR: &str = "script-error";
+    /// The visual-contrast pass (image and pixel reads). Recorded, not
+    /// replayable.
+    pub const VISUAL_CONTRAST: &str = "visual-contrast";
+}
+
 /// A pre-registry finding as `detectUrl` accumulates them.
 struct RawResult {
     id: String,
     snippet: String,
     ignore_value: String,
     severity: String,
+    /// The flagged element's selector, when the pass names an element.
+    selector: Option<String>,
+    origin: &'static str,
+    /// The flagged element in the scan's capture, when the pass knows it. A
+    /// generated selector names one element unless the page repeats an id,
+    /// and the evidence resolves the selector to this element (see
+    /// [`scan_identities`]).
+    scan_el: Option<ElId>,
+}
+
+impl RawResult {
+    fn new(origin: &'static str, id: String, snippet: String) -> RawResult {
+        RawResult {
+            id,
+            snippet,
+            ignore_value: String::new(),
+            severity: String::new(),
+            selector: None,
+            origin,
+            scan_el: None,
+        }
+    }
+}
+
+/// What [`detect_url_evidence`] records next to the findings.
+#[derive(Debug, Default)]
+pub struct Evidence {
+    /// The main document's final HTTP response, when one was seen.
+    pub response: Option<DocumentResponse>,
+    /// The in-page probe the validity gate ran.
+    pub probe: Option<PageProbe>,
+    /// The validity verdict. A blocked page has no captures and no findings.
+    pub validity: Option<PageValidity>,
+    /// The post-reveal capture's JSON, which every deterministic pass ran over.
+    pub scan_snapshot: Option<String>,
+    /// Every hit test answered for that capture, by all of its passes.
+    pub scan_facts: Facts,
+    /// Unset: the passes share one capture, so there is no second one to
+    /// record. A recording made before they shared it carries its separate
+    /// post-reveal capture here, and [`replay_url_scan`] still reads it.
+    pub reveal_snapshot: Option<String>,
+    /// Every hit test answered for [`Evidence::reveal_snapshot`].
+    pub reveal_facts: Facts,
+    /// Parallel to the findings: which pass produced each (see [`origin`]).
+    pub origins: Vec<&'static str>,
+    /// Document-coordinate `[x, y, width, height]` of each flagged selector,
+    /// measured after the scan, so they match [`Evidence::screenshot`].
+    pub element_rects: Map<String, Value>,
+    /// Per flagged selector, measured after the scan: `{ tag, text, html,
+    /// styles }` (text and html truncated; a fixed set of computed styles).
+    pub element_details: Map<String, Value>,
+    pub screenshot: Option<Screenshot>,
+    /// Why no screenshot was taken, when one was requested and failed.
+    pub screenshot_error: Option<String>,
+    /// A viewport shot per flagged selector whose rect falls outside
+    /// [`Evidence::screenshot`] (past its cut or its right edge), taken with
+    /// the element scrolled into view. See [`fullpage`].
+    pub element_shots: Vec<ElementShot>,
+}
+
+/// A full-page screenshot taken after the scan. Its pixels line up with
+/// [`Evidence::element_rects`].
+#[derive(Debug, Clone)]
+pub struct Screenshot {
+    pub jpeg_base64: String,
+    /// CSS pixels (the scan uses a device scale factor of 1). The document's
+    /// scroll width, at least the viewport's.
+    pub width: f64,
+    pub height: f64,
+    /// The page's height, with an inner page scroller unrolled; larger than
+    /// `height` when the capture was cut.
+    pub document_height: f64,
+    /// How it was captured, one of [`fullpage::method`].
+    pub method: &'static str,
+    /// The document x of the image's left edge, in CSS pixels: an element
+    /// rect's image x is its `x` minus this (its y needs no shift). 0 for most
+    /// pages. Negative when the document scrolls from the right (a
+    /// right-to-left page wider than the viewport), whose overflow lies at
+    /// negative document x: the image starts at the left edge of that
+    /// overflow, or, when [`fullpage::MAX_SCREENSHOT_WIDTH`] cuts it, as far
+    /// left as keeps the viewport in the image.
+    pub origin_x: f64,
+}
+
+/// What [`detect_url_evidence`] should capture beyond the findings.
+#[derive(Debug, Clone)]
+pub struct EvidenceRequest {
+    pub screenshot: bool,
+    /// Cut the screenshot at this height (CSS pixels).
+    pub max_screenshot_height: f64,
+    pub jpeg_quality: u32,
+}
+
+impl Default for EvidenceRequest {
+    fn default() -> Self {
+        EvidenceRequest {
+            screenshot: true,
+            max_screenshot_height: 12000.0,
+            jpeg_quality: 82,
+        }
+    }
 }
 
 fn cdp_err(e: CdpError) -> EngineError {
@@ -318,6 +449,14 @@ fn js_str_or_empty(v: Option<&Value>) -> String {
     }
 }
 
+/// A non-empty `selector` field.
+fn selector_of(v: &Value) -> Option<String> {
+    v.get("selector")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+}
+
 /// `detectUrl(url, options)` with the wait/settle defaults the caller picks
 /// and an optional shared browser (`options.browser`).
 fn detect_url_impl(
@@ -335,11 +474,6 @@ fn detect_url_impl(
     let url = url.as_str();
     let credentials = credentials.as_ref();
     let profile = options.profile.as_deref();
-    let (vw, vh) = options.viewport.unwrap_or((1280, 800));
-    let viewport = Viewport {
-        width: vw,
-        height: vh,
-    };
     let owns_browser = external.is_none();
     let mut owned: Option<Browser> = None;
     let browser: &mut Browser = match external {
@@ -360,22 +494,110 @@ fn detect_url_impl(
         }
     };
 
-    let page = step(profile, "load", "new-page", url, || browser.new_page()).map_err(cdp_err);
-    let scanned = match page {
-        Ok(page) => scan_page(
-            page, url, credentials, options, wait_until, settle_ms, viewport, profile,
-        ),
-        Err(e) => Err(e),
-    };
+    let scanned = scan_on_browser(
+        browser, url, credentials, options, wait_until, settle_ms, profile, None,
+    );
     // finally: close page (inside scan_page) and the browser when owned.
     if owns_browser {
         if let Some(b) = owned.take() {
             step(profile, "load", "close-browser", url, || b.close());
         }
     }
-    let results = scanned?;
+    let (findings, _) = results_to_findings(url, scanned?)?;
+    Ok(findings)
+}
 
+/// Run the URL engine's scan on a browser the caller owns and also return
+/// the [`Evidence`] a reviewer needs to check each finding. The findings are
+/// the ones `impeccable detect --json <url>` prints for the same page and
+/// wait strategy. A blocked page returns no findings and an `Ok` with
+/// [`Evidence::validity`] set, instead of the CLI's error.
+pub fn detect_url_evidence(
+    browser: &mut Browser,
+    url: &str,
+    options: &ScanOptions,
+    wait_until: &str,
+    settle_ms: u64,
+    request: &EvidenceRequest,
+) -> Result<(Vec<Finding>, Evidence), EngineError> {
+    let (url, credentials) = split_scan_url(url);
+    let mut evidence = Evidence::default();
+    let results = scan_on_browser(
+        browser,
+        &url,
+        credentials.as_ref(),
+        options,
+        wait_until,
+        settle_ms,
+        options.profile.as_deref(),
+        Some((&mut evidence, request)),
+    )?;
+    let (findings, origins) = results_to_findings(&url, results)?;
+    evidence.origins = origins;
+    Ok((findings, evidence))
+}
+
+/// The outcome of [`replay_url_scan`].
+#[derive(Debug)]
+pub struct ReplayOutcome {
+    /// Findings from the replayable passes ([`origin::SCAN`],
+    /// [`origin::CONTENT_HIDDEN`]), in the order a live scan emits them.
+    pub findings: Vec<Finding>,
+    /// Hit tests the rules asked for that the recording cannot answer. Zero
+    /// for an unchanged engine; a rule change that probes new points reports
+    /// them here, and its findings for those points are an undercount.
+    pub unanswered_hit_tests: usize,
+}
+
+/// Re-run the deterministic passes over a recorded capture, with no browser.
+/// Both passes read the post-reveal capture, as the live scan does: that is
+/// `reveal` when the recording kept it separately (a recording made before the
+/// passes shared one capture), otherwise `scan_snapshot` itself, which
+/// [`Evidence::scan_snapshot`] now records post-reveal.
+///
+/// Replaying a separate pair is an undercount: the recorded `reveal` facts
+/// answer only the hit tests the hidden-text measure asked for, so the rule
+/// pass's own points come back in [`ReplayOutcome::unanswered_hit_tests`].
+pub fn replay_url_scan(
+    url: &str,
+    scan_snapshot: &str,
+    scan_facts: &Facts,
+    reveal: Option<(&str, &Facts)>,
+    options: &ScanOptions,
+) -> Result<ReplayOutcome, EngineError> {
+    let config = snapshot_engine::browser_config(
+        serialize_design_system_for_browser(options.design_system.as_deref()),
+        options.rule_pack,
+    );
+    let (snapshot, facts) = reveal.unwrap_or((scan_snapshot, scan_facts));
+    let dom = snapshot_engine::parse_snapshot(snapshot).map_err(cdp_err)?;
+    dom.add_facts(facts);
+    let collected = collect_browser_findings(&dom, &config);
+    let mut unanswered = dom.take_needs().hit_tests.len();
+    let groups = serialize_findings(&dom, &collected.groups);
+    let mut results = results_from_groups(groups.as_array().map(Vec::as_slice).unwrap_or(&[]));
+    let measured = measure_hidden_text_dom(&dom);
+    unanswered += dom.take_needs().hit_tests.len();
+    results.extend(content_hidden_results(
+        measured.total_chars,
+        measured.hidden_chars,
+        measured.hidden_samples,
+    ));
+    let (findings, _) = results_to_findings(url, results)?;
+    Ok(ReplayOutcome {
+        findings,
+        unanswered_hit_tests: unanswered,
+    })
+}
+
+/// Map raw results onto registry findings, returning each one's origin
+/// alongside.
+fn results_to_findings(
+    url: &str,
+    results: Vec<RawResult>,
+) -> Result<(Vec<Finding>, Vec<&'static str>), EngineError> {
     let mut findings = Vec::with_capacity(results.len());
+    let mut origins = Vec::with_capacity(results.len());
     for r in results {
         let Some(mut item) = try_finding(&r.id, url, &r.snippet, 0.0) else {
             // JS: `finding()` dereferences an unknown registry entry.
@@ -387,13 +609,83 @@ fn detect_url_impl(
             item.extras
                 .insert("ignoreValue".into(), Value::String(r.ignore_value));
         }
+        if let Some(selector) = r.selector {
+            item.extras.insert("selector".into(), Value::String(selector));
+        }
         if !r.severity.is_empty() && r.severity != item.severity {
             item.severity = r.severity;
         }
         impeccable_core::findings::derive_advisory_flag(&mut item);
         findings.push(item);
+        origins.push(r.origin);
     }
-    Ok(findings)
+    Ok((findings, origins))
+}
+
+/// Flatten `serialize_findings` groups into raw results, each carrying its
+/// group's selector.
+fn results_from_groups(groups: &[Value]) -> Vec<RawResult> {
+    let mut out = Vec::new();
+    for group in groups {
+        let Some(findings) = group.get("findings").and_then(Value::as_array) else {
+            continue;
+        };
+        let selector = selector_of(group);
+        for f in findings {
+            out.push(RawResult {
+                id: js_str(f.get("type")),
+                snippet: js_str(f.get("detail")),
+                ignore_value: js_str_or_empty(f.get("ignoreValue")),
+                severity: js_str_or_empty(f.get("severity")),
+                selector: selector.clone(),
+                origin: origin::SCAN,
+                scan_el: None,
+            });
+        }
+    }
+    out
+}
+
+fn content_hidden_results(
+    total_chars: f64,
+    hidden_chars: f64,
+    hidden_samples: Vec<String>,
+) -> Vec<RawResult> {
+    let input = ContentHiddenInput {
+        total_chars,
+        hidden_chars,
+        hidden_samples,
+    };
+    check_content_hidden_at_rest(&input)
+        .into_iter()
+        .map(|f| RawResult::new(origin::CONTENT_HIDDEN, f.id, f.snippet))
+        .collect()
+}
+
+/// A new page on `browser`, scanned, then closed.
+#[allow(clippy::too_many_arguments)]
+fn scan_on_browser(
+    browser: &mut Browser,
+    url: &str,
+    credentials: Option<&ScanCredentials>,
+    options: &ScanOptions,
+    wait_until: &str,
+    settle_ms: u64,
+    profile: Option<&DetectorProfile>,
+    evidence: Option<(&mut Evidence, &EvidenceRequest)>,
+) -> Result<Vec<RawResult>, EngineError> {
+    let (vw, vh) = options.viewport.unwrap_or((1280, 800));
+    let viewport = Viewport {
+        width: vw,
+        height: vh,
+    };
+    let page = step(profile, "load", "new-page", url, || browser.new_page()).map_err(cdp_err);
+    match page {
+        Ok(page) => scan_page(
+            page, url, credentials, options, wait_until, settle_ms, viewport, profile, evidence,
+        ),
+        Err(e) => Err(e),
+    }
 }
 
 /// Everything between `newPage` and the `finally` that closes the page.
@@ -407,6 +699,7 @@ fn scan_page(
     settle_ms: u64,
     viewport: Viewport,
     profile: Option<&DetectorProfile>,
+    evidence: Option<(&mut Evidence, &EvidenceRequest)>,
 ) -> Result<Vec<RawResult>, EngineError> {
     let outcome = scan_page_inner(
         &mut page,
@@ -417,9 +710,30 @@ fn scan_page(
         settle_ms,
         viewport,
         profile,
+        evidence,
     );
     step(profile, "load", "close-page", url, || page.close());
     outcome
+}
+
+/// Probe the loaded page and classify it. A probe that fails because the page
+/// navigated underneath it (a challenge redirecting on its own) is retried
+/// once after a short wait.
+fn check_validity(page: &mut Page<'_>) -> Result<(Option<DocumentResponse>, PageProbe, PageValidity), CdpError> {
+    let js = validity::probe_js();
+    let raw = match page.evaluate_value(&js) {
+        Ok(v) => v,
+        Err(_) => {
+            std::thread::sleep(Duration::from_millis(1000));
+            page.evaluate_value(&js)?
+        }
+    };
+    let probe = PageProbe::from_value(&raw);
+    let response = page
+        .main_document_response()
+        .and_then(|r| DocumentResponse::from_cdp(&r));
+    let verdict = validity::classify(response.as_ref(), &probe);
+    Ok((response, probe, verdict))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -432,6 +746,7 @@ fn scan_page_inner(
     settle_ms: u64,
     viewport: Viewport,
     profile: Option<&DetectorProfile>,
+    mut evidence: Option<(&mut Evidence, &EvidenceRequest)>,
 ) -> Result<Vec<RawResult>, EngineError> {
     step(profile, "load", "set-viewport", url, || {
         page.set_viewport(viewport)
@@ -453,6 +768,25 @@ fn scan_page_inner(
         });
     }
 
+    // A challenge or error page is not the site: refuse to report on it.
+    let (response, probe, verdict) =
+        step(profile, "load", "validity", url, || check_validity(page)).map_err(cdp_err)?;
+    let blocked = verdict.error_message();
+    if let Some((ev, _)) = evidence.as_mut() {
+        ev.response = response;
+        ev.probe = Some(probe);
+        ev.validity = Some(verdict);
+    }
+    if let Some(message) = blocked {
+        return match evidence {
+            None => Err(EngineError::new(message)),
+            Some((ev, request)) => {
+                capture_post_scan(page, ev, request, &[], &Map::new());
+                Ok(Vec::new())
+            }
+        };
+    }
+
     // Inject the plain-JS snapshot producer (no WebAssembly runs in the page).
     step(profile, "scan", "inject-snapshot-script", url, || {
         snapshot_engine::ensure_snapshot_js(page)
@@ -464,83 +798,266 @@ fn scan_page_inner(
         options.rule_pack,
     );
 
-    // Deterministic pass: capture the page and run the rule core natively over
-    // the snapshot (hit-test misses answered to a fixpoint). serialize_findings
-    // reproduces the same per-finding fields (type/detail/ignoreValue/severity)
-    // and order the in-page bundle's `impeccableDetect({ serialize: true })`
-    // produced; the group selectors feed the visual pass below.
+    // Reveal sweep before anything is measured: scroll the page top to bottom
+    // and back, so scroll-reveal content is at the opacity a visitor sees it at
+    // rather than the 0 it sits at until its section is reached. The element
+    // checks skip an element at effective opacity <= 0.02, so a capture taken
+    // before the sweep hides whole pages of text from the rule pass.
+    step(profile, "scan", "reveal-sweep", url, || reveal_sweep(page)).map_err(cdp_err)?;
+
+    // The one capture every pass below reads: the rule pass, the hidden-text
+    // measure, and the visual pass share this DOM, so a hit test any of them
+    // answers is answered for all three. The sweep leaves the page revealed and
+    // scrolled to the top, which is the scroll-0 snapshot the in-page path
+    // measured and analyzed.
+    let base_json = snapshot_engine::capture_snapshot_json(page).map_err(cdp_err)?;
+    let base = snapshot_engine::parse_snapshot(&base_json).map_err(cdp_err)?;
+    if let Some((ev, _)) = evidence.as_mut() {
+        ev.scan_snapshot = Some(base_json);
+    }
+
+    // Deterministic pass: run the rule core natively over the snapshot
+    // (hit-test misses answered to a fixpoint). serialize_findings reproduces
+    // the same per-finding fields (type/detail/ignoreValue/severity) and order
+    // the in-page bundle's `impeccableDetect({ serialize: true })` produced; the
+    // group selectors feed the visual pass below.
     let mut serialized_groups: Vec<Value> = Vec::new();
     let mut results = step_findings(profile, "scan", "browser-scan", url, || {
-        let dom = snapshot_engine::capture_snapshot(page).map_err(cdp_err)?;
-        let collected =
-            snapshot_engine::resolve_needs(&dom, page, |d| collect_browser_findings(d, &config))
-                .map_err(cdp_err)?;
-        serialized_groups = serialize_findings(&dom, &collected.groups)
+        let facts = evidence.as_mut().map(|(ev, _)| &mut ev.scan_facts);
+        let collected = snapshot_engine::resolve_needs_recording(
+            &base,
+            page,
+            |d| collect_browser_findings(d, &config),
+            facts,
+        )
+        .map_err(cdp_err)?;
+        serialized_groups = serialize_findings(&base, &collected.groups)
             .as_array()
             .cloned()
             .unwrap_or_default();
-        let mut out = Vec::new();
-        for group in &serialized_groups {
-            let Some(findings) = group.get("findings").and_then(Value::as_array) else {
-                continue;
-            };
-            for f in findings {
-                out.push(RawResult {
-                    id: js_str(f.get("type")),
-                    snippet: js_str(f.get("detail")),
-                    ignore_value: js_str_or_empty(f.get("ignoreValue")),
-                    severity: js_str_or_empty(f.get("severity")),
-                });
+        let mut results = results_from_groups(&serialized_groups);
+        // One serialized group per finding group, one result per finding, in
+        // order. Anything else leaves the elements unset, and the evidence
+        // resolves those selectors as before.
+        let counts = collected.groups.iter().map(|g| g.findings.len()).sum::<usize>();
+        if counts == results.len() {
+            let els = collected
+                .groups
+                .iter()
+                .flat_map(|g| std::iter::repeat(g.el).take(g.findings.len()));
+            for (r, el) in results.iter_mut().zip(els) {
+                r.scan_el = Some(el);
             }
         }
-        Ok::<_, EngineError>(out)
+        Ok::<_, EngineError>(results)
     })?;
 
-    // content-hidden-at-rest: reveal sweep, then one post-reveal capture the
-    // hidden-text measure and the visual pass share (the reveal sweep leaves the
-    // page revealed and scrolled to the top — the scroll-0 snapshot the in-page
-    // path measured and analyzed).
-    step(profile, "scan", "reveal-sweep", url, || reveal_sweep(page)).map_err(cdp_err)?;
-    let base = snapshot_engine::capture_snapshot(page).map_err(cdp_err)?;
-
+    // content-hidden-at-rest: what is still hidden once the reveal handlers
+    // have run, measured over the same post-reveal capture.
     let hidden = step_findings(profile, "scan", "content-hidden-at-rest", url, || {
-        let measured =
-            snapshot_engine::resolve_needs(&base, page, |d| measure_hidden_text_dom(d)).map_err(cdp_err)?;
-        let input = ContentHiddenInput {
-            total_chars: measured.total_chars,
-            hidden_chars: measured.hidden_chars,
-            hidden_samples: measured.hidden_samples,
-        };
-        Ok::<_, EngineError>(
-            check_content_hidden_at_rest(&input)
-                .into_iter()
-                .map(|f| RawResult {
-                    id: f.id,
-                    snippet: f.snippet,
-                    ignore_value: String::new(),
-                    severity: String::new(),
-                })
-                .collect(),
+        let facts = evidence.as_mut().map(|(ev, _)| &mut ev.scan_facts);
+        let measured = snapshot_engine::resolve_needs_recording(
+            &base,
+            page,
+            |d| measure_hidden_text_dom(d),
+            facts,
         )
+        .map_err(cdp_err)?;
+        Ok::<_, EngineError>(content_hidden_results(
+            measured.total_chars,
+            measured.hidden_chars,
+            measured.hidden_samples,
+        ))
     })?;
     results.extend(hidden);
 
-    for message in page.page_errors().into_iter().take(3) {
-        results.push(RawResult {
-            id: "script-error".to_string(),
-            snippet: message,
-            ignore_value: String::new(),
-            severity: String::new(),
-        });
+    for error in page.page_errors().into_iter().take(3) {
+        // The message alone rarely says which script failed (`Uncaught
+        // [object Object]`, a minified React invariant), so the finding names
+        // where it was thrown.
+        let snippet = match error.source {
+            Some(source) => format!("{} ({source})", error.message),
+            None => error.message,
+        };
+        results.push(RawResult::new(
+            origin::SCRIPT_ERROR,
+            "script-error".to_string(),
+            snippet,
+        ));
     }
 
     let analyses = step(profile, "visual-contrast", "browser-analyze", url, || {
         snapshot_engine::analyze_visual_contrast(page, &base, 12.0, true)
     })
     .map_err(cdp_err)?;
-    let visual = run_visual_contrast_fallback(page, &analyses, &serialized_groups, viewport, profile, url)?;
+    let mut visual = run_visual_contrast_fallback(page, &analyses, &serialized_groups, viewport, profile, url)?;
+    if evidence.is_some() {
+        for r in visual.iter_mut() {
+            r.scan_el = r.selector.as_deref().and_then(|s| visual_scan_element(&base, s, &analyses));
+        }
+    }
     results.extend(visual);
+
+    if let Some((ev, request)) = evidence {
+        let mut selectors: Vec<String> = Vec::new();
+        for r in &results {
+            if let Some(s) = &r.selector {
+                if !selectors.contains(s) {
+                    selectors.push(s.clone());
+                }
+            }
+        }
+        let identities = scan_identities(&base, &results);
+        capture_post_scan(page, ev, request, &selectors, &identities);
+    }
     Ok(results)
+}
+
+/// Per flagged selector the scan's capture matched on more than one element,
+/// `[n, count]`: the flagged element is the `n`th of `count` matches, in
+/// document order. A generated selector names one element unless an id
+/// anchors it and the page repeats that id (a search box rendered once per
+/// breakpoint), and then `querySelector` returns the first copy, which can be
+/// a collapsed duplicate the scan never scored. The evidence takes the `n`th
+/// match while the page still has `count` of them, and `querySelector`'s
+/// answer otherwise. The first result naming a selector decides, as it does
+/// for [`Evidence::element_rects`]; a selector matched once, or a result with
+/// no known element, is left out.
+fn scan_identities(dom: &SnapshotDom, results: &[RawResult]) -> Map<String, Value> {
+    let mut out = Map::new();
+    let mut seen: Vec<&str> = Vec::new();
+    for r in results {
+        let Some(selector) = r.selector.as_deref() else { continue };
+        if seen.contains(&selector) {
+            continue;
+        }
+        seen.push(selector);
+        // Without an id the generator checks that its selector is unique.
+        if !selector.contains('#') {
+            continue;
+        }
+        let Some(el) = r.scan_el else { continue };
+        let Ok(matches) = dom.query_all(None, selector) else { continue };
+        if matches.len() < 2 {
+            continue;
+        }
+        if let Some(n) = matches.iter().position(|m| *m == el) {
+            out.insert(selector.to_string(), json!([n, matches.len()]));
+        }
+    }
+    out
+}
+
+/// The element a visual-contrast result on `selector` was measured on: the
+/// match whose box gives the clip of every analysis on that selector (the
+/// collector's `clip`, from the capture's rect and scroll). `None` when no
+/// single match gives them all, and for a selector with no id, which names
+/// one element.
+fn visual_scan_element(dom: &SnapshotDom, selector: &str, analyses: &[Value]) -> Option<ElId> {
+    if !selector.contains('#') {
+        return None;
+    }
+    let matches = dom.query_all(None, selector).ok()?;
+    if matches.len() < 2 {
+        return matches.first().copied();
+    }
+    let (sx, sy) = (dom.scroll_x(), dom.scroll_y());
+    let clip_of = |el: ElId| {
+        let r = dom.rect(el);
+        [
+            (r.left + sx - 2.0).floor().max(0.0),
+            (r.top + sy - 2.0).floor().max(0.0),
+            (r.width + 4.0).ceil().max(1.0),
+            (r.height + 4.0).ceil().max(1.0),
+        ]
+    };
+    let mut found: Option<ElId> = None;
+    for analysis in analyses
+        .iter()
+        .filter(|a| a.get("selector").and_then(Value::as_str) == Some(selector))
+    {
+        let clip = analysis.get("clip")?;
+        let num = |k: &str| clip.get(k).and_then(Value::as_f64);
+        let want = [num("x")?, num("y")?, num("width")?, num("height")?];
+        let hits: Vec<ElId> = matches.iter().copied().filter(|el| clip_of(*el) == want).collect();
+        match (hits.as_slice(), found) {
+            ([el], None) => found = Some(*el),
+            ([el], Some(f)) if *el == f => {}
+            _ => return None,
+        }
+    }
+    found
+}
+
+/// Element rects, the screenshot and the element shots, after every pass has
+/// run, so a live scan and an evidence scan drive the page identically up to
+/// here. Failures are recorded on the evidence, never raised: the findings
+/// stand without them.
+fn capture_post_scan(
+    page: &mut Page<'_>,
+    ev: &mut Evidence,
+    request: &EvidenceRequest,
+    selectors: &[String],
+    identities: &Map<String, Value>,
+) {
+    if !selectors.is_empty() {
+        let expr = format!(
+            r#"(() => {{
+  const props = ['display', 'position', 'font-family', 'font-size', 'font-weight', 'font-style', 'line-height', 'letter-spacing', 'text-transform', 'text-align', 'color', 'background-color', 'background-image', 'border', 'border-radius', 'box-shadow', 'padding', 'margin', 'width', 'height', 'max-width', 'opacity'];
+  const resolve = {resolve};
+  const identities = {ids};
+  const rects = {{}};
+  const details = {{}};
+  for (const s of {sels}) {{
+    try {{
+      const el = resolve(s, identities[s]);
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      rects[s] = [r.x + window.scrollX, r.y + window.scrollY, r.width, r.height];
+      const cs = getComputedStyle(el);
+      const styles = {{}};
+      for (const p of props) styles[p] = cs.getPropertyValue(p);
+      details[s] = {{
+        tag: el.tagName.toLowerCase(),
+        text: (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 300),
+        html: (el.outerHTML || '').slice(0, 1500),
+        styles,
+      }};
+    }} catch (e) {{}}
+  }}
+  return {{ rects, details }};
+}})()"#,
+            sels = json!(selectors),
+            resolve = fullpage::RESOLVE_FLAGGED_JS,
+            ids = Value::Object(identities.clone()),
+        );
+        if let Ok(v) = page.evaluate_value(&expr) {
+            if let Some(Value::Object(m)) = v.get("rects") {
+                ev.element_rects = m.clone();
+            }
+            if let Some(Value::Object(m)) = v.get("details") {
+                ev.element_details = m.clone();
+            }
+        }
+    }
+    if !request.screenshot {
+        return;
+    }
+    match fullpage::capture_full_page(page, request.max_screenshot_height, request.jpeg_quality) {
+        Ok(shot) => {
+            ev.element_shots = fullpage::capture_element_shots(
+                page,
+                &ev.element_rects,
+                identities,
+                shot.origin_x,
+                shot.width,
+                shot.height,
+                request.jpeg_quality,
+            );
+            ev.screenshot = Some(shot);
+        }
+        Err(e) => ev.screenshot_error = Some(e.message),
+    }
 }
 
 /// The `measureContentHiddenAfterReveal` reveal sweep: scroll the page top to
@@ -601,12 +1118,10 @@ fn run_visual_contrast_fallback(
                     .iter()
                     .any(|s| Some(s.as_str()) == r.get("selector").and_then(Value::as_str))
         })
-        .filter_map(|r| r.get("finding"))
-        .map(|f| RawResult {
-            id: js_str(f.get("id")),
-            snippet: js_str(f.get("snippet")),
-            ignore_value: String::new(),
-            severity: String::new(),
+        .filter_map(|r| r.get("finding").map(|f| (f, selector_of(r))))
+        .map(|(f, selector)| RawResult {
+            selector,
+            ..RawResult::new(origin::VISUAL_CONTRAST, js_str(f.get("id")), js_str(f.get("snippet")))
         })
         .collect();
 
@@ -637,6 +1152,17 @@ fn run_visual_contrast_fallback(
                 && !browser_resolved.iter().any(|s| Some(s.as_str()) == sel)
         })
         .collect();
+    if !filtered.is_empty() {
+        // The pixel pass reads one box twice, once with the text painted and
+        // once without. A frame that advances between the two shots turns
+        // every pixel in the box into a difference, and the pass would rather
+        // say nothing than measure that. Playing media is the one moving thing
+        // a scan can hold still without changing what the page shows: a paused
+        // video still paints the frame the visitor is looking at.
+        let _ = page.evaluate(
+            "document.querySelectorAll('video').forEach(v => { try { v.pause(); } catch (e) {} })",
+        );
+    }
     for candidate in filtered {
         let result = step_findings(profile, "visual-contrast", "pixel-diff", target, || {
             let f = screenshot_contrast::capture_visual_contrast_candidate(
@@ -648,10 +1174,8 @@ fn run_visual_contrast_fallback(
             Ok::<_, EngineError>(
                 f.map(|f| {
                     vec![RawResult {
-                        id: f.id.to_string(),
-                        snippet: f.snippet,
-                        ignore_value: String::new(),
-                        severity: String::new(),
+                        selector: selector_of(candidate),
+                        ..RawResult::new(origin::VISUAL_CONTRAST, f.id.to_string(), f.snippet)
                     }]
                 })
                 .unwrap_or_default(),
@@ -681,6 +1205,23 @@ mod tests {
         assert!(serialize_design_system_for_browser(None).is_null());
         let ds = DesignSystem::default();
         assert!(serialize_design_system_for_browser(Some(&ds)).is_null());
+    }
+
+    #[test]
+    fn group_findings_carry_the_group_selector() {
+        let groups = vec![json!({
+            "selector": "main > h1",
+            "findings": [
+                { "type": "tight-leading", "detail": "line-height 1.15x (need >=1.3)", "ignoreValue": "", "severity": "warning" },
+            ],
+        })];
+        let (findings, origins) =
+            results_to_findings("https://example.com/", results_from_groups(&groups)).unwrap();
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].extras.get("selector"), Some(&json!("main > h1")));
+        assert_eq!(origins, vec![origin::SCAN]);
+        let text = serde_json::to_string(&findings[0]).unwrap();
+        assert!(text.ends_with(r#""line":0,"snippet":"line-height 1.15x (need >=1.3)","selector":"main > h1"}"#));
     }
 
     // Expected values come from tests/detect-url-launch.test.mjs (issue #657).
