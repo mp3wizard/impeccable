@@ -6,6 +6,9 @@
 //! - `nested-cards.html`: a card paints an edge on three sides or a fill that
 //!   differs from its surface, and is rounded or shadowed; dividers, pills,
 //!   one-line eyebrows, a card's own header band and a lip shadow are not cards.
+//!   An inner card shows a border or casts a shadow (r4-p16), and figures,
+//!   output blocks, players and a dialog's panels are not inner cards when
+//!   they are the box's main child (r4-p17).
 //! - `clipped-overflow-container.html`: track words read past BEM separators
 //!   and camelCase, and on the positioned child itself.
 //! - `buried-raster.html`: SVG sources, icon-sized boxes, blurred placeholders
@@ -130,7 +133,22 @@ fn nested_cards_read_the_computed_box() {
     assert_marks(
         &findings,
         "nested-cards",
-        &["#flag-outlined-inner", "#flag-raised-inner"],
+        &[
+            "#flag-outlined-inner",
+            "#flag-raised-inner",
+            "#flag-tint-shadow-inner",
+            "#flag-controls-inner",
+            "#flag-icon-inner",
+            "#flag-mono-page-inner",
+            // r4-p17: embedded content that is not the box's main child, and
+            // a card nested further inside a dialog's panel.
+            "#flag-hidden-audio-inner",
+            "#flag-avatar-video-inner",
+            "#flag-promo-player-inner",
+            "#flag-illustration-inner",
+            "#flag-dialog-nested-inner",
+            "#flag-mono-button-inner",
+        ],
         &[
             "#pass-band-inner",
             "#pass-strip-inner",
@@ -141,6 +159,15 @@ fn nested_cards_read_the_computed_box() {
             "#pass-media-frame",
             "#pass-mark-inline",
             "#pass-lip-inner",
+            // r4-p16: a fill with no border and no shadow.
+            "#pass-tint-inner",
+            // r4-p17: embedded content, and a dialog's panels.
+            "#pass-figure-inner",
+            "#pass-canvas-inner",
+            "#pass-output-inner",
+            "#pass-player-inner",
+            "#pass-dialog-inner",
+            "#flag-dialog-group",
         ],
     );
 }
@@ -153,8 +180,8 @@ fn clipped_overflow_reads_track_words_past_bem_and_camel_case() {
     assert_marks(
         &findings,
         "clipped-overflow-container",
-        &["flag-bem-tooltip", "flag-overflow-hidden"],
-        &["pass-bem-marquee", "hotStuffBox", "pass-camel-host", "pass-nested-deck"],
+        &["flag-bem-tooltip", "flag-overflow-hidden", "flag-native-dialog"],
+        &["pass-bem-marquee", "hotStuffBox", "pass-camel-host", "pass-nested-deck", "pass-closed-dialog", "pass-modal-dialog"],
     );
 }
 
@@ -186,7 +213,7 @@ fn gray_on_color_scales_its_bar_with_luminance() {
         &findings,
         "gray-on-color",
         &["#flag-gray-on-navy", "#flag-gray-on-teal", "#flag-gray-on-dark-navy", "#flag-tailwind-classes"],
-        &["#pass-gray-on-near-black-navy", "#pass-hover-variant"],
+        &["#pass-gray-on-near-black-navy", "#pass-off-white-on-navy", "#pass-off-white-on-teal", "#pass-hover-variant"],
     );
 }
 
@@ -207,9 +234,12 @@ fn undersized_ui_text_skips_links_inside_markers() {
 fn page_level_misreads_stay_silent() {
     for (fixture, rule) in [
         ("flat-type-hierarchy-h1-tie.html", "flat-type-hierarchy"),
+        ("flat-type-hierarchy-dropped-role.html", "flat-type-hierarchy"),
+        ("flat-type-hierarchy-h1-label.html", "flat-type-hierarchy"),
         ("oversized-h1-rendered.html", "oversized-h1"),
         ("first-viewport-column-overflow-outline.html", "first-viewport-column-overflow"),
         ("first-viewport-column-overflow-tabs.html", "first-viewport-column-overflow"),
+        ("first-viewport-column-overflow-clipped.html", "first-viewport-column-overflow"),
         ("em-dash-pricing-matrix.html", "em-dash-overuse"),
     ] {
         let Some(findings) = scan(fixture) else {
@@ -221,6 +251,7 @@ fn page_level_misreads_stay_silent() {
     // The twins still report.
     for (fixture, rule) in [
         ("flat-type-hierarchy.html", "flat-type-hierarchy"),
+        ("flat-type-hierarchy-dropped-flat.html", "flat-type-hierarchy"),
         ("oversized-h1-browser.html", "oversized-h1"),
         ("first-viewport-column-overflow.html", "first-viewport-column-overflow"),
         ("em-dash-prose-with-matrix.html", "em-dash-overuse"),
@@ -282,8 +313,10 @@ fn label_collectors_climb_and_scale() {
             "A Single Kicker Still Flags",
             "Relative Kicker Ceiling",
             "Eyebrow In A Framer Wrapper",
+            "Section Title In A Panel",
+            "Display Title In A Band",
         ],
-        &["Label Too Large For Its Heading", "Untracked Caps Label"],
+        &["Label Too Large For Its Heading", "Untracked Caps Label", "Press Card Source"],
     );
 
     let Some(findings) = scan("numbered-section-labels.html") else {

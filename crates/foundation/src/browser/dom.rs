@@ -106,6 +106,13 @@ pub trait Dom {
     /// when no sheet declares it. Mirrors `keyframesToggleVisibilityDOM`'s
     /// walk order.
     fn keyframes(&self, name: &str) -> Option<Vec<KeyframeFrame>>;
+    /// The selector of each frame [`Dom::keyframes`] returns for `name`, in
+    /// the same order (`"0%, 35%"`, `"to"`): which offsets each frame sets.
+    /// `None` where the probe did not record them (a recording made before
+    /// it did, the in-page probe), and a caller then knows no offsets.
+    fn keyframe_keys(&self, _name: &str) -> Option<Vec<String>> {
+        None
+    }
     /// `document.documentElement.cloneNode(true)` with every
     /// `[id^="impeccable-live-"]` node removed, serialized as `outerHTML`.
     fn document_html_for_patterns(&self) -> String;
@@ -201,43 +208,6 @@ pub trait Dom {
     /// of every non-blank direct text node (rects narrower/shorter than 1px
     /// dropped); `None` when there is none.
     fn direct_text_rect(&self, el: ElId) -> Option<Rect>;
-    /// The CSS properties (`opacity`, `filter`, hyphenated as the CSSOM
-    /// spells them) of every animation and transition running on the element
-    /// itself at capture: `document.getAnimations()` entries whose effect
-    /// targets it (not a pseudo-element) and whose `playState` is `running`
-    /// or that are still pending. An empty list is a capture that looked and
-    /// found none; `None` is a probe that could not look (a snapshot recorded
-    /// before the capture read animations, a page with no Web Animations
-    /// API).
-    fn running_animation_properties(&self, _el: ElId) -> Option<Vec<String>> {
-        None
-    }
-
-    // ── the flat tree ─────────────────────────────────────────────────
-    /// The box an element paints inside once shadow trees are composed: the
-    /// slot a light-DOM child is assigned to, else its parent, else the host
-    /// of the shadow tree whose top-level node it is. A fill drawn by a
-    /// component's shadow tree sits between a slotted heading and the host,
-    /// and only this walk passes through it. The default is `parent`, which
-    /// is the light tree: a probe that cannot see shadow trees.
-    fn flat_parent(&self, el: ElId) -> Option<ElId> {
-        self.parent(el)
-    }
-    /// The slot this element's direct text is assigned to, where the element
-    /// is a shadow host whose own text is slotted into its shadow tree. That
-    /// text inherits its colour and font from the slot, not from the host.
-    fn text_slot(&self, _el: ElId) -> Option<ElId> {
-        None
-    }
-    /// Whether the probe reads open shadow trees ([`Dom::flat_parent`]), so
-    /// that an element with no assigned slot is not slotted anywhere. A
-    /// snapshot recorded before shadow trees were captured answers `false`,
-    /// and so does the default, which goes with the default `flat_parent`: a
-    /// probe that walks the light tree alone (the live page's `JsDom`) never
-    /// sees a fill a component paints in its shadow tree.
-    fn shadow_trees_recorded(&self) -> bool {
-        false
-    }
     /// The rows the element's rendered text occupies: one rect per line box,
     /// top to bottom. `None` when this DOM cannot say where the lines are.
     ///
@@ -259,6 +229,63 @@ pub trait Dom {
     /// a short tail says nothing about either.
     fn text_line_rects(&self, _el: ElId) -> Option<Vec<Rect>> {
         None
+    }
+
+    /// The CSS properties (`opacity`, `filter`, hyphenated as the CSSOM
+    /// spells them) of every animation and transition running on the element
+    /// itself at capture: `document.getAnimations()` entries whose effect
+    /// targets it (not a pseudo-element) and whose `playState` is `running`
+    /// or that are still pending. An empty list is a capture that looked and
+    /// found none; `None` is a probe that could not look (a snapshot recorded
+    /// before the capture read animations, a page with no Web Animations
+    /// API).
+    fn running_animation_properties(&self, _el: ElId) -> Option<Vec<String>> {
+        None
+    }
+
+    /// Whether a box that is hidden with the page scrolled to the top shows
+    /// once the page is scrolled to it: a reveal that follows the scroll
+    /// position (a scrubbed timeline, a reveal that hides again when its
+    /// section leaves the viewport). `None` is a probe that has not looked: a
+    /// recording made before the probe existed, a DOM with no page behind it.
+    /// A caller treats `None` as the base answer, hidden.
+    fn shown_when_scrolled_to(&self, _el: ElId) -> Option<bool> {
+        None
+    }
+
+    // ── the flat tree ─────────────────────────────────────────────────
+    /// The box an element paints inside once shadow trees are composed: the
+    /// slot a light-DOM child is assigned to, else its parent, else the host
+    /// of the shadow tree whose top-level node it is. A fill drawn by a
+    /// component's shadow tree sits between a slotted heading and the host,
+    /// and only this walk passes through it. The default is `parent`, which
+    /// is the light tree: a probe that cannot see shadow trees.
+    fn flat_parent(&self, el: ElId) -> Option<ElId> {
+        self.parent(el)
+    }
+    /// The slot this element's direct text is assigned to, where the element
+    /// is a shadow host whose own text is slotted into its shadow tree. That
+    /// text inherits its colour and font from the slot, not from the host.
+    fn text_slot(&self, _el: ElId) -> Option<ElId> {
+        None
+    }
+    /// The top-level nodes of the open shadow tree `el` hosts, in order:
+    /// the elements whose [`Dom::flat_parent`] is `el` without being its
+    /// children, where the probe composes the flat tree. The live page's
+    /// `JsDom` lists them without composing it. Empty for an element that
+    /// hosts no shadow tree, and from a probe that cannot see shadow trees
+    /// (the default).
+    fn shadow_children(&self, _el: ElId) -> Vec<ElId> {
+        Vec::new()
+    }
+    /// Whether the probe reads open shadow trees ([`Dom::flat_parent`]), so
+    /// that an element with no assigned slot is not slotted anywhere. A
+    /// snapshot recorded before shadow trees were captured answers `false`,
+    /// and so does the default, which goes with the default `flat_parent`: a
+    /// probe that walks the light tree alone (the live page's `JsDom`) never
+    /// sees a fill a component paints in its shadow tree.
+    fn shadow_trees_recorded(&self) -> bool {
+        false
     }
 }
 

@@ -83,13 +83,16 @@ pub use impeccable_foundation::browser::selector;
 pub use impeccable_foundation::browser::fake_dom;
 
 pub mod background;
+pub mod decorative_text;
 pub mod driver;
 pub mod element_checks;
+pub mod field_label;
 pub mod page_checks;
 pub mod painted;
 pub mod quality;
 pub mod snapshot;
 pub mod text_collectors;
+pub mod text_context;
 pub mod text_geometry;
 pub mod text_layers;
 pub mod visual;

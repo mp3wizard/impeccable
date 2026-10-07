@@ -51,6 +51,8 @@ pub struct FakeEl {
     /// The properties of the animations running on the element; `None` is a
     /// probe that could not read them.
     pub running_animations: Option<Vec<String>>,
+    /// [`Dom::shown_when_scrolled_to`].
+    pub shown_on_scroll: Option<bool>,
     /// The shadow host of a shadow tree's top-level node.
     pub shadow_host: Option<ElId>,
     /// `assignedSlot`.
@@ -75,6 +77,8 @@ pub struct FakeDom {
     /// `(x, y)` → element stack, topmost first.
     pub points: Vec<((f64, f64), Vec<ElId>)>,
     pub keyframes: HashMap<String, Vec<KeyframeFrame>>,
+    /// The selector of each frame in `keyframes`, where a test records them.
+    pub keyframe_keys: HashMap<String, Vec<String>>,
     pub html_for_patterns: String,
 }
 
@@ -221,6 +225,10 @@ impl FakeDom {
     }
     /// The properties the animations running on `id` animate, as the capture
     /// would record them (`&[]`: it looked and found none).
+    pub fn set_shown_on_scroll(&mut self, id: ElId, shown: bool) -> &mut Self {
+        self.el_mut(id).shown_on_scroll = Some(shown);
+        self
+    }
     pub fn set_running_animations(&mut self, id: ElId, props: &[&str]) -> &mut Self {
         self.el_mut(id).running_animations = Some(props.iter().map(|p| p.to_string()).collect());
         self
@@ -413,6 +421,9 @@ impl Dom for FakeDom {
     fn keyframes(&self, name: &str) -> Option<Vec<KeyframeFrame>> {
         self.keyframes.get(name).cloned()
     }
+    fn keyframe_keys(&self, name: &str) -> Option<Vec<String>> {
+        self.keyframe_keys.get(name).cloned()
+    }
     fn document_html_for_patterns(&self) -> String {
         self.html_for_patterns.clone()
     }
@@ -552,12 +563,20 @@ impl Dom for FakeDom {
     fn running_animation_properties(&self, el: ElId) -> Option<Vec<String>> {
         self.els[el as usize].running_animations.clone()
     }
+    fn shown_when_scrolled_to(&self, el: ElId) -> Option<bool> {
+        self.els[el as usize].shown_on_scroll
+    }
     fn flat_parent(&self, el: ElId) -> Option<ElId> {
         let e = &self.els[el as usize];
         e.assigned_slot.or(e.parent).or(e.shadow_host)
     }
     fn text_slot(&self, el: ElId) -> Option<ElId> {
         self.els[el as usize].text_slot
+    }
+    fn shadow_children(&self, el: ElId) -> Vec<ElId> {
+        (1..self.els.len() as ElId)
+            .filter(|&i| self.els[i as usize].shadow_host == Some(el))
+            .collect()
     }
     fn shadow_trees_recorded(&self) -> bool {
         !self.shadow_trees_unrecorded

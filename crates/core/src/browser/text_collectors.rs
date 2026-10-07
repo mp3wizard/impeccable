@@ -15,7 +15,7 @@ use crate::checks::rules::{check_kicker_above_heading, KickerCandidate, RuleHit}
 use crate::checks::text_rules::{
     check_em_dash_overuse, check_numbered_section_labels, is_kicker_candidate,
     is_numbered_section_label_candidate, is_repeated_text_container, parse_numbered_label_text,
-    strip_edge_quotes, HEADING_TAGS, KICKER_CARD_CONTEXT_SELECTOR, KICKER_SKIP_SELECTOR,
+    strip_edge_quotes, HEADING_TAGS, KICKER_CARD_CONTEXT_SELECTOR, KICKER_SKIP_SELECTOR, LEADING_DISPLAY_TYPE_PX,
     KickerCandidateInput, NumberedLabelCandidate, NumberedLabelCandidateInput,
     REPEATED_TEXT_CONTAINER_TAGS, REPEATED_TEXT_SKIP_SELECTOR,
 };
@@ -44,12 +44,65 @@ fn collapsed_text_content(dom: &dyn Dom, el: ElId) -> String {
     js::trim(&collapse_ws(&dom.text_content(el))).to_string()
 }
 
-/// JS: checks.mjs#isKickerCardContext(heading, kicker)
+/// How many viewports tall a card-context element may be before it is the
+/// page's frame rather than a card: outreign.io wraps its whole page in
+/// `main > article`, 11,527px tall, and a card on a phone runs under two
+/// screens.
+pub const KICKER_CARD_MAX_VIEWPORTS: f64 = 2.0;
+
+/// JS: checks.mjs#isKickerCardContext(heading, kicker), less a page-scale
+/// ancestor: an `article` (or list item, link, button) more than
+/// [`KICKER_CARD_MAX_VIEWPORTS`] viewports tall holds the page, and a label
+/// and heading inside it share no card. Where the box or the viewport is not
+/// measured the ancestor counts, as before.
 pub fn is_kicker_card_context(dom: &dyn Dom, heading: ElId, kicker: ElId) -> bool {
     match dom.closest(heading, KICKER_CARD_CONTEXT_SELECTOR) {
-        Ok(Some(item)) => dom.contains(item, kicker),
+        Ok(Some(item)) => {
+            let viewport = dom.inner_height();
+            let height = dom.rect(item).height;
+            let page_scale = viewport.is_finite()
+                && viewport > 0.0
+                && height.is_finite()
+                && height > viewport * KICKER_CARD_MAX_VIEWPORTS;
+            !page_scale && dom.contains(item, kicker)
+        }
         _ => false,
     }
+}
+
+/// Whether `kicker` sits in the card that holds `heading`: the nearest
+/// ancestor of the heading drawn as a card (a boundary of its own, read from
+/// the computed box), shorter than the viewport, whatever its tag. A label in
+/// a card beside its title is the card's metadata, as it is in an `article`
+/// or `li` card: aina-tech.io's white press card names its source ("The
+/// Future Media") over its 20px h3 headline in a `div`. Only a card title
+/// counts: an h3 or lower set under display size. A section's own heading in
+/// a painted panel (redoubt.agency's h2 in the hero's side panel,
+/// vestra.ai's 40px h3 across a feature band) keeps its eyebrow reported.
+fn kicker_in_painted_card(dom: &dyn Dom, heading: ElId, kicker: ElId) -> bool {
+    if kicker_heading_level(dom, heading) < 3.0 || font_size_of(dom, heading) >= LEADING_DISPLAY_TYPE_PX {
+        return false;
+    }
+    let viewport = {
+        let h = dom.inner_height();
+        if num_truthy(h) {
+            h
+        } else {
+            800.0
+        }
+    };
+    let body = dom.body();
+    let mut cur = dom.parent(heading);
+    while let Some(c) = cur {
+        if Some(c) == body {
+            return false;
+        }
+        if super::page_checks::is_card_like_dom(dom, c) {
+            return dom.rect(c).height < viewport && dom.contains(c, kicker);
+        }
+        cur = dom.parent(c);
+    }
+    false
 }
 
 static HEADING_LEVEL_RE: Lazy<Regex> =
@@ -144,7 +197,7 @@ pub fn collect_kicker_candidates_with_elements(dom: &dyn Dom) -> Vec<(ElId, Kick
         if super::dom::closest_or_none(dom, kicker, KICKER_SKIP_SELECTOR).is_some() {
             continue;
         }
-        if is_kicker_card_context(dom, heading, kicker) {
+        if is_kicker_card_context(dom, heading, kicker) || kicker_in_painted_card(dom, heading, kicker) {
             continue;
         }
         let heading_tag = tag_lower(dom, heading);
@@ -180,7 +233,26 @@ pub fn collect_kicker_candidates_with_elements(dom: &dyn Dom) -> Vec<(ElId, Kick
         }) {
             continue;
         }
-        if heading_tag == "h1" && heading_font_size >= 48.0 && kicker_letter_spacing >= 1.6 {
+        // The hero rule takes a tracked label over a display h1. Its em
+        // floor reaches only the labels that rule reads (the h1's own
+        // previous sibling, at eyebrow size), and under the fixed 1.6px floor
+        // the label is handed off only where the hero rule reports it: that
+        // rule reads case from text-transform and typed capitals (not
+        // small-caps) and passes over a dated meta line, so a label it leaves
+        // is kept here.
+        if heading_tag == "h1"
+            && heading_font_size >= 48.0
+            && (kicker_letter_spacing >= crate::checks::rules::HERO_EYEBROW_TRACKING_PX
+                || (found.levels == 0
+                    && kicker_font_size <= 14.0
+                    && crate::checks::rules::hero_eyebrow_tracked(
+                        kicker_letter_spacing,
+                        kicker_font_size,
+                        Some(crate::checks::rules::HERO_EYEBROW_TRACKING_EM),
+                    )
+                    && !super::element_checks::check_element_hero_eyebrow_dom(dom, heading)
+                        .is_empty()))
+        {
             continue;
         }
         // A pair a visitor cannot see (a section at `hidden`, an inactive
@@ -325,6 +397,7 @@ fn hits(v: Vec<crate::checks::measures::Finding>) -> Vec<RuleHit> {
         .map(|f| RuleHit {
             id: f.id,
             snippet: f.snippet,
+            severity: None,
         })
         .collect()
 }
@@ -434,9 +507,13 @@ pub fn label_near_heading(dom: &dyn Dom, label: ElId, heading: ElId) -> bool {
 }
 
 /// The element that sets a label's type: the label itself when it has text of
-/// its own, else its only element child, at most three levels down. Framer
-/// sets an eyebrow's size, tracking and case on a `p` inside a bare `div`, and
-/// a mono index often sits in a `span` inside a sized column.
+/// its own, else the one element child that holds its text, at most three
+/// levels down. Framer sets an eyebrow's size, tracking and case on a `p`
+/// inside a bare `div`, and a mono index often sits in a `span` inside a sized
+/// column. A chip puts an icon beside its text span (redoubt.agency's flag
+/// svg, uncoverroads.com's status dot): children that hold no text are the
+/// chip's marks, and the one that holds the text sets the type. A wrapper
+/// with two children that both hold text is read as itself.
 pub fn label_type_element(dom: &dyn Dom, label: ElId) -> ElId {
     let mut el = label;
     for _ in 0..3 {
@@ -444,10 +521,14 @@ pub fn label_type_element(dom: &dyn Dom, label: ElId) -> ElId {
             return el;
         }
         let children = dom.children(el);
-        if children.len() != 1 {
+        let mut with_text = children
+            .iter()
+            .copied()
+            .filter(|&c| !js::trim(&dom.text_content(c)).is_empty());
+        let (Some(only), None) = (with_text.next(), with_text.next()) else {
             return el;
-        }
-        el = children[0];
+        };
+        el = only;
     }
     el
 }
@@ -538,10 +619,16 @@ pub fn collect_repeated_container_text_findings(
                 }
                 let raw = dom.attr(c, "class").unwrap_or_default();
                 let raw_cls = js::trim(&raw);
+                // A class that carries an id (`jet-listing-dynamic-post-43268`,
+                // `elementor-element-a565c83`) names one instance, not a
+                // spot: the slides of one carousel differ by nothing else.
                 let mut cls: Vec<&str> = if raw_cls.is_empty() {
                     Vec::new()
                 } else {
-                    WS_RE.split(raw_cls).filter(|s| !s.is_empty()).collect()
+                    WS_RE
+                        .split(raw_cls)
+                        .filter(|s| !s.is_empty() && !crate::checks::text_rules::is_id_like_class(s))
+                        .collect()
                 };
                 cls.sort_by(|a, b| a.encode_utf16().cmp(b.encode_utf16()));
                 let cls = cls.join(".");
@@ -587,7 +674,24 @@ pub fn collect_repeated_container_text_findings(
 
 /// JS: checks.mjs#checkRepeatedContainerTextDOM()
 pub fn check_repeated_container_text_dom(dom: &dyn Dom) -> Vec<RuleHit> {
-    collect_repeated_container_text_findings(dom, &|el| is_rendered_for_browser_rule(dom, el))
+    // Text a visitor cannot see at capture repeats nothing on screen: the
+    // slides a carousel parks past its window carry the same label as the one
+    // it shows. The Text paint gate is asked of an element only once it has
+    // passed the cheaper rendered test.
+    collect_repeated_container_text_findings(dom, &|el| {
+        if !is_rendered_for_browser_rule(dom, el) {
+            return false;
+        }
+        // The collector asks this of the container and of each element
+        // under it. The Text gate needs text, so it is asked only of an
+        // element that holds some; a container's box is asked the gate's
+        // walk without that test.
+        if super::dom::has_direct_text_longer_than(dom, el, 0) {
+            super::painted::unpainted_for(dom, el, super::painted::PaintGate::Text).is_none()
+        } else {
+            super::painted::unpainted_text_box(dom, el).is_none()
+        }
+    })
 }
 
 #[cfg(test)]
@@ -652,6 +756,45 @@ mod tests {
         d.set_style(h2, "fontSize", "24px");
         d.set_rect(h2, 40.0, 324.0, 600.0, 32.0);
         assert_eq!(check_kicker_above_heading_dom(&d, None).len(), 1);
+    }
+
+    /// The kicker rule hands a label over a display h1 to the hero rule only
+    /// where the hero rule reports it. A small-caps kicker at 0.1em is not
+    /// caps to the hero rule, so it stays a kicker; the same label set in
+    /// uppercase goes to the hero rule.
+    #[test]
+    fn kicker_hands_off_only_what_the_hero_rule_reports() {
+        let hero = |d: &mut FakeDom, body: ElId, y: f64, variant: &str, transform: &str, heading: &str| {
+            let sec = d.add(Some(body), "section");
+            let kicker = d.add(Some(sec), "p");
+            d.add_text(kicker, "new in version four");
+            d.set_styles(
+                kicker,
+                &[
+                    ("fontSize", "13px"),
+                    ("letterSpacing", "1.3px"),
+                    ("textTransform", transform),
+                    ("fontVariant", variant),
+                    ("fontVariantCaps", variant),
+                ],
+            );
+            d.set_rect(kicker, 40.0, y, 240.0, 18.0);
+            let h = d.add(Some(sec), "h1");
+            d.add_text(h, heading);
+            d.set_style(h, "fontSize", "56px");
+            d.set_rect(h, 40.0, y + 30.0, 900.0, 64.0);
+        };
+        let mut d = FakeDom::new();
+        let (_html, body) = d.with_page();
+        hero(&mut d, body, 100.0, "small-caps", "none", "The workspace that thinks");
+        let hits = check_kicker_above_heading_dom(&d, None);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert!(hits[0].finding.detail.contains("new in version four"));
+
+        let mut d = FakeDom::new();
+        let (_html, body) = d.with_page();
+        hero(&mut d, body, 100.0, "normal", "uppercase", "The workspace that thinks");
+        assert!(check_kicker_above_heading_dom(&d, None).is_empty());
     }
 
     /// demotv.lol's hero pair in a section at `hidden`, and exxonmobil.com's
@@ -911,9 +1054,14 @@ mod tests {
                 ("backgroundColor", "rgb(255, 255, 255)"),
             ],
         );
-        for tag in ["p", "span", "em"] {
+        d.set_rect(card, 0.0, 0.0, 400.0, 200.0);
+        let mut spots = Vec::new();
+        for (i, tag) in ["p", "span", "em"].into_iter().enumerate() {
             let e = d.add(Some(card), tag);
             d.add_text(e, "Active");
+            d.set_style(e, "fontSize", "14px");
+            d.set_rect(e, 20.0, 20.0 + 30.0 * i as f64, 60.0, 20.0);
+            spots.push(e);
         }
         let hits = check_repeated_container_text_dom(&d);
         assert_eq!(hits.len(), 1);
@@ -922,6 +1070,32 @@ mod tests {
         assert!(hits[0]
             .snippet
             .starts_with("\"Active\" rendered 3× in distinct spots inside div"));
+        // observations-35 row 15 (kinghost.com.br 218763): a spot a visitor
+        // cannot see repeats nothing. With one of the three unpainted, two
+        // are left.
+        d.set_style(spots[2], "visibility", "hidden");
+        assert!(check_repeated_container_text_dom(&d).is_empty(), "a hidden spot");
+        d.set_style(spots[2], "visibility", "visible");
+        assert_eq!(check_repeated_container_text_dom(&d).len(), 1);
+        // Classes that carry an id name an instance, not a spot: three
+        // slides that differ by nothing else are one spot three times.
+        for (e, id) in spots.iter().zip(["post-43268", "post-22775", "post-42287"]) {
+            d.el_mut(*e).tag = "P".to_string();
+            d.set_attr(*e, "class", &format!("term jet-listing-dynamic-{id}"));
+        }
+        assert!(check_repeated_container_text_dom(&d).is_empty(), "id-like classes");
+        for (e, class) in spots.iter().zip(["term title", "term badge", "term footer"]) {
+            d.set_attr(*e, "class", class);
+        }
+        assert_eq!(check_repeated_container_text_dom(&d).len(), 1, "three named spots");
+        use crate::checks::text_rules::is_id_like_class;
+        assert!(is_id_like_class("elementor-element-a565c83"));
+        assert!(is_id_like_class("elementor-dcss-67254963955209192"));
+        assert!(is_id_like_class("jet_listing_43268"));
+        for plain in ["grid-col-desk-2", "elementor-col-50", "text-gray-500", "card", "face-cafe", "w-1/2"] {
+            assert!(!is_id_like_class(plain), "{plain}");
+        }
+
         // Parallel positions (same signature) do not count.
         let mut d2 = FakeDom::new();
         let (_h, b2) = d2.with_page();

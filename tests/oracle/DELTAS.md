@@ -3738,6 +3738,2109 @@ reporting.
     `phrasing_text_font`, `average_glyph_advance_em_at`,
     `is_monospace_family`, `MONOSPACE_ADVANCE_EM` and `PROPORTIONAL_ADVANCE_EM`
     are new; `scrolls_x` and `moves_a_track` are now `pub(crate)`.
+
+## Recorded 2026-09-18: low-contrast reports near misses and decorative text as advisory (corpus/premise3-low-contrast-advisory)
+
+Two taste calls Paul decided on 2026-09-18, both "advisory". Each moves a
+`low-contrast` finding's own severity to `advisory` (the rule's registry
+severity is unchanged, since neither call covers every finding): the finding
+stays in the output with its measured ratio and its snippet byte for byte, the
+JSON gains `"severity": "advisory", "advisory": true`, the text output moves
+it under "Advisory (not counted as failures)", the failure count and the exit
+code drop it, `--no-advisory` hides it, and the design hook leaves it out
+unless `advisoryRules` is `include`, as for every other advisory finding.
+
+- **r3-02, ratios just under the bar.** Decision: "Report ratios inside the
+  margin as advisory, outside the failure count. The findings stay visible
+  with their measured ratios." The margin is within 0.3 of the bar for
+  normal text (4.2:1 up to 4.5:1) and within 0.2 for large text (2.8:1 up
+  to 3:1), read off the ratio as the snippet prints it, so every finding
+  printed `4.2:1` reports the same way. Every producer applies it: the
+  element pass, the link and span path, placeholders and `:hover` state in
+  both engines, and the URL engine's sampled (`browser contrast`) and pixel
+  (`pixel contrast`) passes on their verdict. r3-08 (keep) is untouched:
+  bold display text at 700+ above about 36px under the large-text margin
+  (2.0 to 2.7:1) keeps failing.
+- **r3-04, text with no reading job.** Decision: "Rank those shapes lower:
+  reported as advisory, outside the failure count. The clipto.com mockup
+  labels and the terminal text stay visible." The shapes are read
+  conservatively (`crates/core/src/checks/decorative_text.rs`): one or two
+  letters (not a lone lower-case `i`, `x` or `v` icon glyph) alone and centred in a small (12 to 72px) square or round
+  box that paints itself, not the whole label of a control and not a key in
+  a `kbd`; text made only of a version or build identifier (with at most a
+  date, a time, a short hash), outside headings and controls, where a word
+  like `release` or `build` needs a dotted version, a build number that is
+  not a year, or a hash after it; a short name in a handwriting face or
+  marked `signature`, outside headings and controls; and text under an
+  ancestor whose class or id has a `mockup(s)` or `illustration(s)` part, or
+  `mock` beside a UI word (`mock-window`), and no credit or caption part (not
+  a landmark or `section`), unless the text is sentence-length copy, or under
+  an HTML element marked `role="img"` (on an `svg` the role labels charts,
+  whose axis text is read, so it is not evidence there). Anything uncertain
+  keeps failing: digits, three letters, an `i` info badge, an uncentred
+  letter, a version inside a sentence, a version as a heading or a link,
+  `Release 2024`, a `mock-exam` or an `illustration-credit`, a mockup built
+  from utility classes alone. An advisory copy claims its colour pair for itself, so it
+  never hides a failing copy of the same pair on the SAFE_TAGS path.
+
+New fixtures `low-contrast-near-bar.html` and `low-contrast-decorative.html`
+(failing, advisory and passing columns); the URL-engine passes are pinned by
+`crates/browser/tests/low_contrast_advisory.rs`, the static engine by
+`crates/html/tests/low_contrast_advisory.rs`. Every re-recorded golden was
+diffed finding by finding against its predecessor: no finding is added or
+removed and no snippet changes; the only moves are `low-contrast` findings
+from `warning` to `advisory`, the text output's sections and counts that
+follow from them, and the new fixtures' own findings.
+
+- `detect-fixture-json-low-contrast-near-bar-html`, `detect-fixture-text-low-contrast-near-bar-html`, `detect-fixture-json-low-contrast-decorative-html`, `detect-fixture-text-low-contrast-decorative-html`: new cases.
+- `detect-fixture-json-low-contrast-near-threshold-html`, `detect-fixture-text-low-contrast-near-threshold-html`: all four near-threshold findings (4.49:1 and 2.99:1) are advisory, so the fixture exits 0 with "0 anti-patterns found" and 4 advisory notes.
+- `detect-fixture-json-modern-color-borders-html`, `detect-fixture-text-modern-color-borders-html`: `4.49:1 — text #64748b on #fef7f2` is advisory (14 to 13 counted).
+- `detect-fixture-json-named-color-borders-html`, `detect-fixture-text-named-color-borders-html`: `4.4:1 — text #64748b on #f6f6f6` is advisory (8 to 7 counted).
+- `detect-fixture-json-overlay-positioning-html`, `detect-fixture-text-overlay-positioning-html`: `4.2:1 — text #ffffff on #8b5cf6 (gradient on button.ai-btn)` is advisory (32 to 31 counted).
+- `detect-fixture-json-gradient-surface-contrast-html`, `detect-fixture-text-gradient-surface-contrast-html`: the white letters `A` and `B` centred in 56px gradient `div.feature-tile` squares (1.6:1 and 1.5:1) read as avatar-initial tiles and are advisory (14 to 12 counted); the navy tile's `C` passes as before.
+- `detect-dir-json-all-fixtures`, `detect-dir-text-all-fixtures`, `detect-dir-quiet-all-fixtures`, `detect-no-advisory-json`, `detect-no-advisory-text`: the nine moves above plus the two new fixtures (644 to 658 counted, 94 to 118 advisory notes: nine moved plus the new fixtures' 23 failing and 15 advisory; `--no-advisory` drops the nine).
+- Review revision: the decorative fixture gained eight should-flag rows the first cut wrongly read as decorative (a `kbd` key, a lower-case `i` info badge, `v4.2.0` as an `h3`, `v3.1.0` as a `nav` link, `Release 2024`, a `mock-exam`, an `illustration-credit`, and a sentence under a `mockups-grid`). All eight fail; `detect-fixture-*-low-contrast-decorative-html` and the five sweeps were re-recorded for those eight added warnings (650 to 658 counted) and nothing else moved.
+
+Known limits, stated so the ratchet does not read them as misses: a
+signature in a plain serif italic (evebcn.com's 'Pedro'), a mockup made of
+utility classes (clipto.com, resurf.so, the kraflio.com post card,
+context.dev's request illustration, v0-optimus-delta's 'Ready'), step and
+ghost numerals (bt.cn's '02.', opentrailpaper.com's '1', the 'II' marker) and
+syntax tokens in a code demo carry no DOM evidence for the four shapes and
+keep failing; the SVG initials an `aria-hidden` avatar draws are not measured
+by the pixel pass at all, as before.
+
+### Known limits at merge
+
+Recorded when `corpus/integration` merged this branch, from its review, after
+the revision (14872d6e) fixed the three problems the review raised (stamps in
+headings and links, `mock-exam` and credit class names, `kbd` keys and icon
+glyphs). These are what the branch still leaves open.
+
+1. **The margin is read off the printed ratio.** A ratio that prints as
+   `4.2:1` is in the margin, so the real band is about 4.15 up to 4.5 for
+   normal text and 2.75 up to 3 for large text (#7c7c7c on white at 4.164,
+   #9b9b9b at 2.763, both advisory in both engines). The large-text margin
+   grows from 0.2 to 0.25 in practice. Paul to confirm.
+2. **Letter tiles read as initials.** Letter logos and icon tiles are
+   demoted along with avatar initials: the gradient-surface-contrast
+   fixture's A and B feature tiles, chorusai's 'O' agent tile, usebidflow's
+   'Y'. The gradient-surface fixture's should-flag tiles are now advisory,
+   so that fixture could change its glyphs to keep testing surface
+   resolution.
+3. **The extension badge counts advisory findings.** The service worker sums
+   `findings.length`, which already held for em-dash-overuse; about 860
+   corpus findings per run now fall into the advisory bucket.
+4. **The ratchet ignores severity**, so a severity-only change shows no
+   difference. The harness should diff severity on matched findings (the
+   review's copy at /tmp/review-premise3-low-contrast-advisory/harness adds
+   `Cand.severity` and a candidate dump).
+5. **Visual-contrast moves are unreplayed.** The live-only pixel pass's
+   severity moves (about 3 in-margin findings in run 25, plus any decorative
+   ones) need a live capture to confirm.
+6. **The static engine's centring test is loose.** Any flex or grid box
+   counts as centring evidence for initials, looser than the browser
+   engine's rect test. SVG initials inside `aria-hidden` avatars are still
+   not measured by the pixel pass.
+
+## Recorded 2026-09-18: typography tolerances (taste calls r3-03, r3-19, r3-20; corpus/premise3-typography-tolerances)
+
+Three taste calls on the typography rules, all decided "narrow" on
+2026-09-18. The chosen option text is the spec.
+
+- **r3-03, `tight-leading`:** "Exempt weight 600 or more with at most two
+  rendered lines, or a -webkit-box line clamp, the way h1 to h6 are exempt.
+  Bold body text running three lines or more still reports."
+- **r3-19, `undersized-ui-text`:** "Flag only below about 10.9px. Text less
+  than 0.1px under the floor stops reporting."
+- **r3-20, `cramped-padding`:** "Measure the inset from the glyphs,
+  half-leading included, for chips under 28px tall. A chip whose text really
+  touches the edge still reports."
+- **r3-07 stays "keep":** any text inside a link keeps the 11px interactive
+  floor, a smallprint class included. The new `Flag Photo Credit` fixture case
+  pins it.
+
+What changed:
+
+- **tight-leading.** Weight is the computed `font-weight` (the static
+  cascade's `bold` and `bolder` read as 700). Rendered lines are counted with
+  `text_line_count` over the text rect, cut at the nearest box within four
+  levels that clips on the y axis, so a headline whose own `div` lays out
+  three lines and whose clamped wrapper shows two (ynet.co.il's
+  `div.slotTitle.medium`) counts as two. A clamp (`is_line_clamp`, shared by
+  both engines) is read from a box's `display` and `webkitLineClamp` on the
+  element or on that path: a `-webkit-box` or `-webkit-inline-box` display is
+  one, and so is a `flow-root` or `inline-block` box carrying a clamp value,
+  which is how Chrome computes a CSS clamp that takes effect. Every run-25
+  snapshot records `webkitLineClamp` (ynet.co.il capture 2683 has 867
+  elements at 1 to 4, all computed `flow-root`). A box that only clips, a
+  `max-height` with `overflow: hidden`, is no clamp: it cuts the line count at
+  its content box, so bold text it shows three lines of still reports. A
+  `-webkit-line-clamp` on a plain block clamps nothing and is no clamp either.
+  The static cascade now carries `-webkit-line-clamp` (default `none`) for
+  the same test. The static engine has no layout: it exempts only bold text
+  in a clamp, and bold text without one keeps reporting there. Registry
+  severity is unchanged.
+- **undersized-ui-text.** Two floors exist, 11px (interactive and functional
+  text) and 10px (non-interactive smallprint). Each keeps a 0.1px tolerance,
+  compared in thousandths of a pixel: text at 10.9px or below (9.9px for
+  smallprint) reports, 10.9688px and 10.944px no longer do. Both engines.
+- **cramped-padding.** In the wrapper path ("children flush against"), a box
+  strictly under 27.5px tall measures each text child by its glyphs: each line's em
+  box, one font size tall and centred on the content area its Range rect
+  spans, which adds the room a face keeps above its capitals and below its
+  descenders to the padding and CSS half-leading the rect already sat inside.
+  Only the vertical edges move, and the 4px edge threshold is unchanged. The
+  bound was first inclusive at 28px; Paul's follow-up (below) made it strictly
+  under 27.5px, so haraj.com.sa's 28px price chip keeps the content-area
+  measure. The first path (own text) is gated at a 30px line box and cannot
+  see a chip. URL engine only: the static wrapper
+  path reads declared padding, not text.
+
+Fixtures: `tight-leading.html` gains four flag cases (bold body text over
+four lines, a weight-500 two-line title, regular copy in a three-line clamp,
+and bold text a `max-height` clip shows three lines of) and four pass cases
+(a bold two-line div title and a bold two-line inline link, both
+browser-only, a bold title in a three-line clamp it fills exactly, so the
+clamp hides nothing, and a bold title in a two-line clamp).
+`undersized-ui-text.html` gains 10.9px and 9.9px flags, the card-wide link
+credit, and 10.9688px and 9.95px passes. `cramped-padding.html` gains a 20px
+chip whose glyphs touch (flag) and a 24px step chip (pass, browser only).
+`crates/browser/tests/text_geometry.rs` pins the browser-only cases; the unit
+tests in `crates/core/src/browser/quality.rs` and
+`crates/html/tests/{tight_leading,undersized_ui_text}.rs` pin the rest.
+
+Corpus, run 25, both cohorts (`premise3-typography-tolerances-25`, diffed
+finding by finding against the unchanged engine): violations 56 as base, no
+confirmed-harmful finding removed, no other rule moved.
+
+- tight-leading: 34 removed (real-harmless 23, unjudged 11), none added:
+  ynet.co.il 23 (the bold span cluster, the taboola `-webkit-box` titles
+  (their `webkitLineClamp` is `none`; `trc_ellipsis` trims them by script), the
+  two clamped `slotTitle medium` headlines, Draft.js bold lead-ins),
+  nubank.com.br 6, thecignagroup.com 3, aajtak.in 1, clipto.com 1. Every
+  remaining bold finding runs three lines or more (tchibo.de's 22px titles
+  among them). The weight-500 `slotTitle` cluster (rep 110325, clone 110549)
+  keeps reporting: 500 is under the decision's 600.
+- undersized-ui-text: 24 removed (unjudged 18, real-harmless 6):
+  yungching.com.tw's 10.9688px card meta (6) and swipeloan.in's 10.944px
+  slider ticks (18, the run-20 evidence of the same entry).
+- cramped-padding: 10 removed, 1 added. yungching.com.tw's 24px step chips
+  (4), haraj.com.sa's 28px price chip (1), people.com.cn's 24.4px `i.gray`
+  chips (4, the run-19 evidence of the same entry); context.dev's 17.5px
+  `Auto-fill` chip moves from "top/bottom" to "top" (its glyphs still reach
+  the top edge).
+
+Goldens re-recorded from the binary and reviewed line by line: each gains only
+the new fixture cases' static findings (two cramped-padding, six
+tight-leading, three undersized-ui-text) and the summary counts (644 to 655
+in the directory sweeps).
+
+- `detect-fixture-json-cramped-padding-html`, `detect-fixture-text-cramped-padding-html`, `detect-fixture-json-tight-leading-html`, `detect-fixture-text-tight-leading-html`, `detect-fixture-json-undersized-ui-text-html`, `detect-fixture-text-undersized-ui-text-html`, `detect-dir-json-all-fixtures`, `detect-dir-text-all-fixtures`, `detect-dir-quiet-all-fixtures`, `detect-scope-type`, `detect-scope-layout-text`, `detect-scope-both`, `detect-no-advisory-json`, `detect-no-advisory-text`.
+
+### Known limits at merge
+
+1. **The static engine keeps the declared-padding flush test**, so the 24px
+   step chip and every small chip it flags are still reported by a file scan.
+2. **The static engine counts no lines**, so a bold title outside a clamp
+   still reports there.
+3. **Bold inline emphasis counts.** A bold lead-in phrase of one or two lines
+   inside a regular paragraph (ynet.co.il's Draft.js bullets) is exempt like a
+   title; the paragraph's own text keeps the floor.
+4. **A clamp exempts at any line count**, as the decision reads: taboola's
+   three-line `-webkit-box` titles pass, and so does a clamp the text fills
+   exactly. Computed styles cannot tell an authored `flow-root` box with a
+   stray `-webkit-line-clamp` (which clamps nothing) from a CSS clamp Chrome
+   computes as `flow-root`, so both read as a clamp.
+5. **The em box is centred on the content area.** Faces with a tall ascent
+   and a short descent sit their glyphs higher than that; the edge threshold
+   stays 4px.
+6. **API.** `glyph_band`, `SMALL_CHIP_HEIGHT_UNDER_PX` (core);
+   `LEADING_BOLD_TITLE_WEIGHT`, `LEADING_BOLD_TITLE_MAX_LINES`,
+   `font_weight_number`, `is_line_clamp_display`, `is_line_clamp`,
+   `is_bold_title_leading`,
+   `UI_TEXT_FLOOR_PX`, `SMALLPRINT_TEXT_FLOOR_PX`,
+   `UI_TEXT_FLOOR_TOLERANCE_PX`, `is_under_ui_text_floor` (foundation) are
+   new.
+
+### Revised at review: read the line clamp itself
+
+The first cut never read `webkitLineClamp`, on the claim that no capture
+carried it, and took a clipping `flow-root` box with text laid out past it as
+the clamp. It is in `STYLE_PROPS` and in every run-25 snapshot, and the
+stand-in misfired both ways: a bold title in a real three-line clamp that its
+text fills exactly still reported, and bold text cut to three lines by a
+`max-height` on a `flow-root` box was exempt. The clamp is now read from
+`display` and `webkitLineClamp` together (`is_line_clamp`, both engines), and
+a clipping box without a clamp only cuts the line count. The two fixture cases
+above pin both directions; `detect-fixture-{json,text}-tight-leading-html`,
+the three `detect-dir-*-all-fixtures` sweeps, `detect-scope-type`,
+`detect-scope-both` and `detect-no-advisory-{json,text}` were re-recorded for
+the one new static finding (the clipped bold summary, 1.14x). Run 25 is
+unchanged by the revision: the same 34 tight-leading removals against the
+unchanged engine, finding for finding, and every other rule identical.
+
+### Known limits at merge (from the review)
+
+Recorded when `corpus/integration` merged this branch, after the revision
+(7adcad5c) fixed the one problem the review raised: the bold-title exemption
+now reads the line clamp itself. The review's open issues, for Paul to
+confirm:
+
+1. **The chip bound is inclusive.** r3-20 exempts chips up to and including
+   28px tall (`<= 28`), while the option text says "under 28px". The entry's
+   problem text says "24 to 28px chips" and haraj.com.sa's evidence chip
+   measures exactly 28, so the inclusive bound is defensible. Paul ruled
+   against it: see the follow-up below.
+2. **Glyphs are the em box, not ink.** With Arial 16px in a 24px chip (2px
+   padding, 20px line) the capitals sit about 6px from the top, yet the chip
+   still reports "flush on top" (em band 3.99px from the edge). Base already
+   reported it, so it is not a regression, but the decision reaches fewer
+   Latin faces with a large ascent than it reads.
+3. **The r3-03 reading is (bold AND (two lines or fewer OR clamp)).** The
+   other reading, ((bold AND two lines or fewer) OR any clamp), is what the
+   entry's question text leans toward. Under the implemented one, ynet's
+   weight-500 clamped `slotTitle` cluster (reps 110325 and 110549,
+   `webkitLineClamp` 3) keeps reporting.
+4. **The static engine counts no lines.** It exempts only a bold title in a
+   `-webkit-box`, so a bold two-line title still reports in a file scan (the
+   fixture documents this).
+5. **The UI floor rounds to thousandths.** `is_under_ui_text_floor` rounds the
+   shortfall, so 10.9000 up to about 10.9005px still reports though it is
+   under 0.1px short of the floor. Not practically significant.
+
+### Follow-up: the chip bound is strictly under 27.5px (r3-20)
+
+Paul, on review item 1: a 28px chip is not under 28px. `cramped-padding`
+measures a box by its glyphs only when it is strictly under 27.5px tall
+(`SMALL_CHIP_HEIGHT_UNDER_PX`, renamed from `SMALL_CHIP_MAX_HEIGHT_PX`, and
+compared with `<`). A 28px chip, or one a subpixel layout puts at 27.6px,
+goes back to the content-area measure it had before r3-20. The 24px step
+chips stay inside the bound.
+
+- **Fixture.** `cramped-padding.html` gains a 28px price chip and the same
+  chip at 27.6px (flag, "on top") and at 27px (pass, browser only): a 14px
+  label on a 20px line 2px from the top, its content area about 3px off the
+  edge and its em box 4.5px off. `crates/browser/tests/text_geometry.rs`
+  pins all three; the unit test in `crates/core/src/browser/quality.rs`
+  pins 28, 27.6 and 27.5px reporting and 27.4px passing, on haraj.com.sa's
+  geometry (a 19px content area 4px off inside a 24px line box).
+- **Goldens.** The static engine reads declared padding, so all three new
+  chips report there ("top/bottom"). Re-recorded and reviewed:
+  `detect-fixture-{json,text}-cramped-padding-html` (3 to 6 in the text
+  form), `detect-dir-{json,text,quiet}-all-fixtures` (683 to 686),
+  `detect-scope-layout-text` (51 to 54), `detect-scope-both` and
+  `detect-no-advisory-{json,text}`. Each gains only the three chip findings
+  and the counts.
+- **Run 25** (`integration-25-premise3b-chip`, against
+  `integration-25-premise3`): cramped-padding 109 to 110. One finding comes
+  back, haraj.com.sa's 28px price chip (capture 2688, `<div> "flex": children
+  flush against bg on top`, labelled pattern-absent). The yungching.com.tw
+  step chips (4), people.com.cn's `i.gray` chips (4) and context.dev's
+  moved `Auto-fill` chip are unchanged. No other rule moves.
+
+## Recorded 2026-09-18: viewport edges and overflow (corpus/premise3-edges-and-overflow)
+
+Three taste calls Paul decided on 2026-09-18, all "narrow", from corpus run 25
+(`reports/observations-25.md` issues 8 and 18, and round 3 issue 34). Every
+change is in the URL engine's rule pass; the static engine measures no boxes
+and is unchanged. No golden moves: the two new goldens are the static scans
+of the new phone fixture, which report nothing.
+
+- **r3-34-body-text-viewport-edge-phone.** Decision: "Use a 12px floor at
+  widths of 480px or less and 16px above. Text 8px from a phone's edge still
+  reports." `body_text_gutter_floor` returns 12px when `innerWidth` is 480px
+  or less (`BODY_TEXT_PHONE_VIEWPORT_MAX_PX`, `BODY_TEXT_GUTTER_PHONE_PX`) and
+  16px above (`BODY_TEXT_GUTTER_PX`). rtx.com's consistent 12px at 390px and
+  sapo.vn's 15px no longer report; 8px and 11px at 390px, and 12px at 481px,
+  still do.
+- **r4-p20-body-text-viewport-edge-overflow.** Decision: "Report text past
+  the viewport edge as overflow, once per page, with a message that says the
+  page scrolls sideways and names the widest element. The per-paragraph
+  findings go. Gutters between 0 and 16px still report as gutters." The
+  measurement moved into `body_text_edge_span`, shared by the element form
+  and a new page pass, `check_page_overflow_dom`, which the driver runs after
+  `check_page_quality_dom`. A paragraph whose text runs past a side (the
+  distance rounds below 0) reports no gutter on that side and keeps its
+  gutter finding for the other side (centene.com's `left 10px / right -95px`
+  now reads `left 10px`). The page pass collects those paragraphs through the
+  same gates plus the Text paint gate and inline ignores, and reports one
+  `body-text-viewport-edge` finding on the page (`selector` `body`,
+  `pageLevel`). The page-level finding keeps the rule id rather than taking
+  `text-overflow`'s: the paragraphs it replaces are this rule's, the
+  decision is this rule's, and `text-overflow` (below) keeps its own
+  per-element viewport-edge findings, so carrying the page form there would
+  report one overflowing layout twice under one id. No rule id is added.
+  - When the page scrolls sideways (the viewport does not clip x overflow,
+    reading the root's `overflow-x` and then body's; the side is the one the
+    page scrolls to, right or left under `direction: rtl`; the root's
+    `scrollWidth` exceeds its `clientWidth`) the message reads `page scrolls
+    sideways at 390px: body.page.page_section_misc reaches 634px past the
+    right edge, and text in 14 blocks runs past it` (drom.ru). The widest
+    element is the box reaching furthest past that side among those no
+    ancestor below the root clips or scrolls on x, not fixed, and no further
+    than the page scrolls; ties go to the outer box.
+  - When the page cannot scroll to that side (centene.com and agora.co.il
+    clip at the root or body, v0-optimus-delta.vercel.app and
+    simplybudget.framer.ai cut the text inside an `overflow-x-hidden`
+    wrapper, a left-to-right page's left edge), saying it scrolls sideways
+    would be false, so the message reads `text runs past the right edge of
+    the 390px viewport and is cut off: div reaches 120px past it, with text in
+    14 blocks` (centene.com), naming the widest box among the paragraphs and
+    their ancestors. A box elsewhere that reaches past the edge on such a
+    page is held by a clip the walk cannot see, so it is not named. This
+    second wording is a reading of the decision, flagged for review; Paul
+    kept it, and the follow-up below sets when each wording applies.
+  - In both, the paragraph is named when its own text reaches further than
+    any box.
+- **r4-p19-text-overflow-free-space.** Decision: "Report only when a clipping
+  ancestor cuts the text, the spill overlaps another box, or it reaches the
+  viewport edge. The findings go. Stats that collide and URLs cut at a panel
+  edge still report." `overflow_is_painted` became `painted_overflow_extent`,
+  which returns the reach of what paints past the box (the scroll extent
+  where the overflow is taken as read), and `spill_does_harm` asks three
+  things of it: a box at `overflow-x: hidden` or `clip` (the element or an
+  ancestor below the body, with area) that the reach passes
+  (`spill_is_clipped`); a reach within a quarter em of the viewport's side
+  (`spill_reaches_viewport_edge`); or a spilled part within a quarter em of
+  another element's text or painted box on the element's lines
+  (`spill_meets_another_box`: not an ancestor or descendant, not a backdrop
+  holding the element's whole box, not a decoration layer, and lines that
+  only touch share no line). A decoration layer (`is_decoration_layer`) is
+  an absolutely or fixed positioned box with no text that is not a replaced
+  element or an `svg` and is either a hairline 2px thick or less
+  (v0-compute-11's 1px grid line) or a plain fill, with no background image
+  and no border, whose alpha times opacity is under 0.25. A positioned
+  image, `svg`, filled badge or bordered frame the spill runs under is a
+  box it overlaps and reports. A quarter em (`SPILL_MEETS_EM`) is
+  under a word space: v0-optimus-delta.vercel.app's `99.99%` ends 3px short
+  of `<50ms` at 36px and the judges read the two as touching. bt.cn's
+  `white-space: pre` footer lines and v0-compute-11.vercel.app's nowrap
+  headline over its hero video no longer report; the stats and
+  soc-workflows-ai-cyb-tstb.bolt.host's report panel (77px past a 260px
+  panel, off the side of a 390px window) still do.
+
+Ratchet, run 25, both cohorts (585 captures), against the integration base
+(`48c6e9cb`, whose own ratchet differs from the recording on line-length,
+low-contrast, undersized-ui-text and four smaller rules, unchanged here):
+
+- body-text-viewport-edge 453 to 161: 331 removed, 39 added. 262 removed are
+  phone gutters of 12 to 15px (sapo.vn 163, ladepeche.fr 21,
+  simplybudget.framer.ai 19, hrsd.gov.sa 16; 149 pattern-absent, 30
+  disputed, 7 confirmed-harmful on hrsd.gov.sa at `right 12px`, which the
+  decision accepts). 66 are per-paragraph findings past the edge (62
+  confirmed-harmful); every capture that lost one gains the page-level
+  finding. 3 are aajtak.in items whose `left 15px / right 10px` now reads
+  `right 10px`. Added: 14 page-level findings, one per capture, and 25 gutter
+  snippets rewritten to their in-viewport side.
+- text-overflow 53 to 33: 20 removed (bt.cn 12 and v0-compute-11.vercel.app 2,
+  all real-harmless; 6 unjudged spills into free space on sapo.vn,
+  evebcn.com, avikmukherjee.com, chorusai.replit.app and clipto.com), none
+  added. The two stats and the report panel still report.
+
+Fixtures and tests:
+
+- `body-text-viewport-edge.html`: the four cases past the edge are renamed
+  `past-*` and no longer report per paragraph; `flag-gutter-beside-overflow`
+  is new (8px on the left, past the right). `crates/browser/tests/text_geometry.rs`
+  pins five gutter findings and one page-level finding naming the 3800px row.
+- `body-text-viewport-edge-phone.html` is new, scanned at 390x844: 8px and
+  11px flag, 12px, 14px and 24px pass, and a 480px list in a body that hides
+  x overflow reports once as cut off, naming `ul.wide-list`.
+- `text-overflow.html`: the flag column hides its overflow at 320px so its
+  spills are cut; `flag-stat-collides`, `flag-viewport-edge`,
+  `flag-under-positioned-image`, `flag-under-positioned-box`,
+  `pass-stat-neighbor`, `pass-free-space-pre`, `pass-free-space-headline`
+  and `pass-under-hairline` are new. `evidence_findings.rs` counts eleven
+  spills.
+- Unit tests: the phone floor, the page-level form (both wordings, the widest
+  box, the scroll bound, a fixed box, clipping boxes, root and body overflow,
+  inline ignores), the scroll side under `direction: rtl`, and the three
+  text-overflow conditions on bt.cn, v0-compute-11, soc-workflows and the
+  stats, with positioned images, `svg`, filled and bordered boxes counting
+  and a hairline and a faint wash not (`quality.rs`, `element_checks.rs`).
+
+### Known limits at merge
+
+1. **Parked carousel cards** that pass the Text gate (microsoft.com's
+   `store-layout-column`, becomeautonomous.com's second `proto-acard`) now
+   report through the page-level form instead of per paragraph: one finding
+   per page where there were one per card. Issue 24's transform-only tracks
+   are the cause and remain open.
+2. **text-overflow's own-clip case** still reports: a box that clips its own
+   overflow cuts its text, which the decision keeps. ynet.co.il's collapsed
+   accordion title (issue 33) and v0-compute-11's 2% ASCII texture report as
+   before.
+3. **The quarter em** is a fixed fraction of the spilling text's size;
+   a spill that ends a word space from its neighbour reads as clear.
+
+### Known limits at merge (from the review)
+
+Recorded when `corpus/integration` merged this branch, after the revision
+(d252382c) fixed the one problem the review raised: a spill under a
+positioned image, svg, filled box or bordered frame reports again, and only a
+hairline or a faint wash is skipped as a decoration layer. The review's open
+issues, for Paul to confirm:
+
+1. **The page-level wording goes past the option text.** On pages that cannot
+   scroll sideways (the root or body clips x, text is cut inside an
+   `overflow-x: hidden` wrapper, or text is past the left edge of an ltr
+   page) the message says the text "is cut off" rather than that the page
+   scrolls sideways, since that would be false on centene, agora, optimus
+   and simplybudget. Paul kept both wordings; the follow-up below makes the
+   message follow the page.
+2. **hrsd.gov.sa's 12px phone gutters go.** The seven confirmed-harmful
+   "right 12px" findings are removed because the r3-34 floor is 12px. This
+   follows the decision as written and contradicts the judges' labels.
+3. **Snippet rounding at the floor.** A gutter of 11.6px at 390px prints as
+   "(left 12px)" against a 12px floor, and a 15.6px desktop gutter prints as
+   16px. Older than the branch, more visible with the 12px floor.
+4. **A URL crossing its own unclipped panel** into free space no longer
+   reports (the review's `spill.html #urlfree`). The panel is an ancestor, so
+   this matches the decision text, but the "URL cut at a panel edge" wording
+   may have meant it.
+5. **Bare `div` names.** The page-level finding names `div` on some pages
+   (centene: "div reaches 120px past it") when `class_selector` has nothing
+   more to use, which is weak guidance for the fix. Addressed in the
+   follow-up below.
+6. **Parked carousel cards** (microsoft.com `store-layout-column`,
+   becomeautonomous.com `proto-acard`) show up as one page-level finding
+   each, inherited from issue 24 (item 1 above).
+
+### Follow-up: the page-level message follows the page (r4-p20)
+
+Paul, on review items 1 and 5: the message says what happens on the page.
+
+- **Page scrolls sideways.** The root's recorded `scrollWidth` exceeds its
+  `clientWidth` by more than 1px, the viewport does not clip x (root, then
+  body), the text is past the side the page scrolls to, and at least one
+  paragraph on that side is not cut by a box that hides overflow: `page
+  scrolls sideways at <vw>px: ...`, naming the widest box that sets the
+  page's width, as before.
+- **Text is cut off.** html or body hides or clips x; or, for every
+  paragraph on that side, the paragraph or an ancestor below the body at
+  `overflow-x: hidden` or `clip`, whose own edge on that side is inside the
+  viewport, is passed by the text (`clip_cuts_text`); or the text is past the
+  side a page never scrolls to (left of a left-to-right page); or the root's
+  recorded scroll width shows the page does not scroll. The last two are
+  readings: the engine can tell the page cannot scroll to the text, so
+  saying it scrolls sideways would be false, though the clip itself may be
+  one the walk cannot see (microsoft.com's parked card in a shadow root).
+  A page that scrolls for another reason (a wide banner) while a wrapper cuts
+  every paragraph now reads "cut off"; before, it read "scrolls sideways".
+- **The engine cannot tell.** Nothing it can see clips the text and the root
+  recorded no scroll width: the sideways wording, naming the widest box
+  around the text.
+- **Bare `div` names** (`overflow_element_name`). A `div` with no class is
+  named `div#<id>`, else after its nearest ancestor below the body with an
+  id or a class (`div in div#member-portal`, `div in section.hero.dark.wide-gutter`,
+  at most three classes), else by up to 40 characters of its text, cut at a
+  word (`div ("A column of a fixed-width desktop layout…")`). Other elements
+  keep their `class_selector`.
+
+Fixtures and tests: the desktop `body-text-viewport-edge.html` scrolls
+sideways (wrappers cut three of its five past-the-edge paragraphs, the page
+scrolls to two) and its 3800px row, a bare `div` under the body, is now named
+by its text; the phone fixture keeps its body-clip "cut off" finding.
+`crates/browser/tests/text_geometry.rs` pins both. New unit tests in
+`quality.rs` pin the wording on one page as it moves through a cutting
+wrapper, a wrapper wider than the viewport, a paragraph clipping itself, one
+reachable paragraph, a non-scrolling root, no scroll metric and a body clip,
+and the bare-`div` names. `docs/CLI-CONTRACT.md` describes both wordings.
+No golden moves: the static engine has no page-level form.
+
+Run 25 (`integration-25-premise3b`, against `integration-25-premise3`, and
+the same two engines replayed with every finding listed): body-text-viewport-edge
+is 161 in both, with the same 360 removed and 39 added; the 14 page-level
+findings keep their wording, 5 "scrolls sideways" (drom.ru, dograh.com,
+news.cn at both widths, so-net.ne.jp, all with a root that scrolls) and 9
+"cut off" (html or body clips: centene.com, agora.co.il,
+becomeautonomous.com; a wrapper cuts every paragraph:
+simplybudget.framer.ai 3, tempra.framer.website,
+v0-optimus-delta.vercel.app; a root that does not scroll: microsoft.com).
+None took the cannot-tell path: every capture records the root's scroll
+width. One message changes, centene.com's `div reaches 120px` to `div in
+div.news-desc reaches 120px`. No other rule moves.
+
+## Recorded 2026-09-18: nested-cards reads fill-only boxes and embedded content (corpus/premise3-nested-cards-premise)
+
+Two taste calls Paul decided on 2026-09-18 from observations-25 (round 4).
+Both narrow the rule's premise in both engines; the registry severity is
+unchanged, and r4-p18 (cards listed inside a panel) was decided `keep`, so a
+list of sibling cards in a framed panel still reports and fails.
+
+- **r4-p16-nested-cards-fill-only = narrow** (against the recommendation).
+  The decision: "Count an inner box as a card only when it shows a border or
+  casts a shadow. The 79 harmless findings go, and so do the 38 findings of
+  harmful fill-only double frames shown as counter-evidence." The URL engine
+  now skips an inner candidate that shows no border on any side (half a pixel
+  or wider, a style that draws, a colour that is not transparent) and casts
+  no shadow (`shows_border_or_shadow`). The outer card still counts a fill,
+  so a framed box inside a tinted panel reports as before. There is no
+  fill-only path left, advisory or otherwise: Paul accepted losing the
+  harmful fill-only double frames. The file scan needs nothing, since it has
+  only ever counted a box with a four-sided border class or a shadow.
+- **r4-p17-nested-cards-embedded-content = narrow.** The decision: "Skip a
+  box whose main child is an svg or canvas with a caption, a monospace output
+  block or a media player, and any box whose outer card is a dialog. Inner
+  boxes that hold ordinary text and controls still report." Each reading
+  asks that the embedded content be the box's main child, so a card of
+  ordinary copy and controls that also holds a sound element, a small video,
+  an illustration or a monospace paragraph still reports. The shared half
+  (what counts as a control, a caption, a player's own button) is in
+  `impeccable_core::checks::embedded_content`. Read as:
+  - **Figure** (URL engine): an `<svg>` or `<canvas>` inside the box covers
+    at least 40% of it, the box holds text beside it of caption length (1 to
+    140 non-space characters), and no control sits outside the figure. The
+    file scan has no layout, so it reads an `<svg>` or `<canvas>` in a
+    `<figure>` or beside a `<figcaption>`, with the same caption and control
+    limits.
+  - **Monospace output block**: one element (the box or a descendant) holds
+    at least 60% of the box's text, 90% of that text is monospace, and it is
+    one run of text: a `pre`, `code`, `samp`, `kbd` or `output`, a box that
+    keeps its white space, or text whose inline runs hold 80% of it. A stack
+    of rows set in a monospace face (dograh.com's provider list with its
+    toggles, context.dev's company cards) is ordinary text and still reports,
+    and so does every box on a page whose outer card is itself monospace.
+    The box may hold no control but the block's own chrome: a button named
+    as a copy button, or an icon button with no text of its own
+    (context.dev's code window has a "More options" icon menu in its
+    header). A monospace card with a paragraph and an Upgrade button reports.
+  - **Media player**: the box holds a visible `<audio>` or `<video>` (drawn
+    with `controls`, or covering 40% of the box; the file scan reads
+    `controls` alone), or a play or pause button beside a seek control
+    (`role="slider"`, a range input, a `<progress>`). And the player is most
+    of the box: every control in it is a seek control or a button named with
+    a media word (play, pause, mute, volume, skip and the like) or not named,
+    and the text outside the controls is caption-length. A settings panel
+    with a hidden `<audio>`, a profile card with a 48px avatar video and a
+    pricing tier with a "Play intro" button beside its Choose button report.
+  - **Dialog**: the outer card is a `<dialog>`, has `role="dialog"` or
+    `role="alertdialog"`, or `aria-modal="true"`, or it is the first
+    card-like box inside such an element (the panel of a modal inside its
+    fixed overlay). A card nested further in, inside the dialog's panel,
+    reports as it does anywhere else.
+- **Fixture.** `nested-cards.html` gains ten flag cases (a tint that casts a
+  shadow, a panel with copy and a button, a tile with an icon, a monospace
+  card on a monospace page; and, for the main-child reading, a panel with a
+  hidden `<audio>`, a profile with an avatar `<video>`, a pricing tier with a
+  promo play button and a `<progress>`, a feature tile with a large svg,
+  copy and buttons in a `<figure>`, a card nested inside a dialog's panel,
+  and a monospace tier with an Upgrade button) and six pass cases (a fill-only bubble, an svg
+  figure, a canvas figure, a `<pre>` output block, an audio player, a panel
+  in a `role="dialog"` card). `crates/browser/tests/card_heuristics.rs` pins
+  all of them against the URL engine; `crates/html/tests/nested_cards_embedded.rs`
+  pins the file scan's reading.
+- **Goldens.** Re-recorded from the binary:
+  `detect-fixture-json-nested-cards-html`, `detect-fixture-text-nested-cards-html`
+  (3 to 13 findings), `detect-dir-json-all-fixtures`, `detect-dir-text-all-fixtures`,
+  `detect-dir-quiet-all-fixtures` (644 to 654), `detect-scope-layout-text`
+  (39 to 49), `detect-scope-both`, `detect-no-advisory-json`,
+  `detect-no-advisory-text`. Each gains only the fixture's ten new flag
+  cases (nine `Card inside card (div)`, one `Card inside card (figure)`) and
+  the summary count; none of the six new pass cases reports in the file
+  scan, and nothing else moved.
+- **Corpus, run 25 (both cohorts, 585 captures).** nested-cards 279 to 203:
+  76 removed, 0 added (the same with the main-child reading as without it;
+  requiring no labelled control beside an output block first brought
+  context.dev's code window back twice, which the icon-button allowance
+  settles); every other rule matches the synced integration base
+  exactly. Violations 56 to 75, all 19 of them the r4-p16 counter-evidence
+  Paul accepted to lose (donckelektro.nl 6, framai.framer.website 6,
+  paymentkit.com 4, simplybudget.framer.ai 3).
+  - r4-p16 alone removes 63 (real-harmless 39, confirmed-harmful 19,
+    pattern-absent 5) and would add 2: context.dev's code window, whose
+    fill-only inner panel had hidden it, which r4-p17 then skips as an output
+    block.
+  - r4-p17 removes 13 more: soc-workflows-ai-cyb-tstb.bolt.host's report,
+    hungrygpu.com's chart in its welcome dialog, theagenticdatacompany.com's
+    audio player, context.dev's terminal and code blocks, blueprintbuddy's
+    GA4 event JSON, and challengebrew.com's constellation demo (an svg
+    covering most of a card with its caption line).
+  - Against the premise counts: 10 of the 23 r4-p16 evidence
+    representatives show a border or a shadow (bitroad.ai's agent bubbles
+    and outcome box, challengebrew.com's panels, billia.app's rows,
+    demotv.lol's battle cards, swipeloan.in's shadowed cards), so the
+    decision as written keeps them; the other 13 go. 7 of the 15 r4-p17
+    representatives are product mockups and previews with no svg, canvas,
+    monospace run or player as their main child (askjo.ai's paper preview,
+    overdrive.health's and veeza.ai's mockups) or a data grid with 42%
+    monospace text (visiby.net's heatmap); they hold ordinary text and
+    controls and still report. Of the 8 that go, kraflio.com's bubble and
+    clipto.com's panel are fill-only and go by r4-p16.
+
+### Known limits at merge
+
+Recorded when `corpus/integration` merged this branch, after the revision
+(10bfab7f) fixed the problems the review raised: a player, a figure, an
+output block or a dialog must now be the box's main child, so a card with a
+hidden audio element, an avatar video, a promo player, an illustration tile,
+a card nested inside a dialog's panel or a monospace tier beside ordinary
+controls reports again. The review's open issues, for Paul to confirm:
+
+1. **One side of border counts.** r4-p16 reads a border on any single side
+   as "shows a border": a tint with only a bottom rule still reports as a
+   card, and so does a tint whose 1px border is drawn in its own fill colour,
+   which looks fill-only on screen. Decide whether it needs three or more
+   sides, or a border colour that differs from the fill.
+2. **The stated count and the criteria differ.** The r4-p17 option text says
+   "The 33 findings go", but only 13 findings (8 of 15 representatives) are
+   removed by r4-p17 in run 25. The other 7 representatives (askjo's paper
+   preview, overdrive's and veeza's product mockups, visiby's heatmap at 42%
+   monospace) do not meet the option's own criteria. The criteria win here.
+3. **The engines read figures and monospace differently.** The file scan
+   needs a `figure` or `figcaption` element and reads monospace from tags or
+   a declared font; the URL engine reads an area share and the computed
+   font. The two can disagree on the same markup.
+4. **A large decorative svg with a caption line is skipped.**
+   challengebrew.com's constellation svg goes, which the judges called
+   harmless, and any svg of that shape beside one line of text goes with it.
+5. **The fill-only double frames go.** r4-p16 drops the 38 harmful fill-only
+   double frames, as Paul accepted; the corpus violation count rises from 56
+   to 75, all from that counter-evidence.
+
+## Recorded 2026-09-18: brand hue, ad tech, vendor widgets and weighted ramps (corpus premise round 3)
+
+Four taste calls Paul decided on 2026-09-18, each implemented as the chosen
+option's text says. Quoted verbatim from the corpus decisions table:
+
+- **r3-23-ai-color-palette-brand-hue, narrow:** "Skip when the heading hue
+  matches the logo, the nav bar or a large brand surface on the same page.
+  Purple that shows up only in headings and gradients still reports." With
+  Paul's note: "i think a realistic fix for users would be that if in their
+  design.md, they have purple, then we auto-disable the purple as ai tell
+  check".
+- **r3-31-script-error-ad-tech, advisory:** "Class known ad-tech API
+  rejections (browsingTopics and the like) as third-party and report them as
+  advisory."
+- **r4-p24-third-party-widget-markup, narrow:** "Tag findings inside known
+  vendor subtrees (Taboola, Swiper and the like) as third-party, and name the
+  vendor in the message. They keep counting as failures, because visitors see
+  them."
+- **r4-p23-flat-type-hierarchy-commerce, advisory:** "Report a flat ramp as
+  advisory when weight separates the roles. The findings stay visible, outside
+  the failure count."
+
+What each does (the contract is in `docs/CLI-CONTRACT.md`):
+
+1. **Brand hue, URL engine.** The heading forms of `ai-color-palette` (snippets
+   ending ` on heading`) drop when the heading's computed colour is within 12
+   degrees of hue of a solid (alpha 0.9 or more, chroma 50 or more, no
+   gradient over it) logo, nav bar or header at least half the viewport wide,
+   or band at least 90% of the viewport wide covering a fifth of its area.
+   Headings are never brand surfaces; gradients and neon text still report.
+   `drop_brand_hue_headings` in `crates/core/src/browser/driver.rs`.
+2. **Brand hue, DESIGN.md.** A design system that declares a purple (chroma 30
+   or more, hue 250 to 320) drops every purple/violet form of
+   `ai-color-palette` in the static, regex and URL engines for that target (the
+   cyan forms stay), so the design hook gets it too; text mode prints
+   `Note: ai-color-palette's purple/violet check is off: <DESIGN.md> declares
+   <label> (<hex>).` The detect crate's own design-system loader supplies the
+   colours: it parses the same DESIGN.md frontmatter `crates/context`'s
+   `parse_design_md` does, and `crates/detect` cannot depend on
+   `crates/context`.
+3. **Ad tech.** A `script-error` thrown from AnyMind, Prebid, Meta Pixel,
+   Google Tag Manager, OneTrust or Google Ads script hosts, or naming
+   `browsingTopics` / `joinAdInterestGroup` / `runAdAuction` / `adsbygoogle`,
+   is `severity: advisory`, ends ` (third-party: <vendor>)` and carries
+   `thirdParty`. The list is `crates/core/src/third_party.rs`. The
+   three-error cap is applied after classing, to counted and ad-tech errors
+   separately (`capped_script_errors` in `crates/browser/src/lib.rs`), so
+   three ad-tech errors ahead of the site's own never push it out of the
+   report: a page whose only counted error arrived fourth would otherwise pass
+   with exit 0. `script-error-ad-tech.html` has three ad-tech errors ahead of
+   its own and a fourth after it.
+4. **Vendor widgets.** Findings on Taboola's feed subtree and on Swiper's own
+   wrapper and slide elements end ` (third-party: <vendor>)` and carry
+   `thirdParty`; severity unchanged. Same module.
+5. **Weighted ramps.** `flat-type-hierarchy` is advisory, with `; weight
+   separates headings from body text` inside its parenthesis, when at least
+   four in five heading samples are 200 or more heavier than the body's most
+   common weight. Static and URL engines.
+
+Goldens:
+
+- New: `detect-design-purple-json`, `detect-design-purple-text`,
+  `detect-design-blue-json`, `detect-design-blue-text` (a project with a
+  purple DESIGN.md reports none of the three purple findings its page and
+  component carry and prints the note; the blue project reports all three),
+  `hook-stop-purple-heading-design-purple`, `hook-stop-purple-heading-design-none`
+  (the Stop review of a `text-purple-700` heading is silent with the purple
+  DESIGN.md and reports it without one), and the json and text cases of the
+  new fixtures `ai-color-palette-brand-hue.html`,
+  `ai-color-palette-brand-hue-headings-only.html`, `script-error-ad-tech.html`,
+  `third-party-widgets.html`, `flat-type-hierarchy-weight.html` and
+  `flat-type-hierarchy-weight-flat.html`. The static engine has no rendered
+  page, so both brand-hue fixtures report their two headings there; the
+  script-error and widget fixtures are URL-engine cases that carry only their
+  static findings here (`crates/browser/tests/brand_and_vendors.rs` holds the
+  URL assertions).
+- `detect-fixture-json-covered-text-contrast-html`,
+  `detect-fixture-text-covered-text-contrast-html`,
+  `detect-fixture-json-painted-at-capture-html`,
+  `detect-fixture-text-painted-at-capture-html`,
+  `detect-fixture-json-typography-should-flag-html`,
+  `detect-fixture-text-typography-should-flag-html`: the one
+  `flat-type-hierarchy` finding each moves from warning to advisory with the
+  weight note, because each fixture sets its headings bold over regular body
+  text. Counted findings drop by one, advisory notes rise by one; nothing else
+  moved.
+- `detect-dir-json-all-fixtures`, `detect-dir-text-all-fixtures`,
+  `detect-dir-quiet-all-fixtures`, `detect-scope-type`, `detect-scope-both`,
+  `detect-no-advisory-json`, `detect-no-advisory-text`: the three advisory
+  moves above plus the new fixtures' static findings (644 to 648 counted, 94
+  to 100 advisory in the full sweep).
+- The generated browser asset was regenerated with `cargo xtask bundle`.
+
+**Corpus.** `premise3-brand-and-vendors-25` against run 25 (585 captures, both
+cohorts), compared with `integration-25-synced` (the same base engine): every
+difference outside these four rules' changes is the base's own drift and
+identical in both. The changes:
+
+- `ai-color-palette`: 76 heading findings removed (6 real-harmless, 70
+  unjudged): te.eg 19 (the evidence cluster, 12 findings, plus its inner
+  pages), nubank.com.br 54 (logo and full-width sections in `#8d0de3`), zid.sa
+  2 (a full-width `#af72ff` hero), context.dev 1 (a 95%-wide violet panel at
+  phone width; its desktop capture keeps the finding because the panel is
+  52% wide). None confirmed-harmful.
+- `flat-type-hierarchy`: 15 of 33 move to advisory (2 real-harmless: the two
+  otto.de representatives; 13 unjudged: yna.co.kr, donckelektro.nl, aajtak.in,
+  avikmukherjee.com, joongang.co.kr, all bold headings over regular body).
+  co-trip.jp (109941, headings at 500 and 400) stays a warning.
+- Tagged, severity unchanged: Taboola 23 (`undersized-ui-text` 11, all
+  confirmed-harmful; `low-contrast` 5; `tight-leading` 6; `clipped-overflow-container`
+  1) on ynet.co.il, climatempo.com.br and aajtak.in, and Swiper 8
+  (`layout-transition` on nubank.com.br 7, yungching.com.tw 1). The ratchet
+  keys on snippets, so each tag counts as one removal and one addition, and
+  the 14 confirmed-harmful tagged findings raise its violation count from 56
+  to 70 without anything leaving the report.
+- `script-error` does not replay. Classified offline over the recorded
+  run-25 findings, 20 of 116 turn advisory: co-trip.jp's AnyMind
+  `browsingTopics` rejection 6, onlinetest.tw's `adsbygoogle` errors 8 and
+  adm.com's OneTrust auto-blocker 6 (5 real-harmless, 1 unjudged). The 19
+  real-harmless ones are the decision's run-25 evidence count. The att.com
+  Adobe tag, its web-vitals chunk, PostHog on context.dev and ynet.co.il's
+  ad-unit bundle stay errors: they are served from the site's own host or are
+  not ad tech.
+
+### Known limits at merge
+
+Recorded when `corpus/integration` merged this branch, after the revision
+(69aa49e5) fixed the one problem the review raised: the URL engine now
+classes page errors before capping them and caps counted and ad-tech errors
+at three each, so ad-tech errors never take a first-party error's slot. The
+review's open issues, for Paul to confirm:
+
+1. **co-trip.jp stays a warning.** The r4-p23 option text says "The 3
+   findings stay visible, outside the failure count", but only otto.de's two
+   (111427, 112210) turn advisory. co-trip.jp 109941 has headings at 500 for
+   12 of 36 samples and 400 for the rest, which no reasonable weight
+   threshold catches, though both judges called it contrast by weight.
+2. **The engines disagree on default bold.** A heading that relies on the
+   browser's default bold reports a warning in a static scan and advisory in
+   a URL scan (the review's `ft-default.html`), so the design hook's static
+   scan can fail a page whose URL scan passes. Defaulting h1 to h6 to 700 in
+   the static sampler when no `font-weight` is declared would close it.
+3. **r4-p23 reaches beyond commerce.** 13 unjudged findings on news sites and
+   a blog (yna.co.kr, joongang.co.kr, aajtak.in, donckelektro.nl,
+   avikmukherjee.com) turn advisory, following the option's weight criterion.
+4. **The logo trigger is partial.** It reads the logo element's own
+   background, or its text colour only when the text sits directly in it, so
+   `<a class="site-logo"><span>Acme</span></a>` with a purple span still
+   reports; SVG and image logos are invisible because the snapshot carries no
+   `fill`. Reading descendant text ink when the logo has no direct text would
+   help.
+5. **A stock violet CTA band is a brand surface.** A full-width band in
+   Tailwind's violet-600 (#7c3aed) silences a matching violet-600 heading,
+   following the option text; the page-level accent finding still reports.
+6. **The DESIGN.md switch misses indigo and URLs.** An indigo DESIGN.md
+   (#4f46e5, hue about 243) does not switch the check off though the rule
+   treats `indigo` classes as purple forms, and the switch never applies to
+   http(s) scans, localhost dev servers included.
+7. **The hook drops the purple forms silently.** Only CLI text mode prints
+   that the check is off; JSON has no place for the note, and the design hook
+   never tells the agent.
+8. **r3-31 is wider than API rejections.** Any error thrown from a Meta
+   Pixel, GTM, OneTrust or Google Ads host is ad tech. OneTrust is a consent
+   manager; the evidence ids support it, but Paul should confirm it belongs
+   on the list.
+9. **Vendor tagging is partial.** Only rule-pass and visual-contrast findings
+   are tagged; content-hidden findings and the static engine never are.
+   Swiper is tagged on its own elements only, not its subtree, on purpose.
+10. **Tags change snippets**, so snippet-keyed consumers (the ratchet,
+    cluster keys) count each tagged finding as one removal and one addition.
+11. **Live test flake.** `crates/cli/tests/agent_target.rs` and the
+    impeccable-live lib tests fail now and then under a full
+    `cargo test --workspace` run; older than the branch.
+
+## Recorded 2026-09-18: URL scans hide known consent banners (corpus/fix-consent-hiding)
+
+Paul's decision (2026-09-18): the URL engine hides known consent managers
+before the rule pass runs. It answers known limit 1 of the covered-text
+branch ("Covered text hides real failures") for vendor banners.
+
+One golden changes, `detect-help`: the usage text gains
+`--no-consent-hiding` (three lines after `--no-advisory`). No fixture case
+changes: the oracle scans files, and the static engine is unaffected. The URL
+behavior is pinned by `crates/browser/tests/consent_hiding.rs` over
+`tests/fixtures/consent/`.
+
+- **What is hidden.** Roots and backdrops of the managers in
+  `crates/browser/src/consent.rs`, by vendor ids and classes only. Corpus
+  evidence (runs 20 and 25, 848 captures): OneTrust on 7 sites, Usercentrics
+  on 2, and Cookiebot, TrustArc, Didomi, the open-source Cookie Consent
+  library (centene.com) and Google Funding Choices (ynet.co.il) on 1 each.
+  The other listed vendors have no corpus capture yet.
+- **When.** After the validity gate, after the reveal sweep (a banner that
+  arrives late or on the first scroll), right after the capture (a pass that
+  changes the page triggers a second capture, so the capture, the live hit
+  tests and the pixel reads agree), and before the evidence screenshot.
+  Every pass is best-effort: a failed one hides nothing and the scan goes on.
+  An injected `display: none !important` style; nothing is clicked and no
+  consent state is set. Scroll locks are undone only where the manager put
+  them: its own lock classes, and an inline `overflow: hidden` on html/body
+  while its backdrop was up, unless the page is an app shell (an element at
+  least half the viewport tall that scrolls itself), whose body lock is the
+  site's.
+- **Borlabs.** Only `#BorlabsCookieBox` and `#BorlabsCookieBoxWrap`. The
+  shared `.brlbs-cmpnt-container` class was dropped in review: Borlabs
+  Cookie 3 also puts it on its content blockers (the YouTube and Maps
+  placeholders), which are page content.
+- **Consent wall.** There was no consent-wall detection before this branch
+  (the round-4 note that the gate "already recognizes OneTrust, Cookiebot and
+  Usercentrics" was wrong). The probe now names the managers showing, the
+  text inside them, and the visible form controls and media of 10,000 square
+  pixels or more outside them, before hiding. A small page is refused as
+  `consent-wall` only when hiding would leave next to nothing: under 20
+  visible characters outside a showing manager, no control or sizable image
+  outside it, and at least 100 characters inside it. The first version
+  (under 100 characters outside, three times as many inside) refused a
+  sign-in page under a OneTrust bar in review, 48 characters of its own plus
+  a form, which base scanned and reported correctly; that page is now
+  `tests/fixtures/consent/short-page.html`. With `--no-consent-hiding` the
+  gate is off and the wall is scanned with its banner, which is what the
+  flag asks for. No capture in runs 26 and 27 comes near the gate: the two
+  mckesson.com pages under 3000 characters keep about 2400 of their own.
+
+Measure, live (the ratchet cannot replay this: the recorded captures have
+the banners in them). Run 26 recaptured hrsimple.app, theagenticdatacompany.com,
+centene.com, veeza.ai, otto.de and mckesson.com. Against run 25 the counts
+move with page drift (otto.de's deal pages rotate), so each URL was also
+scanned twice at once with the branch binary, with and without
+`--no-consent-hiding`, desktop and 390px:
+
+- Banners hidden (read from `consentHidden`, so only scans with findings
+  show it): OneTrust on every otto.de and mckesson.com scan with findings,
+  Cookiebot on all 6 theagenticdatacompany.com scans, Cookie Consent on
+  every centene.com scan with findings. Run 26's probe records the same
+  managers showing at load on the scans with no findings. None on veeza.ai: its banner is the site's own
+  (`data-cookie-consent`), so it stays, as designed.
+- low-contrast 158 to 156, undersized-ui-text 201 to 195, text-occlusion 0
+  and 0. Every one of those differences is on otto.de and is recommendation
+  tile rotation between the two loads, not the banner. The other rule
+  difference is `layout-transition` on `#CybotCookiebotDialog`, gone from all
+  six theagenticdatacompany.com scans: the finding was the dialog's.
+- Crops: ten run-25 crops that showed a banner were opened next to their
+  run-26 twins (mckesson.com line-length x4, centene.com body text x2, otto.de
+  filter chips x3, theagenticdatacompany.com NEW chip). Every run-26 crop
+  shows the page element; every run-25 one showed the banner.
+- hrsimple.app could not be checked. The domain expired and now serves a
+  GoDaddy parking page (521 characters, 0 findings on all six scans). Its
+  banner was also the site's own (`We value your privacy`, a `lucide-cookie`
+  icon, Tailwind classes, no vendor), so this branch would not have hidden it:
+  the ten findings under it stay covered by design.
+
+After review (run 27, same six sites, same command): the counts against run
+26 are unchanged on every site but otto.de (low-contrast 158 to 156,
+undersized-ui-text 198 to 206, text-occlusion 0 and 0; otto.de's deal tiles
+rotate), and all 36 captures are `ok`. Ten run-25 crops that showed a
+consent layer were opened next to their run-27 twins: mckesson.com
+line-length x2 (the OneTrust bar over the paragraph, now the paragraph),
+centene.com body text x2 (the cc-window box, now the italic copy),
+otto.de mobile filter chips x3 (112172 to 112174: "Cookies und andere
+Technologien erlauben?", now the "von OTTO", "Damen" and "schwarz" chips),
+otto.de mobile cramped-padding (the OneTrust heading, now the promo module),
+and theagenticdatacompany.com undersized-ui-text at both widths (Cookiebot's
+"Preferences" toggle, now the "NEW" chip). All ten now show the flagged
+page element.
+
+### Known limits at merge
+
+1. **Site-made banners still cover text.** hrsimple.app and veeza.ai are the
+   corpus cases. Hiding them needs a generic banner heuristic, which the
+   decision ruled out.
+2. **Scroll-lock data is thin.** No corpus capture shows a vendor lock class
+   on html/body; the two listed (Didomi, Sourcepoint) come from the vendors'
+   own stylesheets, and the inline rule is inferred. A site that locks body
+   scroll for its own modal (not an app shell) while a vendor backdrop is
+   also up is unlocked too.
+3. **The corpus harness does not record `Evidence.consent`.** Its
+   `evidence.json` carries the probe's `consent` list (showing before
+   hiding), which names the same managers; recording the matched selectors
+   needs a harness change.
+4. **Tagged CLI findings, untagged evidence findings.** `consentHidden` is
+   added only on the CLI path, so evidence findings replay equal.
+
+From the review, checked against the merged code:
+
+5. **Borlabs `.brlbs-cmpnt-container`.** Raised as too broad (Borlabs
+   Cookie 3's content blockers, the YouTube and Maps placeholders, carry it
+   too; recalled, not verified, and no Borlabs site is in the corpus).
+   Resolved on the branch: the roots are only `#BorlabsCookieBox` and
+   `#BorlabsCookieBoxWrap`.
+6. **Scroll-lock undo can remove a site's own lock.** While a vendor
+   backdrop is showing, any inline `overflow` / `overflow-y: hidden` on
+   html or body is removed unless the page is an app shell (checked with
+   own-lock-backdrop.html). Recording the inline value at the first pass,
+   before the vendor could have set it, would narrow this. Same case as
+   limit 2.
+7. **Hide after the capture.** Raised as CLI-only-missing; the branch now
+   hides again right after the capture on both paths and recaptures when
+   that pass changed the page. A banner injected after that pass and before
+   the pixel-pass screenshots would still be painted in the pixel reads but
+   missing from the snapshot. A narrow timing window.
+8. **A failed hide pass aborting the scan.** Resolved on the branch: every
+   hide pass is best-effort (`hide_consent_banners` returns whether it
+   changed the page and swallows evaluation errors).
+9. **`consentHidden` only on scans with findings, and no
+   `Evidence.consent` in the corpus harness.** Same as limits 3 and 4;
+   measuring it going forward needs a harness change in impeccable-corpus.
+10. **Site-made banners.** Same as limit 1: hrsimple.app and veeza.ai still
+    cover text by design. The hrsimple.app findings that prompted the brief
+    cannot be fixed by this rule and cannot be checked live, because the
+    domain now serves a parking page.
+11. **One unexplained workspace failure.** One of four full
+    `cargo test --workspace` runs under load failed once and did not
+    reproduce. Watch the browser-backed suites for flakiness. At the merge,
+    the first full run failed once in `fullpage_screenshot.rs`
+    (`a_right_to_left_page_records_where_its_screenshot_starts`, browser
+    launch under load); the next full run and three runs of that file
+    passed.
+
+## Recorded 2026-09-18: surfaces off the ancestor chain (corpus/round7-surfaces)
+
+Corpus run 28, `observations-28.md` section 6 branch 1: rows 1 (sibling
+layers), 3 (scrims over photos), 10 (text-shadow outlines), the sampled-pass
+washes and SVG initials of row 27, and row 21's "on dark background" read off
+a dark root; plus the walkthrough misses in `walkthroughs-28.md` issue 1 that
+belong here (a link or span with no fill over a picture, the hit test's blind
+spots below the fold and through `pointer-events: none`, and the page width
+measured against the window).
+
+- **Every contrast path asks the structural climb.** The SAFE_TAGS path asked
+  `layer_under_text`; every other element relied on the hit-test stacks,
+  which answer only in the viewport and never list a layer that ignores
+  pointer events. Now every failing `low-contrast` verdict asks the climb.
+  Outside the SAFE_TAGS path its own finding counts where the stacks cannot
+  answer, already see unread paint, or confirm the walk only because the
+  layer ignores pointer events or is an SVG shape.
+- **A covering gradient beside the text is unread paint.** `own_paint` read a
+  gradient only when drawn larger than its box, so an `absolute inset-0
+  bg-gradient-to-br` sibling painted nothing to the climb. A gradient that
+  paints a surface on a box that is nobody's ancestor is now
+  `LayerUnder::Gradient` (opaque stops, as the channel-wise least and greatest)
+  or `Unmodelled` (a translucent stop). It uses the stacks' own texture tests
+  (`text_layers::gradient_surface_stops`). An ancestor painting an opaque
+  gradient ends the climb, as its fill does, since the walk scores its stops.
+  An SVG shape drawn around the text (at most three times the text box plus
+  16px) is unmodelled paint; one behind a whole section is decoration.
+- **Unread paint is read for what it can make of the surface**
+  (`visual::unread_verdict`). The climb is asked again past each translucent
+  layer, up to four, until it reaches paint that hides what is beneath or the
+  walk's own ground. The walk's translucent layers are put over or under that
+  paint by the box each hangs from. Over that span of surfaces:
+  - a verdict that **fails everywhere** stands, also where the stacks see
+    unread paint. Where the walk named a flat colour more than 24 away from
+    the span, and the span's colours are known (fills and gradients), it is
+    printed against the surface it reads best on: `3.2:1 (need 4.5:1) — text
+    #5b6c7f on #0a1f0e (layer on div.absolute)`.
+  - a verdict that **passes everywhere** is dropped. Examples: light copy on
+    a dark hero gradient, and white card copy on a dark panel, where the walk
+    read the white page.
+  - a verdict that **depends on what the paint shows** (a photo, an SVG
+    shape's unknown fill) stands outside the SAFE_TAGS path, as it did (fail
+    safe). The SAFE_TAGS path waives it, as it did.
+- **The pixel pass reads what the element pass hands over.** A second
+  candidate budget, `maxRoutedCandidates`, takes text over unread paint whose
+  verdict depends on the paint, ink in exactly the walk's surface colour over
+  it, links and spans with no fill among them, and outlined text.
+  - **The first budget is unchanged.** Its 12 candidates are selected exactly
+    as before; the URL engine passes 12 routed slots after them, and the
+    in-page bundle passes none.
+  - **Routed candidates go to the screenshot pass.** They carry `routed` and
+    the reason `unread layer` or `text outline`, which the sampled pass
+    refuses. A first-budget candidate the element pass hands over carries
+    `routed` only, and the sampled pass reads it as before.
+  - **The pixels' verdict replaces the element pass's.** Where the pixel
+    pass gives a verdict, pass or fail, on a routed selector, the URL engine
+    drops the element pass's `low-contrast` finding on it. Where it gives
+    none, the element verdict stays.
+  - **The extra reads are capped.** Reads the first budget would not have
+    made stop after 4 seconds, or after 4 slow reads in a row that gave no
+    verdict (lpga.or.jp's carousels, about a second a read).
+- **Outlines.** `-webkit-text-stroke` (width and colour, now in the capture)
+  in a colour of its own, or two or more opaque text-shadow layers blurred at
+  most 2px and offset in opposing directions, is an outline. The element
+  pass keeps its verdict. The pixel pass reads the rendered colours
+  (`preferRenderedForeground`), and its hide style now also clears
+  `-webkit-text-stroke-color`, and `fill` and `stroke` on SVG `text` and
+  `tspan`, so an initial's glyphs can be diffed.
+- **The sampled pass reads a faded picture faded.** A picture whose own box
+  or wrapper is faded (below the nearest box that also holds the text) is
+  composited at that opacity, not read raw. Examples: phillips66.com's card
+  photos at 0.16, thairath.co.th's 0.1 slide wrapper. A picture that cannot
+  be read (a tainted image, a refused video frame) ends the walk rather than
+  letting the page white under a hero video answer. Both walks share this
+  (`visual::media_sample`, `vc_media_sample`).
+- **dark-glow's dark claim reads the surface under the element.** Where
+  that form fired, an opaque detached fill or gradient under the element's box is
+  its surface; a light panel laid over a dark section is not dark. A picture
+  or a translucent layer leaves the claim as the walk made it.
+- **The page's width is the document's** (`overlaps_page_width`): on a page
+  laid out wider than the phone, the right column's links and spans are
+  scored (inven.co.kr's 14 pairs at 390px).
+- **Pixel budget.** The pixel pass's candidate budget goes from 12 to 24 per
+  scan (the second 12 for handed-over text only). Measured live, a read costs
+  about 80 to 190ms on the pages checked, so the second budget costs under
+  two seconds there. lpga.or.jp, where every read takes about a second and
+  none resolves, is bounded by the four-miss cap.
+
+Goldens re-recorded from the binary and read finding by finding:
+
+- `detect-fixture-json-unread-surface-contrast-html`,
+  `detect-fixture-text-unread-surface-contrast-html`: new, 6 findings. The
+  static engine has no layout: it scores the dim copy, the emerald copy and
+  the outlined sticker against the page, both glows as on dark, and its
+  page-level dark glow.
+- `detect-fixture-json-wide-page-contrast-html`,
+  `detect-fixture-text-wide-page-contrast-html`: new, 2 findings, the right
+  column label and the parked drawer's label (no layout).
+- `detect-dir-json-all-fixtures`, `detect-no-advisory-json`: exactly the new
+  fixtures' 8 added, none removed (810 to 818, 686 to 694);
+  `detect-dir-text-all-fixtures`, `detect-dir-quiet-all-fixtures`,
+  `detect-no-advisory-text` the same.
+
+The URL behavior is pinned by `crates/browser/tests/unread_surfaces.rs`.
+Scanned with the base binary (156c3150), the fixture misses the dim copy, the
+grain link, the cream copy on the pointer-events-none photo and the faint
+link below the fold. It reports the outlined sticker (`1.2:1`), the faded card
+photo (`browser contrast 1.9:1 via canvas-img-underlay`) and the glow on the
+light panel. `a_title_cut_by_the_viewport_edge_is_answered_from_what_is_visible`
+now ends its photo at the viewport's edge, since the climb reads a photo under
+the whole run. `paint_under_the_text_that_the_walk_never_read_leaves_no_verdict`
+now expects the 40% violet tint to report, since the near-white ink fails
+over every surface it can make; a 90% dark scrim still prints nothing.
+
+Corpus (`reports/ratchet/round7-surfaces-28-ratchet-28.json`, all three
+cohorts, 801 captures):
+
+- **low-contrast 6,471 to 6,419.** 158 removed, 106 added, 0 violations, no
+  severity moves.
+  - **By label:** pattern-absent 152, real-harmless 1, unjudged 5.
+  - **By cohort:** cohort 3 removed 153 (pattern-absent 152, real-harmless 1)
+    and added 72; cohort 1 removed 4 unjudged (sapo.vn's dark cards,
+    becomeautonomous.com's dark tab) and added 27; cohort 2 removed 1 (fabadda.com, a
+    4.4:1 advisory) and added 7.
+  - **The removals by site:** arbiproseller-app.vercel.app 136 (its whole row 1 set: the
+    emerald nav, the tinted icon tiles, the `#cecece` cards, the white strong;
+    2 of them are the dim paragraph re-scored against its dark gradient), aisdr.com 6
+    (row 3's glow-framed prices), pool-web-eight.vercel.app 8 (outlined brand letters over
+    blurred blobs, a pair move to the next copy), zettabrasil.com.br 2, vestra.ai 1.
+  - **The additions:** 62 are the page width on wide mobile pages
+    (inven.co.kr 45, yahoo.co.jp 6, drom.ru 5, news.cn 5, people.com.cn 1). The rest are
+    verdicts the unread paint decides as failing (ktb.gov.tr's search button
+    on its white panel, bt.cn's white tab on the green slider, visiby.net's
+    grey unit on its orange card, vestra.ai's calendar over a faded painting),
+    rescores (arbiproseller-app.vercel.app 4, vestra.ai) and SAFE_TAGS pair moves
+    (pool-web-eight.vercel.app 8).
+  - **Crops opened:** 14 removed findings (sapo.vn, becomeautonomous.com,
+    fabadda.com, arbiproseller-app.vercel.app x7, zettabrasil.com.br, aisdr.com x2, and
+    the clipto.com chips of an earlier revision). Every kept removal shows
+    readable light text on a dark surface. fabadda.com's is borderline: grey
+    on pink, a 4.4:1 advisory.
+  - **Revised during the ratchet:** an earlier revision removed clipto.com's 12
+    pastel chips (real 3:1 fails) under a blurred blob. The walk had ended on
+    a gradient and named no ground. The ground under that gradient is now
+    read, and the chips report.
+- **Live** (branch against 156c3150, the same moment, home pages):
+  - arbiproseller-app.vercel.app: low-contrast 80 to 14.
+  - myrecomy.com: 4 to 3. The cream hero's h1 and subline go; "Join today"
+    (miss 317) reports from pixels at 2.5:1.
+  - vestra.ai: 14 to 14. The hero kicker is re-measured from pixels at
+    2.4:1, and "The autonomous loop" (miss 319) reports at 2.6:1.
+  - phillips66.com: 11 to 4. The scrim eyebrows and the sampled washes go;
+    3 pixel findings arrive, 2 of them nav links over the hero video.
+  - zettabrasil.com.br: 14 to 11.
+  - aisdr.com: 27 to 25.
+  - pool-web-eight.vercel.app: 10 to 7 (outlines read from pixels).
+  - lpga.or.jp: 21 to 21, at the same scan time once capped.
+  - walla.co.il: an earlier live pair read 24 to 10. Its 14 scrim headlines
+    were measured at 13 to 20:1 and replaced, and 8 unreadable ones kept
+    their verdict.
+  - hp.com and a later walla.co.il pair returned no findings to either binary.
+
+### Known limits at merge
+
+1. **The ratchet cannot see the pixel pass.** Replays keep every verdict the
+   pixels would replace, so row 3's scrims over photos (walla.co.il, lpga.or.jp),
+   the hero-video and pointer-events-none cases, and outlined text show no
+   change there. Their live effect is above, and it depends on the page
+   letting the two screenshots agree.
+2. **A new hit test in a replay goes unanswered.** The climb's hit-test
+   fallback asks points the capture never recorded; in a replay they fail
+   safe (the verdict stands) where a live scan may answer.
+3. **A picture's colours stay unknown.** Text over a photo prints the walk's
+   numbers until the pixels replace them, and myrecomy.com's "on dark
+   background" glow (139432, 139515) stands: its cream hero is a `url()`
+   photo, which no surface span describes.
+4. **Rescores print the best case.** A verdict re-scored over known paint
+   prints the ratio the text reaches on its best surface in the span.
+   Rescoring applies only where the walk named a flat colour.
+5. **The SAFE_TAGS path waives more.** It waives a verdict that depends on
+   paint it never read. That paint now includes translucent gradients and
+   SVG shapes, so a colour pair can move to a later copy
+   (pool-web-eight.vercel.app).
+6. **The in-page bundle has no second budget.** The extension and the live
+   overlay pass no routed slots. Their verdicts over unread paint stand
+   unless the paint decides them.
+7. **The pixel budget is bounded, not unlimited.** Beyond 12 handed-over
+   candidates, or once the time or miss cap is hit, the element verdict
+   stands. The time cap makes a slow page's output depend on its speed.
+8. **Not changed from row 27:** yna.co.kr's icon sprite (125322), sapo.vn's
+   straddling gradient panel (127441) and microsoft.com's shadow-host ink
+   (130007) read as before.
+9. **Stroke needs a new capture.** `webkitTextStrokeColor` and
+   `webkitTextStrokeWidth` are recorded from this capture on; older
+   snapshots read no stroke.
+10. **API.** `LayerUnder` gains `Gradient`. `visual` gains
+    `layer_under_text_found`, `layer_under_rect`, `layer_matches_surface`,
+    `surface_unread`, `unread_verdict`, `unread_reading`, `UnreadVerdict`,
+    `UnreadReading`, `Rescore`, `opaque_detached_span`, `contrast_threshold`,
+    `routed_reason`, `text_outlined`, `layer_fade` and `media_sample`.
+    `snapshot_engine::analyze_visual_contrast` takes the routed budget.
+    `screenshot_contrast` gains `measure_visual_contrast_candidate` and
+    `PixelMeasure`. The wasm module exports `vc_media_sample`.
+
+### Revised 2026-09-19 after review: paint beneath a fill, paint off the text
+
+The review found pricing and feature cards losing real failures below the
+fold, and a misprinted finding. The climb read a positioned `::before` or
+`::after` as the text's surface whenever it was as large as the text run,
+wherever it sat, and before the host's own fill. With that revision's wider
+use of the climb, that answer dropped or reprinted any tag's verdict wherever
+the hit-test stacks could not answer. A negative `z-index` sibling was read
+past an opaque ancestor fill in the same way.
+
+- **A pseudo-element is placed before it decides anything.** Its box is
+  worked out from the containing block (the nearest positioned or
+  transformed box, less its borders), its pixel offsets and size, and its
+  transform. A translation moves the box. A rotation, scale or skew gives the
+  bounds of the transformed box about its centre, which only rules the
+  pseudo out, since it may not fill them. A pseudo whose box does not cover
+  the text is not its surface. Example: a "Most popular" badge at a card's
+  corner (visiby.net 3806 and 3809 printed `1.2:1 — text #8b8d87 on #c96442
+  (layer on article.pc)` and now print `3.0:1 — text #8b8d87 on #faefe6`).
+  A pseudo the capture cannot place (a fixed pseudo, `auto` offsets, a 3D
+  transform) keeps the old size test.
+- **A pseudo-element at `z-index` below zero is under the host's fill** unless the host opens
+  its own stacking context. The same holds for a negative `z-index` box under
+  an opaque fill or gradient between it and its stacking context. Examples: the
+  neubrutalist offset shadow and the ring drawn with `::before { z-index: -1 }`
+  behind a white card, and the `absolute inset-0 -z-10` gradient inside a
+  `relative bg-white` section. That paint is skipped, and the fill ends the climb as the
+  walk's surface. Stacking contexts are read from `z-index`, opacity,
+  `transform`, `translate`/`rotate`/`scale`, `filter`, `backdrop-filter`,
+  `mix-blend-mode`, `clip-path`, masks, `perspective`, `contain`, the
+  matching `will-change`, fixed and sticky positioning, and `isolation`. A
+  Tailwind `isolate` class stands in for `isolation` where the capture did
+  not record it.
+- **What the capture cannot place decides no verdict of its own.**
+  - A pseudo whose box or paint order is uncertain, or a negative layer
+    under a fill whose stacking context is unknown (a capture older than
+    `isolation` or the pseudo's `z-index`), is read by the climb as before.
+    The SAFE_TAGS path waives against it as it did.
+  - `unread_verdict` calls it `Unknown` (`found_order`): the verdict stands
+    outside the SAFE_TAGS path, nothing is reprinted against it, and the
+    URL engine's second pixel budget takes it.
+  - `dark-glow`'s surface read ignores it.
+- **The capture records more.** The capture adds `isolation` to the style
+  properties, and `zIndex` and `translate` to the pseudo-element properties.
+
+The fixture `unread-surface-contrast.html` gains eight cases below the fold.
+Five should flag against white: the badged card's note, the offset-shadow
+card's note and link, the ringed card's note, and the note over a hidden
+`-z-10` layer. Three should pass: light copy on the same layer in an
+`isolate` section, on a stretched dark `::before`, and on a `z-index: -1`
+dark `::before` in a card that opens its own context. The revision before
+this one reported none of the four notes and the link. Base (156c3150)
+reports the four notes, waives the link on the offset shadow, and reports
+all three pass cases against white.
+
+Goldens re-recorded and read: `detect-fixture-json-unread-surface-contrast-html`
+and `detect-fixture-text-unread-surface-contrast-html` add the eight new
+cases' static findings (6 to 14; the static engine places no pseudo-element
+and no layer). `detect-dir-json-all-fixtures`, `detect-dir-text-all-fixtures`,
+`detect-dir-quiet-all-fixtures`, `detect-no-advisory-json` and
+`detect-no-advisory-text` add exactly those 8 (694 to 702), none removed.
+
+Corpus (`reports/ratchet/round7-surfaces-rev-28-ratchet-28.json`, 801
+captures; full lists from an uncapped copy of the harness):
+
+- **low-contrast 6,471 to 6,425.** 163 removed, 117 added, no severity
+  moves.
+  - **Removed by label:** pattern-absent 152, confirmed-harmful 3,
+    real-harmless 1, unjudged 7.
+  - **Removed by cohort:** cohort 1 lost 9 (confirmed-harmful 3,
+    unjudged 6), cohort 2 lost 1 (unjudged), and cohort 3 lost 153
+    (pattern-absent 152, real-harmless 1).
+  - **Added by cohort:** cohort 1 35, cohort 2 7, cohort 3 75.
+- **Against the revision before this one:** 5 more removed and 9 more added,
+  and the visiby.net pair changes as above.
+  - **The 3 violations are colour-pair moves.** yungching.com.tw 3369 and
+    3375 report `#ffaa01 on #fbf0da` on the FAQ's first "STEP" label
+    instead of its seventh, with the same snippet. The earlier copy sat under
+    a rotated circle decoration, and the old size test waived it; its bounds
+    lie off the label. thairath.co.th 3422 and yungching.com.tw's "expand
+    all" move the same way. The crops show the earlier copies visible and
+    failing the same way.
+  - **The new additions.** yna.co.kr 3337: white "IR" on `#add3ff`, 1.6:1,
+    beside two banner images that do not reach it. yna.co.kr 3337 and 3346:
+    white on the blue banner gradient, 3.5:1 and 4.3:1, which a
+    half-overlapping `::before` image had waived. jyes.com.tw 4093, 4098
+    and 4101: a goldenrod heading on white, 2.2:1, under a tab pane whose
+    fade-out `::after` sits 800px lower. All three are real in the crops.
+  - **One addition dropped.** yungching.com.tw 3369's `#949494` card label
+    was added under the old answer. It now sits under a rotated decoration
+    whose bounds do cover it, so it is uncertain and waived as base waived it.
+- **Live** (home pages, the revision before this one against this one):
+  arbiproseller-app.vercel.app 14 and 14, myrecomy.com 3 and 3, vestra.ai 14
+  and 14. visiby.net/pricing prints the grey unit at 3.0:1 on `#faefe6`
+  where the revision before printed 1.2:1 on the badge's orange.
+
+Known limits added:
+
+1. **Old captures cannot place paint beneath a fill.** Replays of captures
+   without `isolation` or the pseudo's `z-index` read such paint as before
+   and decide no verdict from it.
+2. **`transform-origin` is assumed to be the centre** for a transformed
+   pseudo-element, whose origin the capture does not record.
+3. **Two review notes stay open.** A closed drawer parked right of an
+   unclipped mobile page now widens the page (`wide.html`). Pixel findings
+   on links are not grouped by colour pair.
+
+### Known limits at merge (from the review)
+
+Open issues the review of the revision left, carried here at the merge into
+corpus/integration:
+
+1. **A parked drawer widens the page.** Page width is now the document's, so
+   on an unclipped mobile page a closed drawer parked to the right
+   (`absolute; left:100%`, or `right:0; translateX(110%)`) widens the root's
+   scroll width and its labels are scored (review pages wide.html
+   `#e-drawer1` and wide2.html `#f-right` at 390x844; base does not report
+   them). Run 28 had no such case: all 62 of its document-width additions
+   are real.
+2. **Pixel link findings are not grouped by colour pair.** Eight white nav
+   links over a cream photo give eight findings (photo.html); the SAFE_TAGS
+   element path reported one per colour pair.
+3. **A rescore can still name a box that is not under the text** when the
+   text never paints: arbiproseller 3936/3938 "to order", clipped inside a
+   scroll list, prints `3.0:1 ... on #2857be (layer on a.inline-flex)`. The
+   base finding was already pattern-absent; the class belongs to
+   round7-never-painted (text that never paints).
+4. **gameghost.manus.space 3957** adds 2 findings on text under a
+   full-viewport "click to enter fullscreen" blur overlay (harness row 28d).
+5. **context.dev 3649/3655.** Tab labels and the `https://` prefix are real
+   fails at about 3.4 to 4:1 but print the walk's `#6786db` / `#a7b9ea`
+   surface. The walk was already inaccurate there; UnreadSurface plus Fails
+   standing makes it visible.
+6. **A letterpress emboss counts as an outline.** Two opposing sharp
+   text-shadows, one dark, read as an outline; the pixel pass reads the
+   shadow in, so pale grey captions move from warning 2.2:1 to advisory 4.2
+   to 4.3:1 (outline.html `#d4` to `#d6`). The finding is still reported.
+7. **The ratchet cannot see the pixel pass.** Scrims, video,
+   pointer-events-none photos and outlines are measured only live, and the
+   4 s cap makes a slow page's output depend on machine speed.
+8. **The implementer's known limits 1 to 10 above stand:** myrecomy's
+   dark-glow over a cream `url()` photo, yna/sapo/microsoft from row 27,
+   stroke recorded only in new captures, the public API growth (the
+   `analyze_visual_contrast` signature changed), and the `dev_url` port-race
+   flake in crates/live.
+
+## Recorded 2026-09-18: paint that never reaches the screen (corpus/round7-never-painted)
+
+Round 7, branch 2 of observations-28 section 6. The painted-at-capture
+predicate (`crates/core/src/browser/painted.rs`) learns what hides the paint
+inside a box, three rules that lacked it ask it, and text-occlusion stops
+counting answers its probe cannot rank.
+
+Ten goldens change, all from the new fixture
+`tests/fixtures/antipatterns/never-painted.html`: its two per-fixture cases
+are new (`detect-fixture-json-never-painted-html`,
+`detect-fixture-text-never-painted-html`), and the sweeps
+`detect-dir-json-all-fixtures`, `detect-dir-text-all-fixtures`,
+`detect-dir-quiet-all-fixtures`, `detect-scope-type`,
+`detect-scope-layout-text`, `detect-scope-both`, `detect-no-advisory-json` and
+`detect-no-advisory-text` gain its findings and nothing else (686 to 717
+counted, 124 to 125 advisory). Every change is URL-engine behavior, and the
+static engine reports what it can see in both columns of the fixture, as the
+painted-gate fixtures before it do. The URL behavior is pinned by
+`crates/browser/tests/never_painted.rs`: the base engine (156c3150) reports
+every should-pass case, the branch none.
+
+- **Transparent placeholder ink** (row 6). `check_placeholder_colors` skips a
+  `::placeholder` inked at or under the transparent-ink floor (Bootstrap's
+  `form-floating`, `placeholder:text-transparent`), which printed `#ffffff on
+  #ffffff`.
+- **Text under 1px** (rows 6, 15). The Text gate drops text whose element
+  computes `font-size` under 1px when no descendant with text of its own sets
+  a size of 1px or more (a row that collapses inline-block gaps keeps its
+  children). A size that does not parse keeps the finding. Slick's dot
+  labels, drom.ru's hidden link, ktb.gov.tr's `text-indent: 9999px` arrow.
+- **Fallback content** (row 6). Text inside `<video>`, `<audio>`,
+  `<canvas>` and `<iframe>` is not painted, and neither is a media element's
+  own text for the Text gate. `<object>` is left out: it shows its content
+  when the resource fails, which a capture does not record.
+- **Faces turned away** (row 12). `backfaceVisibility` joins the capture
+  (`STYLE_PROPS` in `snapshot.rs` and `15-snapshot.js`). A box whose own
+  computed `transform` is a `matrix3d` with a negative z scale under
+  `backface-visibility: hidden` is not painted, with its subtree, unless an
+  individual `rotate` / `scale` sits on it or a 3D transform or `rotate` sits
+  above it (a flip card turned on hover). Recorded captures lack the property,
+  so they keep their findings; the fixture measures it live.
+- **A viewport layer past the viewport's sides** (rows 11, 20). A fixed chain
+  (decided containment) whose element lies wholly left or right of the
+  viewport is outside the document, the case the outermost-fixed-box test
+  missed when a fixed header with `backdrop-filter` holds a parked drawer
+  (bt.cn at x 540 on a 390px phone). Only the x axis: a smooth-scroll layer
+  keeps its page below the fold.
+- **A panel held at its max-height is not a scroll frame** (row 13). The
+  script-scroll-frame exception (a box at least as tall as the fold that
+  hides overflow) no longer applies to a box standing at its computed
+  `max-height` in px when that cap is taller than the viewport: jyes.com.tw's
+  spec table under a 1000px "read more" panel on a 844px phone. A frame
+  capped at the viewport's own height (`height: 100vh; max-height: 100vh`)
+  is still a scroll frame.
+- **Lazy images not shown yet** (row 9). A raster under the state-layer
+  opacity is a state layer when `data-loaded="false"`, `data-ll-status` is
+  not `loaded`, a library holds its source with no `src` of its own, or a
+  lazy class sits on it or its parent with no loaded class while it rests at
+  0 or a script tweens its inline `opacity`. The native `loading="lazy"`
+  attribute alone does not count, as before.
+- **A colour reveal caught part way** (row 12). low-contrast and
+  gray-on-color skip, and claim no colour pair for, a word whose `style`
+  attribute sets its colour (with nothing but its transition or opacity
+  beside it) while it transitions `color`, when its parent holds at least
+  three such words as children, or when it is one letter and its
+  grandparent's words hold three such letters. The run's container holds no
+  bare word of its own (a reveal wraps every word it lights). A chip row
+  styled inline with its fill is not a word run, and neither is copy an
+  editor coloured under a theme's transition: a footer list of coloured
+  links, one coloured link per paragraph, TinyMCE spans in a sentence.
+- **Gates that were missing** (rows 11, 16, 20). `gradient-text` joins
+  `PAINT_GATED_TEXT_RULES` and `PAINT_GATED_PAGE_FORMS` (its page form stands
+  only where its selector matches something painted, so gating the element
+  does not bring the page form back). side-tab's border path and the
+  clipped-overflow container ask the new `unpainted_text_box`: the Text gate's
+  walk, share floor and area test, without its test for text, so a card that
+  holds only an image still reports. layout-transition's element form and
+  cramped-padding's own-text form were already gated (Box and Text); the
+  corpus cases of both were something else (below).
+- **Carousel words and nearer windows** (row 14). `VIEWPORT_IDENT_WORDS`
+  gains `slick`, `tempwrap`, `rolling` and `reel`. An outer clip now defers to
+  a nearer clip that traps the same layer even when that nearer one is a
+  carousel window (it cut the layer on purpose); before, the Taboola ad slot
+  took over the reel's arrow once the reel was exempt.
+- **text-occlusion** (rows 7, 15). Over text that ignores pointer events the
+  probe answers with what is under it, so a box it names is not counted
+  (text it names still is: overlap is overlap either way). An answer counts
+  as text only where its glyphs could cover the victim: its direct-text rect
+  holds the point, or it meets the victim's direct-text rect somewhere (the
+  grid is one row through a single line's middle and cannot say where two
+  words collide), or either rect was not recorded; and its size must be 1px
+  or more. A text answer whose glyphs lie clear of the victim's (a stretched
+  link's title below the topic its overlay answers over) covers nothing.
+  Marquee words are asked of the answer itself as before; up to four of its
+  ancestors count only while they move (an animation named for a ticker, or
+  a marquee name on a box running an animation), so a still wrapper named
+  `.page-scroller` silences nothing.
+
+### Measure: run 28 ratchet (801 captures, all three cohorts)
+
+`scripts/ratchet.sh <worktree> r7-never-painted ratchet --run 28 --label
+r7-never-painted-28`. Removed, by label (cohort):
+
+| Rule | Base | Removed | Added | Removed by label | By cohort |
+|---|---|---|---|---|---|
+| buried-raster | 198 | 188 | 0 | pattern-absent 176, unjudged 12 | c1 185, c3 3 |
+| text-occlusion | 77 | 51 | 3 | pattern-absent 44, unjudged 7 | c1 17, c3 34 |
+| low-contrast | 6471 | 58 | 0 | pattern-absent 33, confirmed-harmful 20, unjudged 5 | c1 4, c2 2, c3 52 |
+| clipped-overflow-container | 108 | 32 | 0 | pattern-absent 28, unjudged 4 | c1 6, c3 26 |
+| cramped-padding | 194 | 9 | 0 | pattern-absent 9 | c3 9 |
+| side-tab | 149 | 7 | 0 | pattern-absent 6, real-harmless 1 | c1 6, c3 1 |
+| text-overflow | 41 | 6 | 0 | unjudged 6 | c1 6 |
+| gradient-text | 332 | 3 | 0 | real-harmless 3 | c1 3 |
+| layout-transition | 346 | 1 | 0 | unjudged 1 | c1 1 |
+
+No severity moved. The three additions are snippet changes, not new
+findings: ynet.co.il's city label (126214, 126350, 126591) goes from "67%
+covered by overlapping text (button.accessibility-icon-new)" to "50% covered
+by overlapping text (button.searchBtn)". The accessibility button's glyphs
+end left of the label, so its answers (its icon) no longer count; the search
+label's glyphs overlap the city's (x 163 to 176 of 132 to 176), and the crop
+(crops/64.jpg) shows the two words printed over each other.
+
+**The 20 confirmed-harmful removals are not the harmful copies.** They are
+jyes.com.tw's spec-table section labels (white on `#7cc4ea`, 1.9:1) in the
+rows the 1000px panel folds away. The cluster's label comes from its
+representatives (142485, 142753), which are the second legend, above the
+fold of the panel, and those copies still report on every capture. The crop
+of a removed one (142490) shows an empty row.
+
+Crops opened for removed findings: 142490 and 142635 (jyes rows past the
+panel's fold, review text or nothing where the rect is), 141986 (a Slick dot,
+no "1"), 132828 (stroq.dev's video poster, no fallback line), 143090
+(vitap.ac.in's video, no fallback line), 142829 and 131849 (floating labels,
+no placeholder), 127029 (nubank's CPF label readable), 143368 (hp.com, slide
+1 at the parked slide's rect), 126906 (ladepeche's "Faits divers" readable),
+127461 (drom.ru's "Belgee" readable), 142010 (jyes's lazy image shown), 139710
+(v0-evasion's "Experience" in its revealed black), 132017 (adant.ai, no
+striped card), 125511 (zigzag.kr, the capture's viewport), and ynet.co.il
+126214 (above).
+
+### Known limits at merge
+
+1. **ynet.co.il 126214 (unjudged)** keeps reporting, under a new occluder
+   (see above). The header collision the judges confirmed (126213, the
+   temperature under the search label) still reports as it was.
+2. **Flip faces in recorded captures.** The corpus snapshots carry no
+   `backfaceVisibility`, so aisdr.com's backs (140791, 140828 and the
+   ai-color-palette findings on them) keep reporting until the next capture.
+3. **Not attempted from row 12:** inactive slides 45% on screen (apple.com),
+   text under a fixed widget below the fold, an ad skin, crossfade frames and
+   framer-motion's rising opacity. From row 15: stacked states (vestra.ai's
+   cycling pill went with the glyph test; inven.co.kr's rolling list keeps
+   one of its two).
+4. **cnnbrasil.com.br's mobile ticker (143126 to 143129) stays.** The
+   answers are not marquee spans: the ticker sits under the live-TV strip's
+   white `z-10` panel, whose text the probes return.
+5. **otto.de's feedback widget (126891, 127001) stays.** Its inline
+   `visibility: hidden` loses to the stylesheet's `visibility: unset
+   !important`; the widget computes visible and `checkVisibility()` is true.
+   The judges read the inline style.
+6. **slotListWrapper** (ynet.co.il) and a marquee two levels down (adant.ai)
+   are not on the word list; the brief named slick-list, tempWrap, rolling
+   and reel.
+
+### Revised after review
+
+An independent review found two regressions in the first version, and three
+open issues cost little to close. Each fix has a should-flag twin in
+`never-painted.html` that the first version dropped and the base engine
+reports, pinned by `crates/browser/tests/never_painted.rs`.
+
+- **Glyphs against boxes (text-occlusion).** The first version counted a text
+  answer only where its own glyphs held the probe point, while the points
+  still spanned the victim's whole box. A block label wider than its words,
+  lying wholly under a heading's words, then scored only the share of its box
+  the heading's glyphs crossed: v0-dashboard-ui-redesign-nine.vercel.app's
+  "Menu" (135418, 135518) and "Settings" under a card's h3 (135526, whose
+  single probe row passes below the h3's glyph rect while the two glyph rects
+  overlap by 6px). The probe points cannot move, since a recording answers
+  only the grid's, so an answer's glyphs now count wherever they meet the
+  victim's glyphs. All three report as on base, at 100%.
+- **Editor colour is not a reveal (low-contrast).** The reveal needed only an
+  inline colour, a colour transition and three such words anywhere under the
+  parent or grandparent, which a footer list of coloured links, one coloured
+  link per paragraph, or TinyMCE spans in a sentence also have. The run is
+  now the parent's children, or, for a single letter, its grandparent's
+  words' letters, and a container with a bare word of its own is prose.
+  zoptron.framer.ai and v0-evasion-website.vercel.app still clear.
+- **Moving ancestors only (text-occlusion).** Marquee words were asked of
+  every ancestor up to the body, so a page wrapper named `.page-scroller`
+  (or iScroll's `#scroller`) silenced every collision under it. Ancestors,
+  up to four, now count only while they run an animation named for a ticker
+  or carry a marquee name and an animation. cnnbrasil.com.br's
+  react-fast-marquee (`.rfm-marquee`, animation `scroll`) still clears.
+- **A frame capped at the viewport (row 13).** `height: 100vh; max-height:
+  100vh` read as a collapsed panel and dropped the page below the fold; the
+  cap must now stand taller than the viewport. Unit-tested
+  (`a_panel_held_at_its_max_height_is_not_a_scroll_frame`); the fixture page
+  cannot host a page-sized frame.
+
+Seven goldens change again, from the fixture alone: its three new
+low-contrast twins, which the static engine sees (inline colours), join
+`detect-fixture-json-never-painted-html`,
+`detect-fixture-text-never-painted-html` and the five sweeps that list every
+fixture (714 to 717 counted), and nothing else moves. The text-occlusion and page-scroller twins are
+URL-engine only.
+
+Ratchet (`scripts/ratchet.sh <worktree> r7-never-painted-rev ratchet --run
+28 --label r7-never-painted-rev-28`): identical to the first version except
+text-occlusion, which removes 51 (was 54) and re-snippets 3 (was 1). The 20
+violations are the same jyes.com.tw ids. Crops opened for removals that
+stand: 126906, 127461, 127467, 141186, 142360, 143060, 134472, 139710,
+142837, 143317, 127029, 143465, 143530, 142490, and ynet.co.il's 64.jpg for
+the re-snippeted city label.
+
+Still open from the review: text that ignores pointer events under an opaque
+box above it goes unreported (the probe cannot rank the two; paint order
+could), and a horizontally scroll-jacked gallery pinned in a fixed layer
+reads as unpainted past the viewport's right edge.
+
+### Known limits at merge (from the review)
+
+Open issues the review of the revision left, carried here at the merge into
+corpus/integration and checked against the merged code:
+
+1. **Covered pointer-events-none text.** Text with `pointer-events: none`
+   that an opaque box really covers from above is no longer reported by
+   text-occlusion, because the probe cannot tell a box above from a box
+   below (the brief asked for this). Review page occlusion.html `#a3`, a
+   heading in a pointer-events-none layer under a z-index badge. Ranking the
+   two by paint order could fix it.
+2. **Marquee words on ancestors.** Raised as too broad (every ancestor up to
+   body). Resolved on the branch: ancestors count only within 4 levels and
+   only while they run an animation; occlusion.html `#a4` reports again.
+3. **`capped_by_max_height`.** Raised because a `height:100vh;
+   max-height:100vh` smooth-scroll frame read as capped. Resolved on the
+   branch: the cap must be taller than the viewport; frames.html `#c2`
+   matches base. Unit-tested only.
+4. **The fixed-layer x-axis test and the max-height test apply to every
+   gate** through the shared walk. A horizontally scroll-jacked gallery
+   captured while pinned inside a fixed layer would read as unpainted.
+5. **Faces turned away** cannot be measured on recorded snapshots, which
+   lack `backfaceVisibility`; aisdr.com's flip-card backs keep reporting
+   until the site is recaptured.
+6. **Unjudged removals to judge next run:** zigzag.kr Swiper captions
+   (clipped-overflow, 4) and buried-raster (12); ynet.co.il
+   126214/126350/126591 (now reported under `button.searchBtn`, see above);
+   nubank.com.br CPF label (4); ktb.gov.tr text-overflow (6); aajtak.in
+   `#adbanner` layout-transition (1); zoptron.framer.ai low-contrast (2);
+   becomeautonomous.com placeholder (2).
+7. **Row 12 is only partly done:** apple.com's inactive slides, text under
+   fixed widgets, ad skins, crossfade frames and the framer fade were not
+   attempted; slotListWrapper and a marquee two levels down were not added.
+8. **The impeccable-live `dev_url` port-race test** is flaky under a
+   parallel full workspace run; it passes on its own and is unrelated.
+9. **Merge note.** low-contrast's `at_rest` drop (the colour-reveal skip)
+   runs with round7-surfaces' `verdict_stands` in both the SAFE_TAGS closure
+   and the retain, before the unread-surface rescore.
+
+## Recorded 2026-09-18: read the layout the reader sees (corpus/round7-reader-layout)
+
+Corpus run 28, observations-28 section 6 branch 3: rows 4, 13, 23, 24 and
+25, the band edge painted with `background-image`, the press-card kicker
+and the clipped column count (row 27). Every change removes findings where
+the engine measured something a reader does not see; where the engine
+cannot tell, the finding stays.
+
+- **heading-rhythm** (row 4). The eyebrow fold takes a short line at body
+  size as the heading's label when its colour, italics or much lighter
+  weight sets it apart from both its container and the heading, and the
+  line is the first box its parent lays out: one rendered line of at most
+  40 UTF-16 units, a colour at least 32 apart on a channel (or 0.25 in
+  alpha), or a weight 300 or more under its container's.
+  cnnbrasil.com.br's grey section links 1px over each headline and
+  outreign.io's italic hairline eyebrows 12 to 20px over each title were
+  measured as the block above; each opens the box that holds its heading.
+  A box whose `background-image` covers it (a layer tiled on both axes,
+  sized to `cover`, or a gradient at the box's own size) now draws an edge,
+  as one painted with a colour does (jyes.com.tw's grey news band tiles a
+  texture). Not done: observations-28 also proposed treating space that
+  `justify-content: space-between` makes as unmeasured, but the capture does
+  not record `justifyContent` or `flexDirection`, so a replay cannot tell;
+  the fold alone clears cnnbrasil.com.br.
+- **tight-leading** (row 25). A flex container with `flex-wrap: wrap`
+  whose own text is two or more runs, each an anonymous item too short to
+  wrap in the box by the widest advance a face sets (0.7em, 0.8em for a
+  capital, 1.05em for a full-width glyph), has no second line box:
+  outreign.io's hero meta row wraps three short runs as whole items onto two
+  rows on a phone. A single run, one long enough to wrap, a row that does
+  not wrap, a grid, and a row whose wrapping the capture did not record are
+  measured as before. The capture gains a `flexWrap` column for this. target.com 143630 was not an
+  engine misfire: the engine flags a two-line run whose selector also
+  matches a one-line span earlier on the page, so the crop shows the wrong
+  element (observations-28 row 28a).
+- **text-overflow** (row 24). An absolutely or fixed positioned descendant
+  adds nothing to the painted extent, text or not: clipto.com's hover QR
+  card at opacity 0, coachcall.ai's "Popular" badge pinned past a tab's
+  corner, drom.ru's "Еще" dropdown. Generated content on such a descendant
+  still leaves the overflow unmeasured, as the earlier review decided.
+- **cramped-padding** (row 13, flush form). A side is measured by what the
+  clipping boxes between the text and the container leave of the line; a
+  side a clip cuts by more than the edge tolerance is not flush (a table
+  scrolled sideways inside its bordered box on outreign.io, onco.cc,
+  copperhead.sh, visiby.net and vibe-genomics.replit.app; capitalone.com's
+  scrolling tab strip; inven.co.kr's ellipsized titles; tickers on yna.co.kr
+  and cnnbrasil.com.br). A band's fill bounds no side where an abutting
+  sibling paints the same colour (cencora.com's stacked grey bands, otto.de's
+  lavender promo band), and no side at all when an earlier positioned layer
+  under it paints that colour, which the ancestor walk never reads (hp.com's
+  grey media layer). A box a transform draws below 0.95 of its layout width
+  is measured at that scale: the 4px tolerance, the r3-20 chip bound and the
+  glyph band (people.com.cn lays its desktop page into a phone at 0.3).
+  cnnbrasil.com.br 143110 stays: its borders are 1px solid in the capture,
+  and nothing on record says they do not paint.
+- **flat-type-hierarchy** (row 23, both engines). The ladder declines when
+  the heading levels with no dominant size hold more headings than the
+  settled ones and one of their sizes, placed in the ladder, would make a
+  step of 1.25 or more (cnnbrasil.com.br sets thirty h3 headlines at 14, 16
+  and 20px, ten each, against twelve h1 and h2; 20px over the 16px h2 is a
+  1.25 step), and when the h1 is set smaller
+  than the body text (phillips66.com's 14px "FIND FBOS:" form label;
+  avikmukherjee.com's 13px name over 14px copy). The first version declined
+  whenever the most-used heading level dropped out; the ratchet showed it
+  removing otto.de's confirmed flat ramp (127002), where the dropped level
+  was two h2s beside three settled headings, and it was narrowed.
+- **kicker-above-heading** (press card, URL engine). A label in the
+  nearest ancestor of the heading drawn as a card (`is_card_like_dom`),
+  shorter than the viewport and holding the label, is card metadata, as in
+  an `article` or `li` card, when the heading is a card title: an h3 or
+  lower set under 24px. aina-tech.io's white press card is a `div`. The
+  first version had no title test; the ratchet showed it removing six
+  section eyebrows both judges call harmful (redoubt.agency's h2 in its
+  hero side panel, vestra.ai's 40px h3 across a feature band), and it was
+  narrowed. The static engine has no layout and still reports it.
+- **first-viewport-column-overflow** (row 27). A column's content ends at
+  the nearest box between it and the row that clips or scrolls y:
+  cuisineactuelle.fr's tile column runs eleven tiles into a 610px scroller
+  and read as 187% of the viewport.
+
+Fixtures: `heading-rhythm.html` gains the grey, italic and hairline labels
+at body size and the image band (pass) and a grey sentence too long to be a
+label (flag); `tight-leading.html` a flex row of short runs (pass, browser
+only) and one whose long run wraps (flag); `text-overflow.html` the hover
+tooltip and the corner badge (pass); `kicker-above-heading.html` the press
+card (pass, browser only), a section h2 in a painted side panel and a
+display-size h3 in a band (flag). New: `cramped-padding-edges.html` (the
+scrolled table's far side, the ellipsis panel, the same-grey band, the
+same-grey layer and the scaled chip pass; the scrolled table's start side
+and a band beside another colour flag; browser only),
+`flat-type-hierarchy-dropped-role.html` and
+`flat-type-hierarchy-h1-label.html` (pass in both engines), and
+`first-viewport-column-overflow-clipped.html` (pass). Pinned against a real
+browser by `crates/browser/tests/heading_rhythm.rs`, `text_geometry.rs` and
+`card_heuristics.rs`; each new pass case was checked to report on the base
+engine. The edge cases live in their own file because adding body copy to
+`cramped-padding.html` tipped that page's static flat-type ladder.
+
+Goldens recorded from the binary and read finding by finding:
+
+- New: `detect-fixture-json-cramped-padding-edges-html`,
+  `detect-fixture-text-cramped-padding-edges-html` (6 static findings: the
+  static engine has no layout and reports both flag cases and four of the
+  five pass cases),
+  `detect-fixture-json-first-viewport-column-overflow-clipped-html`,
+  `detect-fixture-text-first-viewport-column-overflow-clipped-html`,
+  `detect-fixture-json-flat-type-hierarchy-dropped-role-html`,
+  `detect-fixture-text-flat-type-hierarchy-dropped-role-html`,
+  `detect-fixture-json-flat-type-hierarchy-h1-label-html`,
+  `detect-fixture-text-flat-type-hierarchy-h1-label-html` (no findings, exit
+  0; the base engine reported both flat-type pages).
+- `detect-fixture-json-kicker-above-heading-html`,
+  `detect-fixture-text-kicker-above-heading-html`: 14 to 17, the two new flag
+  cases and the press card the static engine cannot read as a card.
+- `detect-fixture-json-tight-leading-html`,
+  `detect-fixture-text-tight-leading-html`: 13 to 15, the flex row whose
+  long run wraps (1.17x, both engines) and the flex row of short runs
+  (1.25x, static only).
+- `detect-dir-json-all-fixtures`, `detect-dir-text-all-fixtures`,
+  `detect-dir-quiet-all-fixtures`, `detect-no-advisory-json`,
+  `detect-no-advisory-text`, `detect-scope-type`, `detect-scope-both`,
+  `detect-scope-layout-text`: the same eleven findings (686 to 697; layout
+  scope 54 to 60). Nothing removed: no existing fixture's static output
+  changed.
+
+Ratchet, run 28, all three cohorts (801 captures): 128 findings removed, 0
+added, 0 severity moves, 0 violations.
+
+| Rule | Base | Branch | Removed by label | By cohort |
+|---|---|---|---|---|
+| heading-rhythm | 65 | 2 | pattern-absent 63 | c3 63 |
+| cramped-padding | 194 | 156 | pattern-absent 22, unjudged 14, disputed 1, real-harmless 1 | c1 17, c2 2, c3 19 |
+| text-overflow | 41 | 25 | pattern-absent 6, unjudged 10 | c1 12, c3 4 |
+| flat-type-hierarchy | 37 | 31 | pattern-absent 4, unjudged 2 | c1 2, c3 4 |
+| kicker-above-heading | 362 | 360 | pattern-absent 2 | c3 2 |
+| tight-leading | 410 | 408 | real-harmless 2 | c3 2 |
+| first-viewport-column-overflow | 3 | 2 | pattern-absent 1 | c3 1 |
+
+te.eg's two heading-rhythm findings, correct in every run since 19, still
+report. Removed findings opened on crops: otto.de 126764 (the lavender band
+runs on below the heading), vibe-genomics.replit.app 130667, copperhead.sh
+135808 and visiby.net 137229 (tables cut by a sideways scroll),
+cnnbrasil.com.br 143043 and yna.co.kr 125352 (tickers cut by their track),
+inven.co.kr 141869 (titles an ellipsis ends inside the inset),
+people.com.cn 125418 and 125421 (bands with room at 0.3 scale), drom.ru
+127354 (a menu button whose dropdown is positioned), clipto.com 131711 (a
+pill whose tooltip is positioned), outreign.io 139926 (an italic eyebrow
+over the title) and cnnbrasil.com.br 143283 (a grey section link over the
+headline). Each shows the fix is right.
+
+### Known limits at merge
+
+1. **`justify-content` is not captured.** Space a column flexbox spreads
+   between its items still reads as a gap below a heading; a capture change
+   would let the rule treat it as unmeasured.
+2. **The press-card title test is a size.** A card whose title is an h2, or
+   an h3 at 24px or more, still reports its label; a section panel with an
+   h3 under 24px is exempt.
+3. **avikmukherjee.com's flat ramp is gone** with the h1-under-body test.
+   Its 13px h1 is the site owner's name on a deliberately small page, and
+   neither finding was judged.
+4. **The scale test reads the element's own width.** A box whose layout
+   width was not recorded, or a transform that scales one axis only, is
+   measured unscaled, as before.
+
+### Revised after review
+
+The independent review of the branch found four places where a fix removed
+findings the engine had measured right. Each now fails safe to the base
+behaviour; the reviewer's pages report exactly what base reports, in the
+URL engine and, for flat-type-hierarchy and tight-leading, the file engine.
+
+1. **A coloured line that closes the block above is not a label.** The
+   colour, italic and weight fold took a blue "View all essays" link under
+   a grid, 12 to 15px over the next h2, as that h2's label; three folded,
+   the gaps measured to the grid, and the page fell under the two-heading
+   minimum (4 findings to 0). A grey post date took the previous post's
+   date as the next title's label ("24px above" where base said "14px").
+   Markup is what tells the two apart: cnnbrasil.com.br's category link and
+   outreign.io's eyebrow each open the box that holds the heading, while a
+   closing link or date has the block above laid out before it in the same
+   box. The fold on colour, italics or weight alone now needs the line to
+   be the first box its parent lays out. Size, capitals, tracking and chips
+   fold as before.
+2. **A heading's own background image is not a top edge.** Any
+   `background-image` counted as a painted edge, so an icon bullet placed
+   once beside an h3 and a 48px accent bar drawn with a gradient under an h2
+   made each heading read as drawing its own top boundary, and every such
+   heading was skipped (4 to 0 on each page). Only a layer that covers the
+   box counts now: tiled on both axes, sized `cover`, or a gradient at the
+   box's own size, and never text filled through `background-clip: text`.
+   A layer whose tiling the capture did not record is not counted.
+3. **A dropped heading level declines only when it changes the verdict.**
+   The majority test declined whenever the dropped levels held more
+   headings than the settled ones. An 18px h1, h2s tied at 17 and 18px, a
+   16px h3 and 16px body is flat whichever size stands for the h2s, and
+   base reports it; the branch did not, in either engine. The ladder now
+   declines only when a dropped size placed in it makes a step of 1.25 or
+   more. cnnbrasil.com.br's 20px h3s still do.
+4. **Only a wrapping flex row moves its runs whole.** The skip compared each
+   run with the whole container and never read `flex-wrap`. Under the
+   default `nowrap` the items shrink into one row and each run wraps inside
+   its item; in a grid each run wraps in a cell narrower than the row. The
+   reviewer's 420px nowrap row and three-column grid row of 14px runs at 1.1
+   went from 2 findings to 0. The skip now needs `display: flex` or
+   `inline-flex` and a `flexWrap` that starts with `wrap`, and the capture
+   records `flexWrap` (`STYLE_PROPS` and `browser-bundle/15-snapshot.js`).
+   Run 28's snapshots predate the column and read it as empty, so on replay
+   outreign.io's hero row reports again; at 1280px that row is
+   `sm:flex-nowrap`, and its runs really do wrap in their items.
+
+Fixtures: `heading-rhythm.html` gains four flag cases (a link closing a tile
+block, a grey date closing a post, an h3 with a background icon, an h2 with a
+gradient accent bar) and a tiled-texture band (pass); its italic and hairline
+eyebrows now open their wrapper, as outreign.io's do. New:
+`tight-leading-runs.html` (a nowrap flex row and a grid row of short runs,
+flag in both engines; its own file because adding 12px runs to
+`tight-leading.html` tipped that page's static flat-type ladder) and
+`flat-type-hierarchy-dropped-flat.html` (flag in both engines). Unit tests:
+`heading_rhythm_image_band_needs_a_layer_that_covers_the_box`, the nowrap,
+unrecorded, wrap-reverse and grid cases in
+`tight_leading_reads_flex_text_runs_as_items`, and the tie cases in
+`flat_type_hierarchy_declines_a_ladder_without_the_page_headings`. Browser
+tests: `heading_rhythm.rs` (20 findings), `text_geometry.rs` and
+`card_heuristics.rs`.
+
+Goldens: new `detect-fixture-{json,text}-flat-type-hierarchy-dropped-flat-html`
+(1 finding) and `detect-fixture-{json,text}-tight-leading-runs-html` (2
+findings); the directory, scope and no-advisory goldens gain exactly those
+three findings (697 to 700). Nothing else changed.
+
+Ratchet, run 28, all three cohorts (801 captures): 126 removed, 0 added, 0
+severity moves, 0 violations. Every row matches the table above except
+tight-leading, which no longer removes anything (410 to 410): outreign.io's
+two findings report again, as item 4 says.
+
+### Known limits at merge (from the review)
+
+Open issues the review of the revision left, carried here at the merge into
+corpus/integration:
+
+1. **The h1-under-body decline** removes avikmukherjee.com's "h1 13px, h2
+   13px, body 14px" findings (129508 and 129576 on run 28, unjudged).
+   Earlier runs judged the same pattern pattern-yes, harm-no (13688,
+   13829). Whether a flat ramp under a label-sized h1 should still report
+   among the remaining roles is a spec call for Paul.
+2. **The painted-card kicker exemption also covers a section panel** whose
+   h3 is under 24px. Review page kk-panel.html (rounded grey section panels,
+   an uppercase tracked eyebrow over a 22px h3) goes from 3 findings on base
+   to 0. An h2 card title keeps reporting, and the static engine still
+   reports div cards.
+3. **The space-between part of row 4 is not done:** the snapshot does not
+   capture `justifyContent` or `flexDirection`. (`flexWrap` is now
+   captured, which fixed the tight-leading gate.)
+4. **cramped-padding:** `backdrop_layer_matches` does not check opacity or
+   visibility on the covering sibling; `drawn_scale` trusts `offsetWidth`,
+   so a transform that scales one axis is measured unscaled; the clip-cut
+   rule moves text truncated at a padding-less border over to
+   clipped-overflow and text-overflow.
+5. **text-overflow ignores positioned descendants that hold text**, so an
+   author-positioned label that collides with its neighbours is left to
+   text-occlusion.
+6. **The impeccable-live `dev_url::answers_whatever_scheme_the_page_uses`**
+   test failed once for the implementer, likely flaky under load.
+
+## Recorded 2026-09-18: recall bugs and gates from run 28 (corpus/round7-recall-and-gates)
+
+Round 7's recall branch, from `reports/walkthroughs-28.md` (misses) and
+`reports/observations-28.md` (rows 5, 18 to 21, 26; section 3's vendor and
+ad-tech evidence; section 6's branch 5). Nothing here revisits a taste call:
+the vendor and ad-tech lists grow under decisions r4-p24 and r3-31 as
+written, and every other change fixes a measurement. The contract is in
+`docs/CLI-CONTRACT.md` ("Round 7 recall and gates", the validity gate, and
+the vendor and ad-tech bullets).
+
+1. **Prose written into a div** (walkthroughs-28 issue 3). `line-length` and
+   `body-text-viewport-edge` (element and page-level forms) measure a `div`,
+   `section`, `article`, `aside` or `main` laid out as a block with text of
+   its own and only phrasing inside, outside any control, link or editable
+   field and not preformatted, on its text runs only. aina-tech.io's
+   `div.mt-10.text-base` and cencora.com's `div.module__body` report like the
+   `p` siblings beside them. `is_prose_block` in `quality.rs`.
+2. **Label collectors** (issue 2). `label_type_element` reads the one child
+   that holds text when the others hold none (a flag svg, a status dot).
+   `hero-eyebrow-chip` reads its sibling through it, and its tracked-caps
+   floor is 1.6px or 0.08em (`HeroEyebrowOpts::sibling_tracking_floor_em`;
+   the recorded vectors pass `None`, which keeps the JS contract), so
+   Tailwind's `tracking-widest` at 12px counts (redoubt.agency). The kicker
+   rule hands such a label to the hero rule instead of reporting it too, only
+   where the hero rule reads it (the h1's own previous sibling, 14px or
+   less). A card-context ancestor taller than two viewports is the page's
+   frame, not a card (outreign.io's `main > article`). `icon-tile-stack`
+   anchors on a bold block `div` or `span` title (shadcn's `CardTitle`) and
+   reads `oklab()` tile fills (kin-ai.replit.app).
+3. **Small text** (row 5, row 26, the coachcall.ai miss). The element
+   contrast pass scores a box under 10px tall that holds a line of its own
+   text at 8px or more. `tiny-text` skips a label typed in capitals (every
+   letter a capital, 40 letters or fewer, one line) and a monospace run with
+   its whitespace kept. `wide-tracking` counts a caps label's letters, not its
+   characters, and skips a one-line link or button label.
+4. **Validity** (walkthroughs-28 misfire 10). HUMAN Security's (PerimeterX's)
+   "Press & hold" sheet, `iframe#px-captcha-modal` fixed over the viewport,
+   is a challenge on a page of any size while it shows. The four target.com
+   captures of run 28 (4166, 4168, 4170, 4172) carry it; 4174 and 4175 do
+   not. The probe records `overlays` only when one shows, so every other
+   capture's evidence is byte-identical.
+5. **Vendors.** Widgets: Slick (structural elements, and the dot list as a
+   subtree), SuperSlide (`tempWrap`), react-fast-marquee (`rfm-` subtree) and
+   Kaltura (`playkit-`, `kaltura-player` subtree). Ad tech: Nagich
+   (`nagich.co.il`), Chase Reporting (`asset.chase.com/.../reportingjs/`),
+   and a message naming `_prebidjs` (Prebid). The inline `ConsentManager`
+   hook on mrtarget.de has no host and stays an error.
+6. **What paints** (branch 5). `ai-color-palette`'s gradient form skips a box
+   whose gradient, sampled over its border box, shows one colour (a hard-stop
+   hover wipe on a 203% tile, jpmorganchase.com), unless a layer is clipped to
+   the padding or content box; one element reports the rule once (the
+   computed form over the class form, and `gradient-text` over both gradient
+   forms). `gradient-text` is behind the Text gate and skips a ramp under
+   0.15 alpha (vestra.ai's watermark); its stylesheet form does not stand when
+   every element computing a clipped gradient is unpainted or under the
+   floor. `gpt-thin-border-wide-shadow` reads a gradient ancestor's stops
+   (uncoverroads.com's aurora band). `dark-glow`'s lift counts only layers
+   with half the strength floor, and its selector-less stylesheet form
+   defers to the element form when an element's computed shadow carries the
+   declaration.
+
+Goldens:
+
+- New: the json and text cases of `prose-div.html`, `label-collectors.html`,
+  `icon-tile-card-title.html`, `small-text-labels.html`,
+  `paint-that-shows.html`, `third-party-widgets-carousels.html` and
+  `script-error-ad-tech-hosts.html`. They are URL-engine fixtures and carry
+  only their static findings here; `crates/browser/tests/recall_and_gates.rs`
+  holds the URL assertions, and `tests/fixtures/validity/` the challenge
+  pages it serves.
+- `detect-fixture-json-text-occlusion-html`,
+  `detect-fixture-text-text-occlusion-html`: text-occlusion.html's
+  `pass-eyebrow` ("Family Italian on the waterfront", 14px uppercase at
+  0.1em over a 96px h1) moves from `kicker-above-heading` to
+  `hero-eyebrow-chip (tracked-caps)`: the static engine's hand-off follows the
+  em floor. It stays one finding, and it was never a text-occlusion case.
+- `detect-dir-json-all-fixtures`, `detect-dir-text-all-fixtures`,
+  `detect-dir-quiet-all-fixtures`, `detect-scope-type`,
+  `detect-scope-layout-text`, `detect-scope-both`, `detect-no-advisory-json`,
+  `detect-no-advisory-text`: the same move plus the new fixtures' static
+  findings (686 to 709 counted, 124 to 132 advisory in the text sweep).
+  Nothing else moved.
+- The generated browser asset was regenerated with `cargo xtask bundle`.
+
+**Corpus.** `round7-recall-and-gates-28` against run 28 (801 captures,
+cohorts 1 to 3), replayed per capture with the base and branch engines for
+the cohort split. Removed, added, tagged or moved, by rule:
+
+| Rule | c1 | c2 | c3 | Labels of the removed |
+|---|---|---|---|---|
+| ai-color-palette | -35 | -28 | -35 | 92 of 98 are the one-per-element rule: the element keeps its computed form or its gradient-text finding (18 confirmed-harmful, all of them this kind). The other 6 are one-colour boxes: jpmorganchase.com's hover wipes (5, pattern-absent) and blueprintbuddy-b2c.lovable.app's near-flat navy card (1) |
+| body-text-viewport-edge | +21, -1 | +7, -1 | +9 | the two removals are page-level findings renamed: drom.ru and centene.com now count 15 and 16 blocks, the prose divs included |
+| line-length | +23 | +11 | +17 | |
+| icon-tile-stack | | +2 | +40 | kin-ai.replit.app's feature cards 40; covera-agents.com's oklab tile 2 |
+| hero-eyebrow-chip | +6, -1 | +4 | +4 | soc-workflows' `accent-bold` chip now reads `tracked-caps` |
+| kicker-above-heading | +17, -5 | +1, -1 | +6 | the 6 removed are handed to hero-eyebrow-chip on the same label (2 confirmed-harmful: adant.ai's "Blog") |
+| numbered-section-labels | | | +24 | outreign.io and arbiproseller-app.vercel.app |
+| tiny-text | -26 | -2 | | adant.ai's typed-caps card meta and stroq.dev's terminal mock (26 pattern-absent), v0-compute-11's monospace texture |
+| wide-tracking | -1 | | -6 | all pattern-absent: adant.ai's caps eyebrow, pool-web-eight's card number in a button, lpga.or.jp's link labels |
+| low-contrast | +1 | | +4, 11 tagged | coachcall.ai's 9px timestamps 4 (the walkthrough miss); tags on Slick dots and react-fast-marquee quotes |
+| dark-glow | -6 | -8 | -15 | 10 disputed, 5 pattern-absent, the rest unjudged: stylesheet forms an element form had read, and Tailwind `shadow-lg` at 0.2 |
+| gpt-thin-border-wide-shadow | | | -12 | all pattern-absent (uncoverroads.com) |
+| gradient-text | | | -2 | pattern-absent (vestra.ai's watermark) |
+| tagged, severity kept | | | clipped-overflow-container 3, layout-transition 6, text-occlusion 7 | Slick, SuperSlide, Kaltura, react-fast-marquee |
+| script-error | | | 7 to advisory | all real-harmless, classed offline over the recorded findings: Prebid via Prisma Media's ad core 4 (cuisineactuelle.fr), Nagich 2 (walla.co.il), Chase Reporting 1 (jpmorganchase.com) |
+
+Violations: 22, none a finding leaving the report: 18 ai-color-palette
+findings on elements that still report the rule or gradient-text, 2
+page-level renames, 2 kicker hand-offs.
+
+### Known limits at merge
+
+1. **Row 18's stop alpha is not floored.** A 0.25 floor would remove the
+   judged misfires (coldtea.ai's 0.2 glow, outreign.io's 0.15), but it also
+   removes arbiproseller-app.vercel.app's 0.15 cyan section glow, which both
+   judges call harmful, and a 20% violet overlay an earlier round calibrated
+   as visible. The judged misfires are glows something covers, not faint
+   ones; the floor stays at 0.15.
+2. **Row 20's corner glyph is not fixed.** uncoverroads.com's single digit
+   in a 266px ramp box sees a third of the ramp (28 levels on the green
+   channel), more than coachcall.ai's centred short headings see of theirs:
+   measuring the ramp over the ink box cannot tell the misfire from the tell,
+   so it is not measured.
+3. **bt.cn's closed mobile menu still reports gradient-text.** The Text gate
+   applies, but the drawer is a fixed box whose containing block the snapshot
+   cannot decide (an unrecorded containment property), and the gate keeps an
+   undecided fixed layer.
+4. **The validity gate cannot be ratcheted.** Replays read the recorded
+   snapshots; the four target.com captures stay in the corpus until a
+   recapture, where they will be refused as challenges.
+5. **One finding per element (P32).** observations-28 files the
+   gradient-text and ai-color-palette pair as premise question P32, and this
+   branch implements the brief's reading of it. If Paul decides P32 the other
+   way, `drop_covered_palette_forms` in `driver.rs` is the one place to undo.
+6. **Prose divs add findings on CMS pages.** albayan.ae's article divs at a
+   10px phone gutter report as their `p` would (the 12px floor, r3-34);
+   vibe-genomics.replit.app's padded callouts report line-length.
+
+### Revised at review: the hero rule's em floor and the kicker hand-off
+
+The review found two ways the em floor reported the wrong thing.
+
+1. **A dated meta line read as an eyebrow.** The 0.08em floor reaches the
+   most common tracked setting of a blog's date line (Tailwind's
+   `tracking-widest` at 12px), and the hero rule, unlike the kicker rule, had
+   no meta test: `"Sep 2, 2026"` in a `<time>` over a 56px h1 reported in
+   both engines, and so did copperhead.sh's `div.post-eyebrow`
+   ("Engineering/2 September 2026", capture 3785, which holds a `<time>`).
+   Under the fixed 1.6px floor a label that is or holds a `<time>`, or that
+   names a year (the year clause of `KICKER_META_TEXT_RE`, now
+   `KICKER_META_YEAR_RE`), is not tracked caps
+   (`HeroEyebrowOpts::sibling_holds_time`, `false` in the vectors). At 1.6px
+   and up nothing changes, so a dated line tracked that wide still reports
+   as it did on base.
+2. **The kicker hand-off dropped labels the hero rule leaves.** The hand-off
+   under 1.6px followed the em floor alone, but the hero rule reads case
+   from `text-transform` and typed capitals, not `font-variant: small-caps`,
+   which the kicker rule accepts: a 13px small-caps kicker at 0.1em over a
+   56px h1 reported on base and nothing on the branch. Under 1.6px the
+   collectors (`text_collectors.rs`, and the static copy in `adapters.rs`)
+   now hand a label off only when `hero-eyebrow-chip` reports it on that h1.
+   The 1.6px hand-off is base's and is unchanged.
+
+Goldens: new json and text cases for `eyebrow-hand-off.html` (both engines:
+a small-caps kicker that stays a kicker and a tracked eyebrow the hero rule
+takes, against a dated line and a `<time>` that report nothing), and the
+sweeps (`detect-dir-*`, `detect-scope-type`, `detect-scope-both`,
+`detect-no-advisory-*`) gain its two findings (709 to 711). No other golden
+moved.
+
+Corpus, `round7-recall-and-gates-r2-28` against run 28: one finding differs
+from the first version of this branch, copperhead.sh 3785's dated line,
+which leaves `hero-eyebrow-chip` (c2 +5 becomes +4 in the table above; base
+reported it under neither rule). Every other count, the 22 violations and
+the 7 script-error moves are unchanged.
+
+Known limit: base's own 1.6px hand-off is left as it was, so a small-caps
+kicker tracked 1.6px or wider over a display h1 still reports under neither
+rule, and a dated line tracked that wide still reports as an eyebrow.
+
+### Known limits at merge (from the review)
+
+Open issues the review of the revision left, carried here at the merge into
+corpus/integration:
+
+1. **P32 is still an open premise question.** `drop_covered_palette_forms`
+   (crates/core/src/browser/driver.rs) removes 18 confirmed-harmful
+   ai-color-palette findings. Each is still reported through gradient-text
+   or the computed form on the same element at the same severity, but the
+   palette hue is no longer named when gradient-text wins ("Cyan gradient
+   background" becomes "background-clip: text + gradient").
+2. **Row 5's hand-off to undersized-ui-text was not built.** tiny-text skips
+   typed-caps labels outright, so adant.ai's 9.5px caps card meta
+   ("ANIMATION · CINEMATIC 3D", 11 findings on captures 3625 and 3630, both
+   judges harm yes, undersized-ui-text the right rule) is now silent, as
+   text-transform caps already were. undersized-ui-text's 20-character limit
+   leaves any non-interactive caps label over 20 characters unreported.
+3. **The ai-color-palette one-colour skip samples at 1/6 to 5/6 of the
+   box,** which understates a ramp. It drops a visible subtle navy-to-teal
+   card (blueprintbuddy-b2c.lovable.app 128931, endpoints 13, 18 and 21
+   levels apart), close-stop animated shimmer bands (grad2.html section.a,
+   200% `#7c3aed` to `#9333ea`) and a purple-only 400% animated hero
+   (gradients.html). The body-level palette finding still reports on those
+   pages.
+4. **react-fast-marquee's Subtree scope tags site-authored ticker colours as
+   third-party:** cnnbrasil.com.br 4118's `#ef4444`-on-white low-contrast,
+   harmful to both judges, now ends "(third-party: react-fast-marquee)".
+   Severity is unchanged. Swiper's OwnElement scope keeps a site's own slide
+   text untagged.
+5. **Prose-div recall on fine print (P27), unjudged.** line-length and
+   body-text-viewport-edge now report legal fine print written into divs
+   (tryrote.com `div.foot-legal`, capitalone.com footnotes,
+   volkswagen-group.com's consumption disclaimer), a third-party map
+   attribution (phillips66.com `div.esri-attribution__sources`) and albayan.ae
+   CMS divs at a 10px phone gutter (consistent with r3-34).
+6. **hero-eyebrow-chip reads `label_type_element(sibling)`.** Where the
+   wrapper sets an accent colour and the text child is transparent gradient
+   text, accent-bold stops matching. Not seen in the corpus.
+7. **Overlap with round7-never-painted, resolved at the merge.** Both
+   branches add gradient-text to `PAINT_GATED_TEXT_RULES` (kept once), and
+   never-painted gates gradient-text's page form in
+   `PAINT_GATED_PAGE_FORMS` while this branch adds
+   `clipped_gradients_all_silent`; the page form now has to pass both. In
+   `check_element_colors_dom` the gradient-text ramp check runs after the
+   surfaces rescore and the never-painted `at_rest` drop.
+8. **Not replayable:** the validity overlay gate and the new ad-tech hosts.
+   target.com is refused only on recapture, and the script-error moves were
+   classed offline.
+9. **Not fixed (DELTAS known limits above):** row 18's stop-alpha floor
+   (coldtea.ai 132291/132556, outreign.io 139783), row 20's corner glyph
+   (uncoverroads), and bt.cn's closed-menu gradient text.
+10. **One existing golden moved:** text-occlusion.html's 0.1em eyebrow over
+    a 96px h1 moves from kicker-above-heading to hero-eyebrow-chip (reviewed
+    above).
+11. **Carousel windows, resolved at the merge.** This branch tags
+    clipped-overflow-container on Slick's `slick-list` and SuperSlide's
+    `tempWrap` as third-party (lpga.or.jp 141946, scol.com.cn 141745 and
+    141937), while round7-never-painted reads both as carousel windows and
+    drops the finding outright. Silence wins, so there is nothing left to
+    tag: `third-party-widgets-carousels.html` moves those two cells to
+    should-pass (`#pass-slick-list`, `#pass-superslide-wrap`) and
+    `run_28_widget_vendors_are_named` asserts they report nothing. The
+    vendor scopes stay (unit-tested in third_party.rs), and the Slick dot,
+    marquee, Kaltura and untagged site-button cells are unchanged. No
+    golden moved (the static engine measures no clip).
+12. **The `dev_url::answers_whatever_scheme_the_page_uses` flake** failed
+    once in the merged full workspace run and passed three times on its
+    own.
+
 ## Recorded 2026-09-11: comp regions no longer include neighbouring pixels
 
 The `comp-diff-no-spec` golden now measures the automatic bands at their actual
@@ -3868,6 +5971,890 @@ Concept-seed richness instruction scoped by mode (fix/operate-directions): the s
 - `seed-surface-local`, `seed-surface-local-default-scope` (`--mode operate`, surface scope): the atmosphere pair frost arcade and salt terrace and the second interaction pick, signal tower, are gone; folio stand and banner press join placard row and poster wall, with meter row as the one interaction pick. The fixture catalog holds only four graphic duals, so this surface roll deals five challengers where it dealt six: a quota tier reuses its pool when it cannot fill its quota but never borrows another strength. The live catalog holds 16 graphic duals open to operate.
 - `seed-direction-local-operate` (new): an operate direction roll on `oracle-key-1`, five graphic and one interaction, no atmosphere.
 
+## Recorded 2026-10-01: main merged into the detector precision branch
+
+The merge of `origin/main` (755d2df2) into `corpus/integration` conflicted in
+33 detect goldens. None was merged by hand: the code was resolved, the binary
+rebuilt, and the 58 cases the binary then disagreed with were recorded from it
+(`detect-dir-*`, `detect-scope-*`, `detect-no-advisory-*`, `detect-multifile-*`,
+`detect-design-blue-*`, `detect-framework-next-tailwind-json`,
+`hook-stop-purple-heading-design-none`, and the `detect-fixture-{json,text}-*`
+pairs for ai-color-palette, ai-color-palette-brand-hue,
+ai-color-palette-brand-hue-headings-only, clipped-overflow-container, color,
+cramped-padding, cramped-padding-edges, flush-against-border,
+framework-next-tailwind, gray-on-color, icon-tile-stack, jsx-should-flag,
+label-collectors, multifile, never-painted, overlay-positioning,
+paint-that-shows, painted-at-capture, painted-gate-coverage,
+surface-resolution-contrast, svelte-should-flag and vue-should-flag). Against
+the branch's goldens every change is one of these, all from main:
+
+1. **Registry text (#840).** The `ai-color-palette` and `cramped-padding`
+   descriptions changed, which touches every case that prints either rule.
+   This is the only change in most of the 58.
+2. **`gray-on-color` reads gray as low chroma at its own lightness (#840).**
+   `#e5e7eb` (lightness 0.91) on `#1e3a8a` and on `#115e59` no longer reports:
+   an off-white is one of the two neutral inks a coloured surface carries. The
+   fixture's two should-flag rows now use `#d1d5db` (lightness 0.84) so they
+   still flag, and the off-white pair moved to should-pass
+   (`pass-off-white-on-navy`, `pass-off-white-on-teal`). The background half
+   keeps the branch's luminance-scaled bar. gray-on-color.html stays at 4
+   findings; the directory cases go from 772 to 770 with item 3.
+3. **`italic-serif-display` walks into the heading and skips hidden
+   ancestors (the static adapter main rewrote for nested italic headings).**
+   `Inline Em Inside Roman` (main's fixture row) is new, and
+   painted-gate-coverage.html's `pass-italic-hidden` ("Archive in motion", a
+   should-pass row the static engine used to report) is gone: 14 to 13.
+
+No other finding moved. The browser-only halves of #840 (`line-length` on
+rendered lines, `cramped-padding` on the measured inset, the two-hue gate of
+`ai-color-palette`, `kicker-above-heading` naming its eyebrow) print nothing
+in these file-scan goldens; `crates/browser/tests/text_geometry.rs` pins the
+new `line-length` snippets against a real browser.
+
+## Recorded 2026-10-01: labelled placeholders advisory, bold-named faces take the large-text bar
+
+Two taste calls on `low-contrast` (premise round 4):
+
+1. **r5-p30, advisory.** A low-contrast placeholder reports as advisory when
+   a visible label names its field, and keeps its severity when the
+   placeholder is the field's only label. A label is a `<label for>` or a
+   `<label>` around the field, the text `aria-labelledby` points at, or a
+   short text label right above the field, and it counts only where a reader
+   sees it: a label that is `display: none` (HubSpot's forms), screen-reader
+   text and `aria-label` are no label.
+2. **r5-p31, narrow.** A first font family named as a bold cut (`bold`,
+   `semibold`, `demibold`, `extrabold`, `ultrabold`, `heavy` or `black` as a
+   word of the name, split at punctuation and at a lower-to-upper case step)
+   reads as weight 700 for the large-text bar when its computed weight is
+   under 700. 18.66px of it is large text and needs 3:1.
+
+New fixtures `low-contrast-labelled-placeholders.html` and
+`low-contrast-heavy-faces.html` add four per-fixture cases, recorded from the
+binary. The five directory cases were re-recorded and differ only by those
+two files' findings: the all-fixtures JSON goes from 905 to 924 findings (14
+failing, 5 advisory) and the `--no-advisory` JSON from 772 to 786. No finding
+on an existing fixture moved.
+
+### Known limits
+
+1. **A file scan cannot see "right above".** Without layout the static
+   engine counts label elements and `aria-labelledby` text only, so plain
+   text above a field (`Where do you work today` in the fixture) is advisory
+   in the browser engines and keeps its severity in a file scan.
+2. **A label element is taken at its word.** A `<label>` whose visible text
+   does not name the field still counts: a `https://` prefix inside a
+   wrapping label (context.dev), a promotional line written as the field's
+   `<label for>` (sapo.vn).
+3. **Only the family name is read.** The engine cannot see which face was
+   loaded, so a bold-named first family that fell back to a regular system
+   face still takes the large-text bar, and a single-weight display face with
+   no weight word (Lilita One) keeps the normal-text bar. Size still gates
+   it: exxonmobil.com's EMprint-Semibold buttons are 16px and keep 4.5:1.
+## Recorded 2026-10-01: category colours and footer column titles (premise round 4)
+
+Two of Paul's taste calls, both "narrow":
+
+1. **`ai-color-palette` skips category colours**
+   (r5-p28-ai-color-palette-category-colours). In the URL engine an
+   element-level finding does not report when the elements in its role carry
+   six or more distinct hues, at least half of them outside the violet and
+   cyan bands. The role is the tag plus computed font size and weight for the
+   ink forms, the tag plus box size for the gradient forms. Such an element
+   does not vote in the two-hue ink gate either.
+2. **`skipped-heading` skips a skip into the footer**
+   (r5-p29-skipped-heading-footer-titles), in both engines. The skipped
+   heading sits in `footer`, `[role="contentinfo"]` or `#footer`, and the
+   heading it follows is the last one before that footer or the footer's own
+   first heading.
+
+No existing finding moved. Two fixtures are new, which adds four cases and
+changes the seven directory cases by exactly the new files' findings:
+
+- New, `detect-fixture-{json,text}-skipped-heading-footer-html`: 2 findings,
+  the content skip (`<h2> "Should flag" followed by <h4> "Jet fuel grades"`)
+  and the skip between two footer headings (`<h4> "Company" followed by <h6>
+  "Legal small print"`). The four footer column titles do not report.
+- New, `detect-fixture-{json,text}-ai-color-palette-category-colours-html`: 4
+  findings from the static engine, which reads no rendered roles and so
+  reports the two category headings (`#7c3aed`, `#9333ea`) beside the lone one
+  and the page-level accent form. The URL engine's reading of this fixture is
+  pinned in `crates/browser/tests/brand_and_vendors.rs`.
+- Directory cases: `detect-dir-json-all-fixtures` 905 to 911, `detect-no-advisory-json` and
+  `detect-no-advisory-text` 772 to 778, `detect-dir-text-all-fixtures` and
+  `detect-dir-quiet-all-fixtures` the same six, `detect-scope-both` and
+  `detect-scope-type` plus the two `skipped-heading` findings.
+
+Known limits: a footer built from unmarked `div`s (Framer output, a
+`div#contact` closing section) is not recognised and its column titles keep
+reporting; the static engine does not apply the category-colour skip; the
+role key is exact, so category headings set at two font sizes are two roles;
+the page-level `Purple/violet accent colors detected` is not affected.
+## Recorded 2026-10-01: closed interface and recoverable hydration errors (premise round 4)
+
+Two corpus decisions, both in the URL engine, so no existing golden moved: the
+1,011 recorded cases replay byte-equal. Six goldens are new, the
+`detect-fixture-{json,text}-*` pairs for the three fixtures added here, and all
+six are empty, because the static engine reports neither rule.
+
+- `detect-fixture-json-content-hidden-at-rest-html`, `detect-fixture-text-content-hidden-at-rest-html`,
+  `detect-fixture-json-content-hidden-closed-interface-html`, `detect-fixture-text-content-hidden-closed-interface-html`
+  (r5-p5-content-hidden-closed-navigation): `content-hidden-at-rest` leaves
+  text in closed interface out of the hidden count and the page total. A
+  subtree is closed interface when the box that starts it (itself at opacity
+  0.02 or less, or `visibility: hidden`) is in a `nav` or under a `navigation`,
+  `menu` or `menubar` role, is or sits under `inert`, is or sits under an id
+  whose `aria-controls` triggers say `aria-expanded="false"` or
+  `aria-selected="false"`, carries a `dialog`, `alertdialog` or `tabpanel`
+  role, carries a drawer, flyout, modal, tab-panel or accordion-panel class
+  word, follows an element that says `aria-expanded="false"`, or is
+  `position: fixed` and wholly beside the viewport. In a browser the first
+  fixture reports `50% of page text (580 of 1162 chars)`, the three stalled
+  reveals alone (the base engine printed 80%, 2269 of 2851), and the second
+  reports nothing (base: 74%). `crates/browser/tests/hidden_and_hydration.rs`
+  pins both.
+- `detect-fixture-json-script-error-hydration-html`, `detect-fixture-text-script-error-hydration-html`
+  (r5-p13-script-error-hydration): a `script-error` whose message is
+  `Minified React error #418`, `#419`, `#422`, `#423` or `#425` reports as
+  advisory, snippet unchanged, under its own cap of three. Other React
+  invariants and first-party errors stay errors. Pinned by the same test file.
+
+`crates/live/assets/detect-antipatterns-browser.js` was rebuilt, since the
+measure is compiled into the in-page bundle.
+
+**Known limits.** Closed interface is recognized only by the marks above. An
+unmarked closed panel still counts (ktb.gov.tr's `#accessibility_panel`, a
+Framer accordion with no ARIA on landio.framer.website), which is base
+behaviour. In the other direction, a reveal that never ran is left out when it
+carries one of the marks: a whole `nav` staged at opacity 0, a `tab-content`
+or `modal` wrapper faded in on scroll, a section that directly follows a
+collapsed disclosure button. A carousel whose dots are `aria-selected="false"`
+tabs with `aria-controls` reads as unselected tab panels. The hydration
+decision reads the message alone: it does not check that the page rendered
+complete, and development builds, which print the long message without a
+number, stay errors. The corpus replays `script-error` from recorded snippets,
+so an error the base run's cap dropped is not measured.
+## Recorded 2026-10-01: advisory contexts for micro-labels, fine print and framed demos (corpus/premise4-advisory-contexts)
+
+Three taste calls Paul decided on 2026-10-01, all "advisory". Each moves a
+finding's own severity to `advisory` inside the context the call describes
+(the registry severities are unchanged): the finding stays in the output with
+its snippet byte for byte, the JSON gains `"severity": "advisory",
+"advisory": true`, the text output moves it under "Advisory (not counted as
+failures)", and the failure count and the exit code drop it. The decisions
+are made once in `crates/core/src/checks/text_context.rs` over a
+`ContextNode` both engines implement.
+
+- **r5-p3, `undersized-ui-text` on a label with no reading job.** Decision:
+  "Report text under the floor as advisory when it is a label with no reading
+  job: a tick or axis label inside a chart, a unit or step marker beside a
+  number, a pill or eyebrow of a few words beside a heading. Prices, form
+  help, navigation and controls keep failing." Read as: the element's text is
+  all its own, and it is (a) at most 4 words and 32 characters with no figure
+  in it, and either opens its group right before a heading (an `h1` to `h6`,
+  `role="heading"`, a block that starts with one, or an untagged title of
+  words at 18px or more and 1.5 times the label's size) or follows one and is
+  drawn as a pill (rounded, with a fill or border); or (b) a unit from a
+  fixed list beside a sibling number set at 1.3 times its size or more; or
+  (c) a step marker (`01`, `1.`, `Step 2`) beside larger text; or (d) at most
+  3 words and 16 characters and inside a chart: a `chart`, `axis`, `tick`,
+  `graph`, `plot`, `sparkline`, `gauge` or `histogram` class or id part up to
+  4 levels up, a label whose centre sits over a sibling `canvas` or `svg` of
+  100 by 40px or more, or one of 3 or more absolutely placed siblings of the
+  same tag and class lined up on one axis. Never: text in or under a control,
+  `nav`, `form`, a table cell, `dt`/`dd`, `time`, a heading, text with a
+  currency sign, text that ends a sentence.
+- **r5-p27, legal fine print under `line-length`, `tiny-text` and
+  `tight-leading`.** Decision: "Report text marked as fine print (a legal,
+  disclaimer, terms or footnote class, or a block that opens with an asterisk
+  or a footnote mark) as advisory under the three rules. A consent or form
+  label is not fine print and keeps failing." Read as: text set under 15px
+  that is in a `small`, or carries one of the class markers
+  `undersized-ui-text` already reads for its smallprint floor (legal,
+  copyright, fineprint, smallprint, disclaimer, disclosure, footnote, without
+  the bare `footer`) or `terms`, as a class or id, on itself or up to 3
+  levels up (never on `html`, `body`, `main`, `article` or `form`), or that
+  opens with `*`, a dagger, a superscript digit or a leading `sup` and runs
+  to 60 characters or more. Never: text in a `label`, a block holding a form
+  control, a heading.
+- **r5-p26, framed HTML demos count as mock context.** Decision: "Read mock
+  context from structure as well as from a class: a window with three
+  title-bar dots, a caption with the word preview, a device frame that is
+  scaled or 3D-transformed. Text inside reports as advisory under all three
+  rules [...]. Sentence-length copy inside still counts as copy." Read as: an
+  ancestor (not `section`, `article`, `header`, `footer` or `nav`) whose
+  first child is a title bar (12 to 72px tall, 60% of the box's width, at its
+  top) that leads with exactly three empty round painted dots of 5 to 16px
+  at its leading half, or that holds a caption of at most three words with
+  the word `preview` while the box is drawn as a frame (rounded, with a
+  border or shadow); or an ancestor of 120 by 80px or more whose transform
+  tilts it in 3D by about a degree or more, or scales it uniformly to
+  between 0.3 and 0.85 while it is drawn as a frame, with no transform
+  animation running. It feeds the `Mockup` shape r3-04 already reads, so
+  `low-contrast` follows in every pass, and `undersized-ui-text` and
+  `tiny-text` now report text in mock context (by structure, by a mockup or
+  illustration class, or by `role="img"`) as advisory too. Never: the preview
+  caption itself, text in a control (`a[href]`, `button`, `label`, a control
+  role), text under a `figcaption`, anything in a carousel slide, pagination
+  bullets, sentence-length copy.
+
+New fixtures `undersized-ui-text-micro-labels.html`, `fine-print.html` and
+`mockup-structure.html`, each with a failing and an advisory column, pinned
+on the static engine by `crates/html/tests/advisory_contexts.rs` and on the
+URL engine by `crates/browser/tests/advisory_contexts.rs`. Every re-recorded
+golden was diffed finding by finding against its predecessor.
+
+- `detect-fixture-json-undersized-ui-text-micro-labels-html`, `detect-fixture-text-undersized-ui-text-micro-labels-html`, `detect-fixture-json-fine-print-html`, `detect-fixture-text-fine-print-html`, `detect-fixture-json-mockup-structure-html`, `detect-fixture-text-mockup-structure-html`: new cases.
+- `detect-fixture-json-tight-leading-html`, `detect-fixture-text-tight-leading-html`: the `div.footer-legal` block at 1.17x is advisory (15 to 14 counted, 1 advisory note). Its `legal` class marks fine print; the row stays in the should-flag column with a note, since it still reports.
+- `detect-dir-json-all-fixtures`, `detect-dir-text-all-fixtures`, `detect-dir-quiet-all-fixtures`, `detect-scope-type`, `detect-scope-both`, `detect-no-advisory-json`, `detect-no-advisory-text`: the one move above plus the three new fixtures (772 to 815 counted, 133 to 160 advisory notes: 44 failing and 26 advisory rows in the new fixtures, and the moved one). No other finding moved and no snippet changed.
+
+Known limits, stated so the ratchet does not read them as misses:
+
+1. **The static engine has no layout.** A label over a plot and labels
+   lined up along an axis keep failing there, and so does a title bar judged
+   by its place in the window (the dots alone decide). Its cascade carries no
+   `transform`, so a scaled or tilted frame is seen only when the transform
+   is an inline style. `line-length` never reports there at all.
+2. **Device frames that are neither scaled nor tilted** carry none of the
+   three structural cues and keep failing: coldtea.ai's `DevicePhone-module`
+   frame (its text is shrunk by font size, 4 of the 22 r5-p26 evidence
+   findings), kraflio.com's bordered phone (4 more) and adant.ai's
+   `dc-demo-frame` (its "CANVAS · GENERATED" and "Swan rescue").
+3. **Controls keep failing in every context**, which leaves out r5-p3
+   evidence that sits in a link or a button: context.dev's SOC 2 badge,
+   outreign.io's "Listed on" and "Getting Started", redoubt.agency's
+   "Secure", inven.co.kr's "LIVE" and its countdown units, vestra.ai's `01`.
+4. **An eyebrow needs a heading right after it.** A kicker above a paragraph,
+   a list or a ticker (outreign.io's "Also included" and "Explore OutReign",
+   thursdai.news's "Guests From", vestra.ai's "Noticed on its own") keeps
+   failing, and so does a stat's label under its figure.
+5. **Fine print needs a marker.** Unmarked terms keep failing:
+   cuisineactuelle.fr's `custom_newsletter_mentions`, onco.cc's footer
+   paragraph. Fine print at 15px or more keeps failing too
+   (thecignagroup.com's 16px footnote).
+6. **`undersized-ui-text` and `tiny-text` now honour the class-marked mock
+   context as well**, not only the structural one: text under a `mockup` or
+   `illustration` class or `role="img"` is advisory under them. A `mock`
+   class was already exempt from both rules.
+7. **An advisory copy never speaks for a failing copy of the same colour
+   pair** (r3-04), so demoting a mock's text can surface one new
+   `low-contrast` finding on the same page (bitroad.ai, 2 in run 31).
+
+
+## Recorded 2026-10-02: images and text that are not at rest (corpus/round8-not-at-rest)
+
+Four changes from `reports/observations-35.md` (rows 1, 5, the `dark-glow`
+part of row 15, and the mechanical part of `content-hidden-at-rest`), all in
+the URL engine's checks under `crates/core/src/browser`, so no existing
+finding moved in any golden. Two goldens are new, for the fixture added here,
+and eight directory goldens gained that fixture's static findings.
+
+- `buried-raster` skips two more state layers. An animation or transition the
+  capture saw running on the raster that moves its `opacity` is a fade in
+  progress. An `<img>` at rest at 0 is waiting for a class swap when at least
+  two other images on the page are shown (own opacity 0.5 or more, painted
+  through their ancestors), declare an opacity transition or an opacity
+  animation, share a class token with it, and carry its class list with one
+  token swapped or one token added (tagDiv Newspaper's
+  `td-animation-stack-type0-1` to `-type0-2`).
+- `cramped-padding`, wrapper form: text lands on a side only within 4px of it
+  on either side of the edge (it used to count at any distance past it), and
+  text is the wrapper's only when no box from it up to the wrapper is at
+  opacity 0.02 or less, is `position: absolute` or `fixed`, or is a
+  non-inline box painting a fill that differs from what is behind it.
+- `dark-glow`, page form with no selector: when the style text declares
+  `@keyframes` whose readable frames set the shadow property to that colour,
+  the form stands only if an element painted at capture carries one of those
+  names in its `animation-name`.
+- `content-hidden-at-rest`: a box that starts an invisible subtree leaves
+  both counts when it is `position: absolute`, has area and lies wholly
+  outside an ancestor that clips it, every clipping ancestor having area on
+  the axis it clips. It counts as shown when its opacity is held by a scroll
+  or view timeline: a running animation moves its `opacity`, a named
+  animation's keyframes set `opacity`, and a rule matching it declares
+  `animation-timeline: scroll()`, `view()` or a named timeline.
+
+New fixture `not-at-rest.html`, a failing and a passing column, pinned on the
+URL engine by `crates/browser/tests/not_at_rest.rs`: the base engine
+(3b1dced5) reports every should-pass case there, and in a browser the hidden
+share reads `687 of 1654 chars`, which leaves out the 267 characters a view
+timeline holds and the 177 parked under closed rows. Every re-recorded golden
+was diffed finding by finding against its predecessor.
+
+- `detect-fixture-json-not-at-rest-html`, `detect-fixture-text-not-at-rest-html`: new cases. The static engine measures no boxes and reads no running animations, so it reports both columns: 5 `buried-raster`, 2 `cramped-padding`, 1 `dark-glow` and 1 advisory `flat-type-hierarchy`.
+- `detect-dir-json-all-fixtures`, `detect-dir-text-all-fixtures`, `detect-dir-quiet-all-fixtures`, `detect-no-advisory-json`, `detect-no-advisory-text`, `detect-scope-type`, `detect-scope-layout-text`, `detect-scope-both`: the new fixture's findings and nothing else (835 to 843 counted, 165 to 166 advisory notes). No other finding moved and no snippet changed.
+
+`crates/live/assets/detect-antipatterns-browser.js` was rebuilt, since the
+checks are compiled into the in-page bundle.
+
+**Known limits.**
+
+1. **The class-swap test needs two revealed peers and a shared class.** An
+   image with no class, a page where no image of that kind has been revealed
+   yet, and a reveal that swaps a class on a wrapper instead of on the image
+   keep reporting. In the other direction, an image deliberately held at 0
+   whose class list is one token away from two shown, fading images is
+   skipped.
+2. **A fade in progress is read from the capture's running animations.** A
+   snapshot recorded before animations were read keeps base behaviour, and an
+   image a script tweens through inline opacity with no class marker is
+   covered only by the round 7 lazy tests.
+3. **Text more than 4px past a wrapper's edge is no longer `cramped-padding`.**
+   It overflows the box, which is another defect, and no rule here names it.
+   An existing unit test that pinned the old reading
+   (`cramped_padding_reads_the_edges_a_reader_sees`, the unclipped run 38px
+   past its band) was changed with it.
+4. **Out-of-flow and self-painted text is left to its own box.** A caption
+   positioned absolutely at a card's corner with no inset, and text in a
+   filled child that touches the wrapper's edge, are not reported on the
+   wrapper; the filled child is still measured as an element of its own.
+5. **The wrapper form's insulation loop still reads direct children only**,
+   and its paint gate is still asked of the wrapper, not of each text. Only
+   the opacity of the boxes between a text and the wrapper is read.
+6. **The keyframe test reads the names the style text declares** and the
+   frames the probe can read. Keyframes in an unreadable (cross-origin)
+   sheet, and a glow in an inline `style` attribute no element computes, keep
+   base behaviour. An element that runs the animation at capture hands the
+   decision back to the existing logic.
+7. **Scroll timelines are recognised from CSS only.** A timeline attached by
+   script (`new ScrollTimeline()`), a reveal a script scrubs by writing
+   styles (antropi.world), a slider that never initialised (letour.fr,
+   epcco.com.sa) and a reveal that never ran (asakana.co) all keep reporting:
+   those wait on taste call T6. `animation-timeline` is not in the snapshot's
+   style properties, so the rule is found in the style text and matched to
+   the box by its selector; a rule the selector engine cannot match keeps
+   base behaviour.
+8. **A panel parked under a clip collapsed to no height or width still
+   counts** (epcco.com.sa's 0px slider), as does a parked panel that is in
+   flow or `position: fixed`.
+## Recorded 2026-10-02: measuring the right box (corpus/round8-right-box)
+
+Round 8, branch 3 of observations-35 section 5, plus the `side-tab` recall
+bug of walkthroughs-35. Every change reads a box the engine already
+measured and stops reading the wrong one; none adds a rule or changes a
+severity. Fail-safe throughout: where the fact a change needs was not
+recorded (a text rect, a hit-test stack, a scroll width), the base reading
+stands.
+
+- **`side-tab`, a thin stripe on a card rounded away from it**
+  (walkthroughs-35, submitmap.com 7678, 7682). The computed
+  `border-radius` of `0px 12px 12px 0px` leads with 0, so a 2px left stripe
+  on that card took the square stripe's 3px floor. When the leading value is
+  0, the stripe is under 3px and the far corners are known, the radius is the
+  smaller far corner, and the stripe reports as
+  `border-left: 2px + border-radius: 12px`. A stripe of 3px or more keeps its
+  old wording. Top and bottom bands are untouched (taste call T2).
+- **`clipped-overflow-container`, row 7's implementation half.** (a) A
+  positioned child that paints nothing of its own (no fill, background
+  image, border, shadow, outline, own text or generated content) is cut only
+  where its descendants paint: text by its text rect, replaced elements and
+  painted boxes by their border boxes, a descendant that clips both axes by
+  its box. More than 200 descendants, text with no rect, or generated
+  content leave the wrapper's own box standing, and a popover layer keeps
+  reporting whatever it measures. mk.co.kr's `div.more_btn` and
+  bankofamerica.com's `div.spa-icon-wrapper`. (b) An absolutely positioned
+  child whose containing block sits inside a scroll container between it and
+  the clipping box belongs to that scroller (gamer.com.tw's captions in a row
+  at `overflow: auto hidden`). A fixed child is not read this way.
+- **`heading-rhythm`, row 12.** (a) A spacer is now any empty box whose
+  rendered children are all spacers, four levels deep: no text, no picture,
+  no painted bottom edge (kinghost.com.br's `div` around a
+  `wp-block-spacer`). (b) The walk below a heading stops at the end of
+  `main` (or `role="main"`), and once it has left the heading's own box it
+  does not measure to a `footer`, `nav`, `aside` or `header` (or their
+  roles): improved-rotary-phone-two.vercel.app measured 86px to the page
+  footer.
+- **`body-text-viewport-edge`, row 15.** (a) A line its own box truncates
+  by design (an ellipsis or a line clamp on a box that generates one, the
+  test `text-overflow` already uses) is measured to that box's padding edge
+  (keydris.com, leilonozap.vercel.app). (b) Text on a track a running,
+  infinitely repeating CSS animation transforms inside a box that hides x
+  overflow is not measured (paseo.sh). A track a script parks with a
+  transform is measured as before.
+- **`text-occlusion`, row 15.** (a) Where the answer to a probe is text, and
+  the hit-test stack places a picture (`img`, `picture`, `video`, `canvas`)
+  between that answer and the victim, or an ancestor of the victim painting
+  an opaque fill over it, the point is not counted: the answer lies on what
+  buries the victim (bankofamerica.com's sign-in form at `z-index: -1`). (b)
+  Both texts are read as the band their glyphs ink instead of their content
+  area, for text of ASCII, spaces and the four common currency signs with a
+  known font size and one line (or recorded line rects): the band drops
+  `max(0, 0.75 * H - 0.8em)` above the first line and
+  `max(0, 0.18 * H - 0.25em)` below the last, `H` being that line's rect
+  height. freenet.de's 40px price on a 40px line has a 57px rect that laps
+  the 12px label above it; its digits do not.
+- **`edge-flush-cards`, row 15.** A table cell, row, row group, caption or
+  column (by tag or computed `display`) is not a card (paseo.sh's `th`).
+- **`repeated-container-text`, row 15.** In the URL engine an element must
+  also pass the Text paint gate (a container, its box gate), so slides parked
+  past their window repeat nothing. In both engines, a class token with a
+  `-` or `_` part of four or more hex digits that holds a decimal digit is
+  dropped from the spot signature: it names an instance
+  (`jet-listing-dynamic-post-43268`), not a spot (kinghost.com.br).
+- **`first-viewport-column-overflow`, row 15.** The tall column and the
+  short one must have disjoint x ranges (submitmap.com's
+  `flex-col lg:flex-row` stack).
+- **`nested-cards`, row 8's control.** `role="tablist"`, `"radiogroup"` and
+  `"toolbar"` join `"menu"` and `"listbox"` as boxes that are not cards
+  (easyveo.com's Video / Image switch).
+- **`undersized-ui-text`, row 6.** (a) `[tabindex]` no longer makes a box a
+  control by itself: a box with a `tabindex` counts as one only when the value
+  is not negative and its text is 80 UTF-16 units or fewer. Every other
+  control selector is unchanged. (b) In the URL engine, a run in a monospace
+  face with `white-space: pre*` whose text holds one of
+  `{ } [ ] < > = ; " \` \ _` is code and is exempt (directus.io's JSON
+  sample). The character test is what keeps monospace pricing labels on the
+  same site reporting. (a) is mirrored in the static engine; (b) is not,
+  since its cascade carries no `white-space`.
+
+**Not built: `flat-type-hierarchy`** (row 15, kinghost.com.br 218888, 218909).
+"Decline when a rendered heading stands 1.25 times above the ladder top"
+removed the should-flag column of `flat-type-hierarchy.html` (one 48px h1
+on the page) and contradicts round 7's otto.de note. The narrower "a heading
+size a full step above the top, used twice" removed, on run 28, four
+findings both judges called the pattern present (inven.co.kr 141932, 142191,
+joongang.co.kr 138137, walla.co.il 142983). How much a role's secondary
+size counts against its modal one is a taste call.
+
+New fixtures, each with a should-flag and a should-pass column, pinned on
+the URL engine by `crates/browser/tests/right_box.rs` (every test there
+fails on the base engine):
+`side-tab-far-corners.html`, `clipped-overflow-painted-box.html`,
+`heading-rhythm-spacers.html`, `body-text-viewport-edge-truncated.html`,
+`text-occlusion-buried.html`, `edge-flush-cards-table.html`,
+`repeated-container-text-carousel.html`,
+`first-viewport-column-overflow-stacked.html`, `nested-cards-controls.html`,
+`undersized-ui-text-focus-and-code.html`.
+
+- `detect-fixture-json-side-tab-far-corners-html`, `detect-fixture-text-side-tab-far-corners-html`, `detect-fixture-json-clipped-overflow-painted-box-html`, `detect-fixture-text-clipped-overflow-painted-box-html`, `detect-fixture-json-heading-rhythm-spacers-html`, `detect-fixture-text-heading-rhythm-spacers-html`, `detect-fixture-json-body-text-viewport-edge-truncated-html`, `detect-fixture-text-body-text-viewport-edge-truncated-html`, `detect-fixture-json-text-occlusion-buried-html`, `detect-fixture-text-text-occlusion-buried-html`, `detect-fixture-json-edge-flush-cards-table-html`, `detect-fixture-text-edge-flush-cards-table-html`, `detect-fixture-json-repeated-container-text-carousel-html`, `detect-fixture-text-repeated-container-text-carousel-html`, `detect-fixture-json-first-viewport-column-overflow-stacked-html`, `detect-fixture-text-first-viewport-column-overflow-stacked-html`, `detect-fixture-json-nested-cards-controls-html`, `detect-fixture-text-nested-cards-controls-html`, `detect-fixture-json-undersized-ui-text-focus-and-code-html`, `detect-fixture-text-undersized-ui-text-focus-and-code-html`: new cases. On the static engine only three report: the four side-tab rows; the flag panel and the parked-slides panel of the carousel fixture; and on the code fixture the three flag rows plus the JSON lines (one of them also as `tiny-text`), which the static engine cannot exempt.
+- `detect-dir-json-all-fixtures`, `detect-dir-text-all-fixtures`, `detect-dir-quiet-all-fixtures`, `detect-scope-type`, `detect-scope-both`, `detect-no-advisory-json`, `detect-no-advisory-text`: the new fixtures' findings only (835 to 848 counted). No existing finding moved; every pre-existing fixture golden replays byte for byte.
+
+Corpus ratchet (same replay, `reports/ratchet/round8-right-box-ratchet-*.json`):
+run 35 removes 52 and adds 6 (4 of the adds are the `heading-rhythm` page
+count changing from 3 to 2 headings on improved-rotary-phone-two), with one
+violation, 216097 (vexoai.com, "© 2026 VexoAI, Inc." at 10px in a
+`footer tabindex="-1"`: with the footer no longer a control it takes the
+decided 10px small-print floor). Run 34 removes 20 unjudged findings and
+adds 10. Run 28 matches the base engine except clipped-overflow (-8),
+undersized-ui-text (-7) and heading-rhythm (+10), with no new violation.
+
+### Known limits
+
+1. **The static engine reads none of the layout changes**: wrappers, scrollers,
+   spacers, landmarks, truncation, tracks, the hit-test stack, table cells
+   in scrollers, column positions. It shares the side-tab, id-like class and
+   `tabindex` changes, and the nested-cards role list does not apply to its
+   own nested-cards code, which flags neither column of that fixture.
+2. **The ink band is a font-agnostic estimate.** It assumes an ascent of 75
+   to 82% of the content area and ascenders and descenders of at most 0.8
+   and 0.25em; a face with a smaller ascent share and a large size could
+   have a few pixels of ink above the band. Accented capitals, emoji and
+   non-Latin text keep the content area.
+3. **The `heading-rhythm` spacer change also adds findings**: an empty
+   subtitle slot under a heading (tchibo.de's `span.ds-text-75` holding an
+   empty `p`) is now space, and five card titles 8px under a banner and
+   32px over their link report on each tchibo.de capture (10 on run 34, 10
+   on run 28, unjudged). That is what the page shows.
+4. **`tabindex` regions**: a focusable box over 80 characters is read as a
+   region, so a long label inside a custom control written as a big
+   focusable `div` with no role loses the control floor. `undersized-ui-text`
+   then reports it only up to 20 characters, and `tiny-text` takes longer
+   runs.
+5. **Text an ancestor clips** is still measured against the viewport, as the
+   review of observations-20 row 31 decided (simplybudget.framer.ai): only an
+   element's own truncation ends its line.
+## Recorded 2026-10-02: own-box surfaces, repainted ink, and pixels that replace a verdict (corpus/round8-pixels-and-surfaces)
+
+Engine defects from the cohort 4 judge observations (corpus observations-35,
+section 5 branch 1: rows 2, 4, 11, 17, 18 and the contrast parts of row 15).
+No taste decision is involved. All of it is in the browser engines'
+`low-contrast` (and `gray-on-color`) path; the static HTML engine is
+unchanged.
+
+1. **A gradient over the same box's opaque fill is the surface.** `background:
+   #8b5cf6 linear-gradient(135deg, #6d28d9, #9061f9)` was scored against the
+   fill, a colour no pixel of the box shows. The gradient is now sampled
+   under the text and flattened over the fill. The fill stays the surface
+   where no layer paints under the text, where the geometry cannot be read,
+   and where the gradient moves it by less than 12 on every channel at every
+   point under the text (a sheen).
+2. **An upper gradient layer lies over the layers below it.** With several
+   gradient layers on one box, a translucent stop of an upper layer is
+   composited over each colour the lower layers can show, not over the page
+   behind the box.
+3. **SVG text is scored only where its fill is its colour.** SVG text paints
+   `fill`, which the capture does not record. It is scored as `color` only
+   where the nearest `fill` the markup states (attribute or inline style, on
+   the element or an SVG ancestor) is `currentColor`.
+4. **A filter that repaints the ink leaves no verdict.** A `filter` on the
+   element or an ancestor that moves the ink, or the surface of a box inside
+   the filtered one, by more than 2 on a channel (the Filter Effects matrices
+   over the flat colour), or that the engine cannot model (`url()`,
+   `opacity()` under 1), drops `low-contrast` and `gray-on-color`.
+5. **A colour reveal's word may set its own display.** The inline style of a
+   reveal word may declare `display`, and a word that computes to `block` as
+   an item of a flex or grid run is still a word.
+6. **Handed-over text inside an `aria-hidden` box reaches the pixels.** The
+   visual pass took no candidate under `aria-hidden="true"`, while the
+   element pass scores that text, so a verdict handed to the pixels was never
+   read. Painted text there now takes a slot of the second (routed) budget.
+   The first budget is unchanged.
+7. **The sampled pass stops where it cannot place an image.** A
+   `background-attachment: fixed` image, an image that did not load, and a
+   point the image does not reach end the walk unresolved (the pixel pass
+   takes the candidate) instead of scoring the text against the boxes
+   beneath.
+8. **Sample points that disagree go to the pixels.** Where the 10th
+   percentile fails, the median passes and the two differ by the divergence
+   factor, the sampled pass gives no verdict.
+9. **Paint the sampled pass cannot see goes to the pixels.** A first-budget
+   candidate the element pass hands over for unread paint, where that paint
+   is a pseudo-element over the text or a layer that ignores pointer events
+   (neither is in a hit-test stack), gets no sampled verdict.
+
+New fixture `own-box-surface-and-ink-contrast.html` (7 should-flag and 9
+should-pass rows), pinned on the URL engine by
+`crates/browser/tests/own_box_surface_and_ink.rs`. Every should-pass row
+reports on the base engine in a URL scan.
+
+- `detect-fixture-json-own-box-surface-and-ink-contrast-html`,
+  `detect-fixture-text-own-box-surface-and-ink-contrast-html`: new cases,
+  recorded from the binary (10 counted, 2 advisory, the static engine's
+  reading, see limit 1).
+- `detect-dir-json-all-fixtures`, `detect-dir-text-all-fixtures`,
+  `detect-dir-quiet-all-fixtures`, `detect-no-advisory-json`,
+  `detect-no-advisory-text`: the new fixture's findings only (1000 to 1012
+  findings, 835 to 845 counted, 165 to 167 advisory notes). No finding on an
+  existing fixture moved and no snippet changed.
+
+### Known limits
+
+1. **The static HTML engine is unchanged.** A file scan still scores a box
+   with a fill and a gradient against the fill, pools layered stops, reads
+   SVG text as `color` and models no filter or reveal: it misses the
+   fixture's first should-flag row and reports six of its should-pass rows.
+2. **The fill is kept where the gradient cannot be placed** (a
+   `conic-gradient`, a size in units the geometry does not read, a capture
+   with no `background` shorthand), as before.
+3. **A fill given to SVG text by a stylesheet is not seen.** Text styled
+   `fill: currentColor` from a class (Tailwind `fill-current`) is unscored,
+   and so is text whose `fill` is a colour of its own, whatever its contrast.
+4. **A filter is modelled on flat colours only.** A filter that moves either
+   colour silences the verdict rather than rescoring it, including where the
+   filtered result would still fail. A page filtered at its root
+   (`html { filter: invert(1) }`) reports no contrast finding.
+5. **The routed budget is unchanged.** `aria-hidden` text competes for the
+   same 12 routed slots in document order, so a handed-over verdict past the
+   twelfth still prints unread (nvidia.com's carousel credit line). What to
+   do with an unread handed-over verdict is taste call T5.
+6. **In-page scans have no pixel pass.** The live overlay and the extension
+   run the sampled pass alone, so the candidates items 7 and 8 leave
+   unresolved report nothing there.
+7. **`point outside image` on an `<img>`** still lets the walk go on; only
+   CSS `url()` layers end it.
+## Recorded 2026-10-02: text and CSS-text forms (corpus/round8-text-forms)
+
+Five engine defects from the judged findings of corpus run 35
+(`reports/observations-35.md` rows 13, 14, 3 and 15 in the corpus repo). No
+decision of taste is in here: each is a measurement that counted the wrong
+thing, or a stylesheet form that never asked what its selector resolves to.
+
+- **`line-length` counted characters that are on no line.** The rule divides
+  an element's characters among its rendered line rects, and took the count
+  from the UTF-16 length of trimmed `textContent`. It now counts the
+  characters that rendered: the text of a `style`, `script`, `noscript` or
+  `template` descendant and of a `display: none` one is cut out, collapsible
+  white space counts once unless the element computes `white-space: pre`,
+  `pre-wrap` or `break-spaces`, and combining marks and format characters are
+  left out. This is a fix to code that came from main (#840) and is its own
+  commit, with `line-length-text-count.html` and
+  `crates/browser/tests/line_length_text_count.rs` standing alone.
+- **`overused-font` could name a face that sets next to no text.** The
+  element count still decides which face is primary, and the snippet is
+  unchanged. In the URL engine the finding now stands down when that face
+  sets under 5% of the characters in text that has a box (`hidden`,
+  `display: none`, `visibility: hidden` or `collapse` and
+  `content-visibility: hidden` are not weighed; opacity is not read).
+  walla.co.il's Arial at "40% of text" sets 2%. The bar sits under the
+  lowest share among findings both judges called harmful (mrtarget.de's
+  Montserrat, 6.6%): a full by-character share was tried first and lost five
+  of those (sellerassistant.io, v0-gigi, mrtarget.de), where a display or
+  label face that judges call the pattern sets a minority of the characters.
+- **`side-tab` reported one pseudo-element stripe twice,** once off the
+  element and once off the stylesheet. The stylesheet form now defers to the
+  element form on a host it resolves to. And the stylesheet scan no longer
+  reports a stripe whose background is a `url()` with no colour beside it.
+- **`marquee` never asked what the loop moves.** In the URL engine the
+  stylesheet form stands only when an element it resolves to carries text,
+  media, an SVG inside it, a `url()` background or generated content.
+- **`bounce-easing` read a name as the motion.** A bounce-named animation
+  whose keyframes are readable and only scale between 0 and 1 or fade does
+  not report, in either engine.
+
+New fixtures `line-length-text-count.html`, `overused-font-share-pass.html`,
+`overused-font-share-flag.html`, `side-tab-stylesheet-forms.html`,
+`marquee-ornament.html` and `bounce-easing-pulse.html`, pinned on the URL
+engine by `crates/browser/tests/line_length_text_count.rs` and
+`crates/browser/tests/text_forms.rs`. Every re-recorded golden was diffed
+finding by finding against its predecessor.
+
+- `detect-fixture-json-line-length-text-count-html`, `detect-fixture-text-line-length-text-count-html`: new cases, no findings (`line-length` needs layout).
+- `detect-fixture-json-overused-font-share-pass-html`, `detect-fixture-text-overused-font-share-pass-html`, `detect-fixture-json-overused-font-share-flag-html`, `detect-fixture-text-overused-font-share-flag-html`: new cases. Both report `Primary font: inter` on the static engine, see limit 1.
+- `detect-fixture-json-side-tab-stylesheet-forms-html`, `detect-fixture-text-side-tab-stylesheet-forms-html`: new cases, three stripes; the image-only stripe is absent.
+- `detect-fixture-json-marquee-ornament-html`, `detect-fixture-text-marquee-ornament-html`: new cases, four loops on the static engine, see limit 2.
+- `detect-fixture-json-bounce-easing-pulse-html`, `detect-fixture-text-bounce-easing-pulse-html`: new cases, the two bounces as advisory notes; the loader dots are absent.
+- `detect-dir-json-all-fixtures`, `detect-dir-text-all-fixtures`, `detect-dir-quiet-all-fixtures`, `detect-scope-type`, `detect-scope-both`, `detect-no-advisory-json`, `detect-no-advisory-text`: the findings of the new fixtures and nothing else (835 to 844 counted, 165 to 167 advisory notes: two `overused-font`, three `side-tab`, four `marquee`, two advisory `bounce-easing`). No existing finding moved and no snippet changed.
+
+### Known limits
+
+1. **The static engine's `overused-font` is unchanged.** It reads declared
+   families with no layout, so it names Inter on
+   `overused-font-share-pass.html`, where Inter sets thirty step numbers.
+   In the URL engine, a face that sets a minority of the characters but
+   more than 5% is still named by its element count: yedric.ai's Geist Mono
+   labels (11%) keep reporting, as judges split on them, and so does any
+   label face the 5% bar does not reach.
+2. **The static engine reports every marquee loop.** It cannot resolve a
+   selector to an element, so the wave and the sweep on
+   `marquee-ornament.html` report there. The same holds for the double
+   report of a pseudo-element stripe: the static engine has one form and
+   never doubled.
+3. **`line-length` on text ended by `<br>`** still divides the count by
+   width, so short lines ended by breaks share characters in proportion to
+   their ink. odishatreasury.gov.in's footer keeps its finding at the right
+   number (`~125 chars on 2 of 3`, was `~171 chars on 3 of 3`).
+4. **Combining marks are dropped by general category,** not by grapheme
+   cluster, so a conjunct of two consonants counts as two and a spacing
+   vowel sign as none.
+5. **Characters hidden other than by `display: none`** (a `visibility:
+   hidden` child, a 1px visually hidden label) are still counted by
+   `line-length`: their rects are in the lines too, or negligible.
+6. **A bounce name whose keyframes move the element still reports,**
+   including a plain up-and-down loop with no overshoot (Tailwind's `bounce`),
+   which judges call the pattern. Only a pulse in place is dropped, and only
+   when its keyframes can be read: keyframes in a stylesheet the engine could
+   not read keep the finding.
+7. **A square top or bottom band still reports as `side-tab`.** Whether the
+   rounded-card requirement extends to them is an open decision (T2); this
+   change only stops the same band from reporting twice.
+8. **A stripe coloured by an unresolved `var()` or by `currentColor`** in a
+   `url()` background still reports from the stylesheet scan, as before.
+
+
+## Recorded 2026-10-03: near-black ink is not gray (corpus/premise5-hues, r6-t8)
+
+Corpus decision `r6-t8-gray-on-color-near-black` (narrow). The same change
+reached main as #935 and is recorded there ("Recorded 2026-10-02: near-black
+ink is not gray"); merging main replaced this branch's copy with it. The
+own-box fixture golden it also moves is recorded where that merge landed
+("main's near-black floor reaches the own-box fixture").
+
+## Recorded 2026-10-03: the cyan band is 170 to 197 with a saturation floor (corpus/premise5-hues, r6-t7)
+
+Corpus decision `r6-t7-cyan-band` (narrow). `TellHue::of` read any hue from
+160 to 200 as cyan, so emerald buttons and icon tiles (`#059669` at 161,
+`#047857` at 163, harmless to both judges on leilonozap.vercel.app) reported
+as "Cyan gradient background". The band is now 170 to 197, and a cyan also
+needs an HSL saturation of at least 0.4. The decision said "about 170 to
+195"; the top edge is 197 so Tailwind's `cyan-900` (196) and `cyan-950`
+(197) stay in, while sky (198 to 200) and hue-200 glows drop. The violet band is unchanged. The
+band is defined once (`AI_PALETTE_CYAN_HUES` in `element_checks.rs`); the
+category-colour test (r5-p28) reads it by hue alone through `TellHue::of_hue`.
+
+- No golden moved. The element-level gradient and neon-ink forms are URL
+  engine only, and the static engine's output for `ai-color-palette.html`
+  and `ai-color-palette-category-colours.html` is unchanged by their new rows.
+  The URL engine rows are pinned by `crates/browser/tests/brand_and_vendors.rs`.
+
+### Known limits
+
+1. **The category-colour test counts hues, not colours,** so a grayed teal
+   under the saturation floor still counts as inside the cyan band there.
+   That only makes the exemption harder to reach.
+2. **Sky blue at 198 to 200 is no longer cyan,** so the category fixture's
+   sky swatch stops reporting; the set it belongs to is still the palette.
+3. **A hue-200 glow drops with sky.** arbiproseller-app.vercel.app's
+   section-wide hsl(200) radial glow on dark navy (findings 138945, 139054,
+   harmful to both judges) no longer reports; the band's top edge is a hue,
+   and 200 is where sky sits.
+## Recorded 2026-10-03: verdicts the pixels could not read, scroll-linked reveals and sliders that never started
+
+Corpus decisions r6-t5-unread-pixel-verdicts (advisory) and
+r6-t6-hidden-scroll-linked (narrow). Both change the URL engine only: a
+`low-contrast` verdict the element pass hands to the pixel pass that the
+pixels do not read now reports as advisory, and `content-hidden-at-rest`
+leaves out reveals that show once the page is scrolled to them (a live
+scroll probe, recorded in the capture's facts) and sliders whose every slide
+is hidden (a capture note instead of a finding). The static engine, which
+every oracle case runs, has no pixel pass and no hidden-share measure, so no
+existing case moved. Three fixtures were added for the browser tests
+(`content-hidden-scroll-linked.html`, `content-hidden-unstarted-slider.html`,
+`low-contrast-unread-pixels.html`); their own cases are new goldens and the
+directory cases changed only by their findings.
+
+- `detect-fixture-json-content-hidden-scroll-linked-html`,
+  `detect-fixture-text-content-hidden-scroll-linked-html`,
+  `detect-fixture-json-content-hidden-unstarted-slider-html`,
+  `detect-fixture-text-content-hidden-unstarted-slider-html`: new, no
+  findings, exit 0 (both rules they exercise are browser-only).
+- `detect-fixture-json-low-contrast-unread-pixels-html`,
+  `detect-fixture-text-low-contrast-unread-pixels-html`: new, two
+  `low-contrast` findings at full severity (`2.9:1 (need 4.5:1) — text
+  #ffffff on #979797`, once per column). The static engine has no pixel pass
+  to hand either verdict to, so it reports both as before; the URL engine
+  drops the one the pixels read and makes the other advisory.
+- `detect-dir-json-all-fixtures`, `detect-dir-text-all-fixtures`,
+  `detect-dir-quiet-all-fixtures`, `detect-no-advisory-json`,
+  `detect-no-advisory-text`: those two findings only (875 to 877 counted).
+  No existing finding moved and no snippet changed.
+
+Known limits:
+1. **A recording made before the scroll probe answers none of its
+   questions,** so a replay counts every scroll-linked box as hidden: every
+   capture up to run 38 reports antropi.world as before. Only a capture made
+   with this engine records `shownOnScroll`.
+2. **The probe reads the box's own computed opacity and visibility.** A box
+   that a script reveals by moving a child out from under a mask, or that
+   needs a hover or a click, is not shown to it and counts as hidden.
+3. **A reveal that runs once and failed during the sweep but runs on the
+   probe's longer dwell** counts as shown: a visitor who scrolls there sees
+   it. A reveal that only fires on the probe's viewport position but not a
+   visitor's is not distinguished.
+4. **A slider is known by its class words only.** An unclassed slider whose
+   slides are all hidden still counts, as before (the base fixture's
+   0px-high slider case), and a box classed `slider` that is not one (a
+   range input's track) is read as one.
+5. **The static engine and the extension are unchanged:** they have no page
+   to scroll and no pixels, so both decisions fail safe to base behaviour
+   there.
+## Recorded 2026-10-03: URL scans hide tours, stuck preloaders and two more consent layers (corpus/overlays)
+
+From the corpus round 8 harness items (site-made consent boxes, preloaders,
+tours). One golden changes, `detect-help`: the usage text gains
+`--no-overlay-hiding` after `--no-consent-hiding`. No fixture case changes:
+the oracle scans files. The URL behavior is pinned by
+`crates/browser/tests/overlay_hiding.rs` over `tests/fixtures/overlays/` and
+two new cases in `consent_hiding.rs`.
+
+- **consentmanager** (letour.fr): `#cmpwrapper` (the open shadow root host
+  its `#cmpbox` renders in) and `#cmpbox`.
+- **Borlabs Cookie** (fischundfang.de) was already hidden by
+  `#BorlabsCookieBox`; it now also hides `#BorlabsCookieWidget`, counts
+  `#BorlabsDialogBackdrop` as a backdrop (so its inline body
+  `overflow: hidden` is undone), and removes the `aria-hidden="true"` Borlabs
+  marked with `data-borlabs-cookie-aria-hidden` (the page wrapper).
+- **Tours:** driver.js 1.x only, by its own classes; no other tour library
+  appears in the corpus. **Preloaders:** structural (see the contract); wait
+  up to 5s, then hide. Findings carry `overlaysHidden: [{ kind, name }]`;
+  `consentHidden` is unchanged.
+
+Measured live, runs 39 and 40 against run 38 (same pages):
+fischundfang.de 2,928 to 5,729 findings, all but 12 of the rise
+`undersized-ui-text` on the 10px category tags of every post card, which the
+Borlabs aria-hidden had kept out of the rule; letour.fr 104 to 102 with
+consentmanager hidden on every capture; gamer.com.tw 374 to 372 with the
+tour hidden on all four; epcco.com.sa's `div#preloader` hidden on two of six
+captures; bankofamerica.com unchanged (no state picker showed in either run,
+and nothing of the site's was hidden).
+## Recorded 2026-10-03: popover clips, rounded-card bands, mockup panels (corpus/premise5-clip-stripe-mockup)
+
+Three taste calls from premise round 6 (run 35), each built in the browser
+and static engines and, for the stripe gate, the text engine too.
+
+- **r6-t1-clipped-overflow-popovers, narrow.** `clipped-overflow-container`
+  reports only when the positioned child is a popover layer: the child or a
+  descendant matches `POPOVER_LAYER_SELECTOR` (`[popover]`, `role` `dialog`,
+  `listbox`, `menu`, `menubar` or `tooltip`). Every other clipped child is
+  the effect (a curved masthead, an icon in a field, a card's image crop).
+  The exemptions only a non-popover could reach are gone with it: the
+  ornament test, the masked-reveal transform test and the transparent
+  wrapper measure. A popover is cut by its border box, as before.
+- **r6-t2-side-tab-bands, narrow.** A top or bottom border, pseudo-element
+  stripe or inset box-shadow stripe reports `side-tab` only on a card
+  rounded away from it (`is_rounded_away_from_side` for sides 0 and 2), the
+  gate left and right accents already pass. A band on a card rounded all
+  round still reports as `border-accent-on-rounded`, unchanged.
+- **r6-t3-nested-cards-mockups, advisory.** An inner card reports
+  `nested-cards` as advisory when it is under an HTML `role="img"` outside
+  any `svg`, in a framed demo by r5-p26's structure (`in_framed_demo`), or
+  is itself such a frame (`is_demo_frame`: a three-dot title bar, a framed
+  box under a preview caption, a device frame scaled or tilted in 3D). A
+  mockup class or id is not read for this rule: `illustration` names a
+  feature tile's picture as often as a mockup (nested-cards.html's
+  `flag-illustration-inner` would have moved), and r4-p17 keeps those
+  failing. The URL engine now carries a page check's own severity through
+  `el_pass`, and the static engine through its page-level `push_hits`;
+  neither had a page check that set one before.
+
+Fixtures: `clipped-overflow-container.html` gives its flag rows popover
+roles and moves the ribbon to the pass column with a curved masthead and a
+dropdown named only by its class; `clipped-overflow-painted-box.html`,
+`never-painted.html` and `painted-at-capture.html` mark their clipped layers
+as menus, tooltips or dialogs; `side-tab-stylesheet-forms.html` rounds its
+flagged hosts and adds a square band that passes; `border-baseline.html` and
+`named-color-borders.html` move their square top and bottom bands to the
+pass column. New `nested-cards-mockups.html`, pinned on both engines by the
+`advisory_contexts` tests. Every re-recorded golden was diffed finding by
+finding against its predecessor.
+
+- `detect-fixture-json-clipped-overflow-container-html`, `detect-fixture-text-clipped-overflow-container-html`: the ribbon's clip is gone (13 to 12 advisory notes); every popover row still reports.
+- `detect-fixture-json-on-screen-html`, `detect-fixture-text-on-screen-html`: the two `div.word-clip` clips of a word track are gone.
+- `detect-fixture-json-overlay-positioning-html`, `detect-fixture-text-overlay-positioning-html`: the plain `div clips positioned div` is gone.
+- `detect-fixture-json-border-baseline-html`, `detect-fixture-text-border-baseline-html`: the square `border-top: 4px` and `border-bottom: 3px` are gone (10 to 8).
+- `detect-fixture-json-linked-stylesheet-html`, `detect-fixture-text-linked-stylesheet-html`: `.external-square-top`'s `border-top: 4px` is gone (3 to 2), which its stylesheet comment already said.
+- `detect-fixture-json-named-color-borders-html`, `detect-fixture-text-named-color-borders-html`: the square crimson `border-top: 4px` is gone (7 to 6).
+- `detect-fixture-json-nested-cards-mockups-html`, `detect-fixture-text-nested-cards-mockups-html`: new cases, five warnings and four advisory notes.
+- `detect-dir-json-all-fixtures`, `detect-dir-text-all-fixtures`, `detect-dir-quiet-all-fixtures`, `detect-scope-layout-text`, `detect-scope-both`, `detect-no-advisory-json`, `detect-no-advisory-text`: the moves above and the new fixture, nothing else (875 to 876 counted: four square bands out, five nested cards in; 170 advisory notes either way: four clips out, four mockup panels in).
+
+### Known limits
+
+1. **A dropdown named only by its class is silent.** The popover test reads
+   roles and the `popover` attribute, so a menu built from bare `div`s with
+   a `dropdown` class no longer reports. No judged finding showed one cut.
+2. **Mock context for `nested-cards` is read from structure and
+   `role="img"` only.** directus.com's app screenshot built in HTML
+   (215951), quickrefs.com's profile cards (217021, 217066) and
+   context.dev's preview window with a URL bar and no dots (203683, 203837)
+   carry none of those marks and keep failing at full severity.
+3. **The static engine reads a frame's transform from the inline `style`
+   only,** as r5-p26 does, so a device frame tilted by a stylesheet rule
+   is not seen there and its panels keep failing.
+4. **A band whose corners cannot be read keeps reporting,** as a left or
+   right accent does: an unresolved `var()` radius, a stylesheet the static
+   engine could not load.
+
+## Recorded 2026-10-04: heading-rhythm counts even gaps under running prose (corpus/premise6-heading-rhythm, r7-t1)
+
+Paul's call r7-t1-heading-rhythm-equal-gaps (narrow): a heading whose gap
+above is no larger than its gap below (0.5px slack) also counts when the
+block above ends in running prose: the text block at its bottom edge has at
+least 80 characters on at least two rendered lines, is set smaller than the
+heading and no larger than 1.25 times the body text, is not a heading, spans
+at least half the heading's width, and is not inside a box that shows its
+bottom edge. The crowded test (above < 0.75 x below and a 12px deficit) and
+the two-heading page minimum are unchanged. Three walk fixes ride along: a
+shadow host whose shadow tree lays out content is a block, not a spacer; an
+`hr` or an empty box with a top border is a rule, not a spacer; and the walk
+above passes a wrapper painted the colour of its backdrop unless the wrapper
+is one of a run of like boxes. `heading-rhythm.html` moves "Pass Near Equal"
+to the flag column, adds two even-under-prose rows, a white module row and a
+shadow-DOM carousel row (declarative shadow root), and gives three pass rows
+more room above so they keep testing what they were written for.
+
+No golden changed: the static engine does not run `heading-rhythm`, and the
+fixture edits move no static finding.
+
+### Known limits
+
+1. **Captures recorded before line rects stand down.** The prose test reads
+   the capture's line boxes; run 28 and older snapshots have none, so only the
+   crowded test applies there.
+2. **otto.de's carousel is still missed,** and not for the reason the probe
+   gave: its host has light children and is no spacer. The host box starts
+   4px above the heading's padding-box bottom, past the walk's 2px tolerance,
+   and the heading's own 16px bottom padding is not counted as gap below.
+3. **A heading beside a paragraph in a two-column row** can now meet the page
+   minimum through its even-gap neighbours (everhomes.ae "Featured
+   apartments", 80 / 136 under a dark banner) and report on the crowded test.
 ## Recorded 2026-10-01: MODE RULES printed by concept-seed
 
 Mode-specific rules for directions and comps moved out of the shared reference files into `skill/reference/mode-persuade.md` (persuade and experience), `mode-operate.md` and `mode-read.md`. With `--mode`, `concept-seed` now prints the bodies of the mode file's `## Directions` and `## Comps` sections inside a `MODE RULES (<mode>, from <path>). ...` block, so the agent gets them in output it already reads instead of a file it can skip. The block sits right after the richness instruction on a full roll and after the authority instruction on a degraded one, and prints on every round, re-rolls and both registers included. An unreadable file or a missing section prints one `MODE RULES unavailable: read <path> before writing directions or comps.` line and the roll still succeeds. The richness instruction lost its Persuade/Experience versus Operate/Read sentence, which now lives in the mode files, and reads `Keep a literal carrier only when it becomes functional.` where it read `Otherwise keep ...`.
@@ -3952,6 +6939,11 @@ New case, recorded from the binary and reviewed by hand:
 
 - `question-wait-render-check-once`: `k1.render-check` already holds the hand's id `h1`, so a poll with a landed, sidecar-carrying decision comp prints only the WAITING line and leaves the marker as it was.
 
+## Recorded 2026-10-05: main's near-black floor reaches the own-box fixture
+
+Merging main brought #935's `GRAY_INK_MIN_LIGHTNESS` = 0.3 floor (see "near-black ink is not gray" above). On this branch it also clears one static finding main has no fixture for:
+
+- `detect-fixture-json-own-box-surface-and-ink-contrast-html`, `detect-fixture-text-own-box-surface-and-ink-contrast-html`: `gray-on-color` on `#363637` (lightness 0.21) on `#066bed`, the `pass-label-repainted-by-filter` row, is gone; the `low-contrast` 2.5:1 finding on the same pair stays. The directory sweeps lose the same finding.
 ## Recorded 2026-10-05: the chosen decision comp is option one of the comp round
 
 The skill says the direction round's chosen decision comp enters the comp round as compositional option one and is never regenerated, but the comps gate counted only files directly in `.impeccable/mocks/`, while decision comps live in `.impeccable/mocks/decision/`. `build-phase start --direction <key> --decision-comp <png>` now records that comp as `decisionComp` in the state; the comps gate counts it first where it stands, never any other decision comp, and an approval on it closes the gate with the decision path as the approved comp (record, kept copy and `restore-comp` bind to it). `serve-question --wait` treats a pick of that recorded comp during the open comps phase as the approval (`APPROVED COMP`), and the `CHOSEN COMP` line names the flag.
@@ -3975,3 +6967,14 @@ New cases, recorded from the binary and reviewed by hand:
 - `question-start-surface-missing-comps`: a degraded surface roll, then `--start` of a comp-led three-card surface hand with no comps exits 1 naming `ledger, rail, field`; no hand is recorded and `roll.json` stays.
 - `question-update-surface-missing-comps`: a surface re-roll, then `--update` of the same hand with only `ledger` declared exits 1 naming `rail, field`; nothing is delivered and `roll.json` stays.
 - `question-update-surface-shape-after-direction-roll`: after a direction roll the same comp-less hand is delivered, and the page takes the roll (`roll.json` is gone).
+
+## Recorded 2026-10-06: an open native dialog is a popover layer
+
+`clipped-overflow-container` counted a positioned child as a layer that has to escape its clip only by `[popover]` or a role, so a clipped `<dialog open>` without `role="dialog"` was not reported. `POPOVER_LAYER_SELECTOR` now includes `dialog[open]` in both engines, and the fixture gained a `flag-native-dialog` row (and a closed-dialog pass row, which stays quiet). Re-recorded from the binary and reviewed by hand: in each of the fixture's own cases (the JSON form `detect-fixture-json-clipped-overflow-container-html` and the text form `detect-fixture-text-clipped-overflow-container-html`) and in the directory sweeps that read it (`detect-dir-json-all-fixtures`, `detect-dir-text-all-fixtures`, `detect-dir-quiet-all-fixtures`, `detect-scope-layout-text`, `detect-scope-both`), the one change is the new advisory finding `div.box.flag-native-dialog clips positioned dialog.pop.native-dialog` and the advisory count one higher. No other finding moved. The side-tab fixture's new elliptical pass row (`border-radius: 0 12px 12px 0 / 0`) is quiet in both engines, so its goldens did not move.
+
+## Recorded 2026-10-07: boxes a timed animation or a pending state change is about to move
+
+The capture now records `animationFillMode`, `animationDirection`, `animationDuration`, `animationDelay`, `animationPlayState` and `animationComposition` (an animation that adds to the box's own opacity does not end on its end frame's value, so only a replacing one is read to its end), and the selector of each `@keyframes` frame (`keyframeKeys`). In the URL engine, a one-shot animation that ends at opacity 0 and holds that frame leaves its box unpainted for the text rules, a timed animation that shows a box at 0 keeps its text out of the hidden share, a displaced box parked on an opacity transition is not at rest, a loop through opacity 0 is not read from pixels, a poster beside a covering `<video>` is a state layer without a transition, and a drawer slid off the page with a transitioned transform is closed interface. None of it reaches the static engine, which records no running animations and no layout. New fixture `not-at-rest-timed.html`; the two new cases `detect-fixture-json-not-at-rest-timed-html` and `detect-fixture-text-not-at-rest-timed-html` were recorded from the binary and reviewed by hand: the static engine reports every should-pass row beside its should-flag twin (two `low-contrast` on the segment headings, two `undersized-ui-text` on the URL hosts, three `buried-raster` on the images), which is its base behaviour; the browser test `crates/browser/tests/not_at_rest_timed.rs` pins the split. The directory sweeps pick up the same seven findings and are already accepted deltas. No existing golden moved.
+## Recorded 2026-10-06: framed demos with the scale on a wrapper, or turned in the page plane
+
+The framed-demo recognizer (r5-p26) now reads two more device frames: a frame-sized frame box under an ancestor scaled into the frame range (the wrapper needs no border of its own), and a frame turned 3 degrees or more in the page plane while scaled down (`read_transform` keeps a uniform scale under a 2D rotation and reports the turn). `nested-cards` reads the first through `is_demo_frame` as well, for a window that is itself the inner card. `mockup-structure.html` gained two advisory rows (`adv-turned`, `adv-wrapper`) and four failing rows (`fail-polaroid`, `fail-slight-turn`, `fail-wrapper-plain`, `fail-wrapper-small`); `nested-cards-mockups.html` gained `adv-scaled-window` (advisory) and `fail-fanned-inner` (warning). Re-recorded from the binary and reviewed by hand: the fixtures' own cases (the JSON and text forms `detect-fixture-json-mockup-structure-html`, `detect-fixture-text-mockup-structure-html`, `detect-fixture-json-nested-cards-mockups-html`, `detect-fixture-text-nested-cards-mockups-html`) and the sweeps that read them (`detect-dir-json-all-fixtures`, `detect-dir-text-all-fixtures`, `detect-dir-quiet-all-fixtures`, `detect-scope-type`, `detect-scope-both`, `detect-scope-layout-text`, `detect-no-advisory-json`, `detect-no-advisory-text`) gain exactly those rows' findings: four `undersized-ui-text` warnings and two advisories on the first fixture, one `nested-cards` warning and one advisory on the second, with the counts moving to match. No other finding moved.

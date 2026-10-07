@@ -25,7 +25,7 @@ use impeccable_core::checks::measures::{
     GptBorderShadowRowTree, OversizedH1Input, StyleMap, ICON_MAX_PX,
 };
 use impeccable_core::checks::rules::{
-    check_borders, check_colors_deduped, check_glow, check_hero_eyebrow, check_hover_contrast,
+    check_borders, check_colors_deduped_shaped, check_glow, check_hero_eyebrow, check_hover_contrast,
     check_icon_tile, check_italic_serif, check_kicker_above_heading, check_motion,
     check_placeholder_colors, check_stripe_child, is_close_letter_text, is_emoji_only_text,
     is_glyph_only_text, is_heading_tag, is_icon_ligature_text, names_close_control,
@@ -64,6 +64,7 @@ fn hits(v: Vec<measures::Finding>) -> Vec<RuleHit> {
         .map(|f| RuleHit {
             id: f.id,
             snippet: f.snippet,
+            severity: None,
         })
         .collect()
 }
@@ -262,7 +263,23 @@ pub fn collect_kicker_candidates(doc: &StaticDocument) -> Vec<KickerCandidate> {
         }) {
             continue;
         }
-        if heading_tag == "h1" && heading_font_size >= 48.0 && kicker_letter_spacing >= 1.6 {
+        // The hero rule takes a tracked label over a display h1, at eyebrow
+        // size once its em floor is what counts. Under the fixed 1.6px floor
+        // the label is handed off only where the hero rule reports it: that
+        // rule reads case from text-transform and typed capitals (not
+        // small-caps) and passes over a dated meta line, so a label it leaves
+        // is kept here.
+        if heading_tag == "h1"
+            && heading_font_size >= 48.0
+            && (kicker_letter_spacing >= 1.6
+                || (kicker_font_size <= 14.0
+                    && impeccable_core::checks::rules::hero_eyebrow_tracked(
+                        kicker_letter_spacing,
+                        kicker_font_size,
+                        Some(impeccable_core::checks::rules::HERO_EYEBROW_TRACKING_EM),
+                    )
+                    && !check_element_hero_eyebrow(&heading, heading_style, "h1").is_empty()))
+        {
             continue;
         }
         candidates.push(KickerCandidate {
@@ -559,8 +576,9 @@ pub fn check_element_borders(
         left: Some(sv(style, "borderLeftColor")),
     };
     let own_bg = parse_any_color(sv_opt(style, "backgroundColor"));
-    // Only a left or right accent is gated on the corners.
-    let corners = if widths.right > 0.0 || widths.left > 0.0 {
+    // An accent on any edge is gated on the corners (left and right by the
+    // rounded-card decision, top and bottom by r6-t2-side-tab-bands).
+    let corners = if widths.top > 0.0 || widths.right > 0.0 || widths.bottom > 0.0 || widths.left > 0.0 {
         resolve_side_accent_corners(el, style, pf0(sv(style, "width")))
     } else {
         None
@@ -1063,6 +1081,8 @@ pub fn check_element_colors(
             400.0
         }
     };
+    let font_weight =
+        impeccable_core::checks::rules::contrast_font_weight(font_weight, sv(style, "fontFamily"));
     let bg_clip = {
         let a = sv(style, "webkitBackgroundClip");
         if !a.is_empty() {
@@ -1102,9 +1122,19 @@ pub fn check_element_colors(
     // under the text waives it too: this engine has no layout, so it reads
     // the stretched, out-of-flow shape such a photo is written in
     // (`picture_under_text`), where the browser path measures the layers.
-    let mut findings = check_colors_deduped(&color_opts, seen, &mut |h: &RuleHit| {
-        !scoped_ignore_active(el, &h.id) && !picture_under_text(el)
-    });
+    // Text with no reading job (avatar initials, a version stamp, a
+    // signature, a mockup's labels) reports as advisory, asked only of an
+    // element that failed.
+    let decorative = std::cell::OnceCell::new();
+    let is_decorative =
+        || *decorative.get_or_init(|| crate::decorative_text::is_decorative_text(el));
+    let mut findings = check_colors_deduped_shaped(
+        &color_opts,
+        seen,
+        None,
+        &is_decorative,
+        &mut |h: &RuleHit| !scoped_ignore_active(el, &h.id) && !picture_under_text(el),
+    );
     if tag == "input" || tag == "textarea" {
         let placeholder = el.get_attribute("placeholder").unwrap_or("").trim();
         if !placeholder.is_empty() {
@@ -1129,11 +1159,13 @@ pub fn check_element_colors(
                         .or_else(|| parse_rgb(sv_opt(ph_style, "color")))
                         .or_else(|| parse_any_color(sv_opt(ph_style, "color")));
                     if let Some(ph_color) = ph_color {
-                        findings.extend(check_placeholder_colors(
-                            &color_opts,
-                            placeholder,
-                            ph_color,
-                        ));
+                        let mut hits = check_placeholder_colors(&color_opts, placeholder, ph_color);
+                        if hits.iter().any(|h| h.id == "low-contrast")
+                            && (is_decorative() || crate::field_label::field_has_visible_label(el))
+                        {
+                            impeccable_core::checks::rules::demote_low_contrast(&mut hits);
+                        }
+                        findings.extend(hits);
                     }
                 }
             }
@@ -1185,6 +1217,8 @@ pub fn check_element_hover_contrast(
             400.0
         }
     };
+    let font_weight =
+        impeccable_core::checks::rules::contrast_font_weight(font_weight, sv(style, "fontFamily"));
     let font_size = {
         let n = parse_float(sv(style, "fontSize"));
         if num_truthy(n) {
@@ -1259,6 +1293,7 @@ pub fn check_element_icon_tile(el: &StaticElement<'_>, tag: &str) -> Vec<RuleHit
         sibling_border_radius: resolve_border_radius_px(sib_style, sib_width),
         has_icon_child: icon_child.is_some() || has_inline_emoji_icon,
         icon_child_width: icon_width,
+        heading_is_card_title: false,
     })
 }
 
@@ -1348,6 +1383,9 @@ pub fn check_element_hero_eyebrow(
         sibling_font_weight: Some(font_weight_raw.to_string()),
         sibling_color: Some(color_raw.to_string()),
         sibling_has_accent_dash_pseudo: el.doc.has_accent_dash_pseudo(sibling.id()),
+        sibling_tracking_floor_em: Some(impeccable_core::checks::rules::HERO_EYEBROW_TRACKING_EM),
+        sibling_holds_time: sibling.tag_lower() == "time"
+            || sibling.query_selector("time").is_some(),
     })
 }
 
@@ -1653,29 +1691,6 @@ fn positioned_child_is_popover_layer(child: &StaticElement<'_>) -> bool {
         || child.query_selector(POPOVER_LAYER_SELECTOR).is_some()
 }
 
-/// A positioned child that only paints: nothing to read, nothing to click,
-/// and either no content of its own, only media, no pointer target, or
-/// nothing visible at rest.
-fn positioned_child_is_ornament(child: &StaticElement<'_>) -> bool {
-    if positioned_child_has_substantive_content(child) {
-        return false;
-    }
-    let style = child.style();
-    if sv(style, "pointerEvents") == "none" {
-        return true;
-    }
-    // The child's own `opacity`, not the chain's, and a value that does not
-    // parse is not a transparent layer.
-    let opacity = parse_float(sv(style, "opacity"));
-    if opacity.is_finite() && opacity <= 0.05 {
-        return true;
-    }
-    if child.children().is_empty() {
-        return true;
-    }
-    child.query_selector("img,picture,svg,video,canvas").is_some()
-}
-
 fn ident_names_viewport(el: &StaticElement<'_>) -> bool {
     let ident = format!(
         "{} {}",
@@ -1771,6 +1786,11 @@ pub fn check_element_clipped_overflow(el: &StaticElement<'_>, style: &StyleValue
         if pos != "absolute" && pos != "fixed" {
             continue;
         }
+        // Only a popover layer is a layer a clip can trap; the rest of what
+        // a clip cuts is the effect (decision r6-t1-clipped-overflow-popovers).
+        if !positioned_child_is_popover_layer(&child) {
+            continue;
+        }
         if positioned_child_is_decorative(&child) {
             continue;
         }
@@ -1782,9 +1802,6 @@ pub fn check_element_clipped_overflow(el: &StaticElement<'_>, style: &StyleValue
         // No layout statically: `positionedChildEscapesClip` is null, and
         // so is the transform offset of a masked reveal.
         if !positioned_style_implies_escape_axis(&StyleRef(child_style), clip_x, clip_y) {
-            continue;
-        }
-        if !positioned_child_is_popover_layer(&child) && positioned_child_is_ornament(&child) {
             continue;
         }
         if nearer_clip_traps_child(el, &child) {

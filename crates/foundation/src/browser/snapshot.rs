@@ -62,11 +62,19 @@ pub const NS_MATHML: &str = "http://www.w3.org/1998/Math/MathML";
 /// sync with `STYLE_PROPS` in `browser-bundle/15-snapshot.js` (the build
 /// checks the two lists agree).
 pub const STYLE_PROPS: &[&str] = &[
+    "animationComposition",
+    "animationDelay",
+    "animationDirection",
+    "animationDuration",
+    "animationFillMode",
     "animationIterationCount",
     "animationName",
+    "animationPlayState",
+    "animationTimeline",
     "animationTimingFunction",
     "aspectRatio",
     "backdropFilter",
+    "backfaceVisibility",
     "background",
     "backgroundClip",
     "backgroundColor",
@@ -101,6 +109,7 @@ pub const STYLE_PROPS: &[&str] = &[
     "direction",
     "display",
     "filter",
+    "flexWrap",
     "float",
     "fontFamily",
     "fontSize",
@@ -118,6 +127,7 @@ pub const STYLE_PROPS: &[&str] = &[
     "insetInline",
     "insetInlineEnd",
     "insetInlineStart",
+    "isolation",
     "left",
     "letterSpacing",
     "lineHeight",
@@ -174,6 +184,8 @@ pub const STYLE_PROPS: &[&str] = &[
     "webkitLineClamp",
     "webkitMaskImage",
     "webkitTextFillColor",
+    "webkitTextStrokeColor",
+    "webkitTextStrokeWidth",
     "whiteSpace",
     "width",
     "willChange",
@@ -201,6 +213,8 @@ pub const PSEUDO_PROPS: &[&str] = &[
     "borderRadius",
     "transform",
     "visibility",
+    "zIndex",
+    "translate",
 ];
 
 /// One child of an element: an element (by id) or a text node's data.
@@ -373,6 +387,19 @@ impl Needs {
 pub struct Facts {
     #[serde(default)]
     pub hits: Vec<HitTest>,
+    /// Answers to [`SnapshotDom::take_scroll_probes`]: whether a box hidden
+    /// with the page at the top showed once the page was scrolled to it.
+    /// Absent in recordings made before the probe existed, where nothing is
+    /// known and the box counts as hidden.
+    #[serde(rename = "shownOnScroll", default, skip_serializing_if = "Vec::is_empty")]
+    pub shown_on_scroll: Vec<ScrollShown>,
+}
+
+/// One answer of the scroll probe ([`Dom::shown_when_scrolled_to`]).
+#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct ScrollShown {
+    pub el: ElId,
+    pub shown: bool,
 }
 
 /// The serialized page.
@@ -399,6 +426,10 @@ pub struct Snapshot {
     /// `[name, frames]` in stylesheet order (first rule per name wins).
     #[serde(default)]
     pub keyframes: Vec<(String, Vec<Vec<(String, String)>>)>,
+    /// `[name, [keyText, ...]]` per `keyframes` entry: the selector of each
+    /// recorded frame. Absent in captures older than it.
+    #[serde(rename = "keyframeKeys", default)]
+    pub keyframe_keys: Vec<(String, Vec<String>)>,
     /// `__snapLinkedStylesheetText()`: the readable linked-stylesheet corpus
     /// (#709). Absent in captures older than that change.
     #[serde(rename = "linkedCss", default)]
@@ -445,6 +476,9 @@ pub struct Snapshot {
     style_index: HashMap<String, usize>,
     #[serde(skip)]
     pseudo_index: HashMap<String, usize>,
+    /// Derived on load: the top-level shadow-tree nodes of each host.
+    #[serde(skip)]
+    shadow_kids: HashMap<u32, Vec<u32>>,
 }
 
 impl Snapshot {
@@ -491,6 +525,12 @@ impl Snapshot {
                 }
             }
             self.els[i].children = kids;
+        }
+        self.shadow_kids.clear();
+        for i in 0..self.els.len() {
+            if let Some(host) = self.els[i].shadow_host {
+                self.shadow_kids.entry(host).or_default().push(i as u32 + 1);
+            }
         }
     }
 
@@ -597,6 +637,8 @@ pub struct SnapshotDom {
     closest_cache: RefCell<HashMap<(ElId, String), Result<Option<ElId>, SelectorError>>>,
     text_cache: RefCell<HashMap<ElId, String>>,
     unknown_props: RefCell<Vec<String>>,
+    shown_on_scroll: RefCell<HashMap<ElId, bool>>,
+    scroll_probes: RefCell<Vec<ElId>>,
 }
 
 impl SnapshotDom {
@@ -610,6 +652,8 @@ impl SnapshotDom {
             closest_cache: RefCell::new(HashMap::new()),
             text_cache: RefCell::new(HashMap::new()),
             unknown_props: RefCell::new(Vec::new()),
+            shown_on_scroll: RefCell::new(HashMap::new()),
+            scroll_probes: RefCell::new(Vec::new()),
         };
         let inline: Vec<HitTest> = dom.snap.hits.clone();
         dom.add_hits(&inline);
@@ -635,6 +679,13 @@ impl SnapshotDom {
     /// Supply facts for an earlier [`Self::take_needs`].
     pub fn add_facts(&self, facts: &Facts) {
         self.add_hits(&facts.hits);
+        {
+            let mut shown = self.shown_on_scroll.borrow_mut();
+            for s in &facts.shown_on_scroll {
+                shown.insert(s.el, s.shown);
+            }
+        }
+        self.scroll_probes.borrow_mut().clear();
         // Answers may change what a later run asks; forget the misses.
         self.misses.borrow_mut().clear();
         self.missed_keys.borrow_mut().clear();
@@ -645,6 +696,14 @@ impl SnapshotDom {
         let hit_tests = std::mem::take(&mut *self.misses.borrow_mut());
         self.missed_keys.borrow_mut().clear();
         Needs { hit_tests }
+    }
+
+    /// The boxes [`Dom::shown_when_scrolled_to`] asked about that the facts
+    /// do not answer (drained), in first-asked order. Kept apart from
+    /// [`Self::take_needs`]: only the URL engine's hidden-text step answers
+    /// them, and a consumer that answers hit tests alone never sees them.
+    pub fn take_scroll_probes(&self) -> Vec<ElId> {
+        std::mem::take(&mut *self.scroll_probes.borrow_mut())
     }
 
     /// Whether anything is pending.
@@ -744,6 +803,19 @@ impl Dom for SnapshotDom {
     fn css_escape(&self, s: &str) -> String {
         css_escape(s)
     }
+    fn shown_when_scrolled_to(&self, el: ElId) -> Option<bool> {
+        if !self.valid(el) {
+            return None;
+        }
+        if let Some(shown) = self.shown_on_scroll.borrow().get(&el) {
+            return Some(*shown);
+        }
+        let mut pending = self.scroll_probes.borrow_mut();
+        if !pending.contains(&el) {
+            pending.push(el);
+        }
+        None
+    }
     fn running_animation_properties(&self, el: ElId) -> Option<Vec<String>> {
         if !self.snap.animations_recorded || !self.valid(el) {
             return None;
@@ -766,6 +838,16 @@ impl Dom for SnapshotDom {
         }
         self.snap.node(el).text_slot.filter(|s| self.valid(*s))
     }
+    fn shadow_children(&self, el: ElId) -> Vec<ElId> {
+        if !self.valid(el) {
+            return Vec::new();
+        }
+        self.snap
+            .shadow_kids
+            .get(&el)
+            .map(|kids| kids.iter().copied().filter(|k| self.valid(*k)).collect())
+            .unwrap_or_default()
+    }
     fn shadow_trees_recorded(&self) -> bool {
         self.snap.shadow_trees_recorded
     }
@@ -785,6 +867,11 @@ impl Dom for SnapshotDom {
                     })
                     .collect()
             })
+    }
+    fn keyframe_keys(&self, name: &str) -> Option<Vec<String>> {
+        let frames = self.snap.keyframes.iter().find(|(n, _)| n == name)?;
+        let keys = self.snap.keyframe_keys.iter().find(|(n, _)| n == name)?;
+        (keys.1.len() == frames.1.len()).then(|| keys.1.clone())
     }
     fn document_html_for_patterns(&self) -> String {
         self.snap.html.clone()
@@ -1282,6 +1369,27 @@ mod tests {
         );
     }
 
+    /// The fill mode, direction, duration, delay, play state and composition of animations,
+    /// and the keyframe selectors, joined the capture later: a recording
+    /// without them reads each as empty or `None`, which the rules that end
+    /// an animation take as unknown.
+    #[test]
+    fn older_capture_without_animation_timing_props() {
+        let d = snap(SMALL);
+        for prop in [
+            "animationFillMode",
+            "animationDirection",
+            "animationDuration",
+            "animationDelay",
+            "animationPlayState",
+            "animationComposition",
+        ] {
+            assert!(STYLE_PROPS.contains(&prop), "{prop} missing from STYLE_PROPS");
+            assert_eq!(d.style(5, prop), "", "{prop}");
+        }
+        assert_eq!(d.keyframe_keys("anything"), None);
+    }
+
     /// The containing-block properties and `scrollHeight` joined the capture
     /// later: a recording without them reads the properties as empty and the
     /// metric as NaN, which the paint gate takes as undecided.
@@ -1358,10 +1466,31 @@ mod tests {
                 top: 5,
                 stack: vec![5, 4, 3, 1],
             }],
+            ..Facts::default()
         });
         assert_eq!(d.element_from_point(20.0, 20.0), Some(5));
         assert_eq!(d.elements_from_point(20.0, 20.0), vec![5, 4, 3, 1]);
         assert!(!d.has_needs());
+    }
+
+    /// The scroll probe is asked on demand, kept apart from the hit tests a
+    /// consumer answers, and read from the facts once answered; the facts
+    /// leave the field out when there is nothing in it.
+    #[test]
+    fn scroll_probes_are_demand_driven_and_kept_apart() {
+        let d = snap(SMALL);
+        assert_eq!(d.shown_when_scrolled_to(5), None);
+        assert_eq!(d.shown_when_scrolled_to(5), None);
+        assert!(!d.has_needs());
+        assert_eq!(d.take_scroll_probes(), vec![5]);
+        assert!(d.take_scroll_probes().is_empty());
+        let facts: Facts = serde_json::from_str(r#"{"hits":[],"shownOnScroll":[{"el":5,"shown":true}]}"#).unwrap();
+        d.add_facts(&facts);
+        assert_eq!(d.shown_when_scrolled_to(5), Some(true));
+        assert!(d.take_scroll_probes().is_empty());
+        assert_eq!(serde_json::to_string(&Facts::default()).unwrap(), r#"{"hits":[]}"#);
+        let old: Facts = serde_json::from_str(r#"{"hits":[]}"#).unwrap();
+        assert!(old.shown_on_scroll.is_empty());
     }
 
     /// A capture that recorded the text rects hands over the lines; one that

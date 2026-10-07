@@ -553,20 +553,35 @@ pub fn check_html_patterns_with(
     }
 
     // --- Motion ---
-    if let Some(bm) = BOUNCE_ANIM_RE.captures(style_text) {
+    // The first declaration that names a bounce reports, as before, unless
+    // the stylesheet shows that name's keyframes and they only pulse: a
+    // loader dot scaling from nothing to its size and back is called
+    // `sk-bounceDelay` and neither moves nor overshoots. Then the next
+    // declaration is read, so a pulse never hides a bounce declared after it.
+    // Every bounce-named token in a declaration's list is read the same way,
+    // so a pulse listed first never hides a bounce listed after it.
+    for bm in BOUNCE_ANIM_RE.captures_iter(style_text) {
         let list = &bm[1];
-        let token = COMMA_WS_SPLIT_RE
+        let mut labels: Vec<String> = COMMA_WS_SPLIT_RE
             .split(list)
-            .find(|part| BOUNCE_WORD_RE.is_match(part));
-        let label = match token {
-            Some(t) if !t.is_empty() => t.to_string(),
-            _ => js::trim(list).to_string(),
+            .filter(|part| !part.is_empty() && BOUNCE_WORD_RE.is_match(part))
+            .map(str::to_string)
+            .collect();
+        if labels.is_empty() {
+            labels.push(js::trim(list).to_string());
+        }
+        let Some(label) = labels
+            .into_iter()
+            .find(|label| crate::checks::css_scan::css_keyframes_only_pulse(style_text, label) != Some(true))
+        else {
+            continue;
         };
         findings.push(pf(
             "bounce-easing",
             format!("animation: {}", label),
             enclosing_css_selector(style_text, bm.get(0).unwrap().start()),
         ));
+        break;
     }
 
     for bm in BEZIER_RE.captures_iter(style_text) {
@@ -769,5 +784,44 @@ mod tests {
             None,
         );
         assert!(out.is_empty(), "unexpected findings: {out:?}");
+    }
+    /// epcco.com.sa: SpinKit's loader dots run `sk-circleBounceDelay`, which
+    /// scales a dot from nothing to its size and back.
+    #[test]
+    fn a_bounce_name_whose_keyframes_only_pulse_is_not_a_bounce() {
+        let bounce = |css: &str| -> Vec<String> {
+            check_html_patterns(&format!("<style>{css}</style>"), None)
+                .into_iter()
+                .filter(|f| f.id == "bounce-easing")
+                .map(|f| f.snippet)
+                .collect()
+        };
+        let spinner = ".sk-child:before{animation:sk-circleBounceDelay 1.2s infinite ease-in-out both}\
+@keyframes sk-circleBounceDelay{0%,80%,100%{transform:scale(0)}40%{transform:scale(1)}}";
+        assert!(bounce(spinner).is_empty());
+        // The pulse does not hide a bounce declared after it.
+        let both = format!("{spinner} .ball{{animation:bounce 1s infinite}} @keyframes bounce{{0%,100%{{transform:translateY(-25%)}}50%{{transform:none}}}}");
+        assert_eq!(bounce(&both), vec!["animation: bounce".to_string()]);
+        // Keyframes the stylesheet does not show keep the finding.
+        assert_eq!(
+            bounce(".sk-child:before{animation:sk-circleBounceDelay 1.2s infinite}"),
+            vec!["animation: sk-circleBounceDelay".to_string()]
+        );
+        // A pop past full size is a bounce.
+        assert_eq!(
+            bounce(".badge{animation:bounce-in .4s} @keyframes bounce-in{0%{transform:scale(0)}60%{transform:scale(1.15)}100%{transform:scale(1)}}"),
+            vec!["animation: bounce-in".to_string()]
+        );
+        // review of #947: a pulse listed first in one declaration does not
+        // hide a bounce listed after it in the same list.
+        let listed = ".dot{animation:sk-bounceDelay 1s infinite, bounce-in .4s}\
+@keyframes sk-bounceDelay{0%,100%{transform:scale(0)}50%{transform:scale(1)}}\
+@keyframes bounce-in{0%{transform:scale(0)}60%{transform:scale(1.15)}100%{transform:scale(1)}}";
+        assert_eq!(bounce(listed), vec!["animation: bounce-in".to_string()]);
+        // A list of pulses alone stays quiet.
+        let pulses = ".dot{animation:sk-bounceDelay 1s infinite, sk-bounceDelay2 2s infinite}\
+@keyframes sk-bounceDelay{0%,100%{transform:scale(0)}50%{transform:scale(1)}}\
+@keyframes sk-bounceDelay2{0%,100%{opacity:0}50%{opacity:1}}";
+        assert!(bounce(pulses).is_empty());
     }
 }

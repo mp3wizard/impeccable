@@ -248,6 +248,101 @@ pub(crate) fn moves_a_track(dom: &dyn Dom, el: ElId, clip: ElId) -> bool {
     false
 }
 
+/// Whether `el` rides a track that is moving at capture: a box between it and
+/// a clip that hides x overflow which a running, endlessly repeating CSS
+/// animation transforms ([`moves_a_track`] with the animation on the track).
+/// paseo.sh's testimonial cards sit in a `social-proof-track` animated by
+/// `social-proof-scroll`; where a card's text stands against the viewport
+/// edge is where the capture caught it, not a gutter the page sets. A track a
+/// script parks with a transform (a carousel at its first slide) holds still,
+/// and its text is measured as before.
+pub fn rides_a_running_track(dom: &dyn Dom, el: ElId) -> bool {
+    let root = dom.document_element();
+    let body = dom.body();
+    let mut cur = dom.parent(el);
+    while let Some(clip) = cur {
+        if Some(clip) == root || Some(clip) == body {
+            break;
+        }
+        if matches!(overflow_x(dom, clip).as_str(), "hidden" | "clip") {
+            let client = dom.client_width(clip);
+            let mut inner = dom.parent(el);
+            while let Some(t) = inner {
+                if t == clip {
+                    break;
+                }
+                let content = dom.scroll_width(t);
+                if client.is_finite()
+                    && client > 0.0
+                    && content.is_finite()
+                    && content > client + 1.0
+                    && is_transformed(dom, t)
+                    && runs_endless_animation(dom, t)
+                    && holds_row(dom, t)
+                {
+                    return true;
+                }
+                inner = dom.parent(t);
+            }
+        }
+        cur = dom.parent(clip);
+    }
+    false
+}
+
+/// A CSS animation that never ends and moves the box: a name other than
+/// `none` whose own `infinite` iteration count (the lists pair by position,
+/// the shorter one repeating) sits on keyframes that move it (`transform` or
+/// `translate`), or on keyframes the capture could not read. A one-shot
+/// slide beside an endless fade or pulse is not a moving track, and neither
+/// is an endless pulse whose transform only scales the box in place.
+fn runs_endless_animation(dom: &dyn Dom, el: ElId) -> bool {
+    let counts_raw = dom.style(el, "animationIterationCount");
+    let counts: Vec<&str> = counts_raw.split(',').map(js::trim).collect();
+    if counts.is_empty() {
+        return false;
+    }
+    dom.style(el, "animationName").split(',').enumerate().any(|(i, name)| {
+        let name = js::trim(name);
+        !name.is_empty()
+            && name != "none"
+            && counts[i % counts.len()] == "infinite"
+            && dom.keyframes(name).is_none_or(|frames| {
+                frames.iter().any(|f| {
+                    f.decls.iter().any(|(p, v)| match p.strip_prefix("-webkit-").unwrap_or(p) {
+                        "translate" => true,
+                        "transform" => !crate::checks::css_scan::transform_only_scales(v),
+                        _ => false,
+                    })
+                })
+            })
+    })
+}
+
+/// The x range of a truncated line: text measured at `(left, right)` cut to
+/// the padding box of `el`, which hides its own inline overflow. The caller
+/// asks this only of a box that truncates by design (an ellipsis or a line
+/// clamp on a box that generates one): the Range rect of such a line runs on
+/// past the box (keydris.com's `div.truncate` 97px past a 390px viewport,
+/// leilonozap.vercel.app's `p.truncate` 809px) while the line a visitor sees
+/// ends in an ellipsis inside its card. An unmeasured box leaves the range
+/// as it was.
+///
+/// Only the element's own clip is read. Text an ancestor cuts (a card or a
+/// section at `overflow: hidden`) is cut mid-word with no marker, and the
+/// rule keeps reporting it against the viewport, as before.
+pub fn clamp_to_own_clip(dom: &dyn Dom, el: ElId, left: f64, right: f64) -> (f64, f64) {
+    let r = dom.rect(el);
+    if !(r.all_finite() && r.width > 0.0) {
+        return (left, right);
+    }
+    let border = dom.client_left(el);
+    let clip_left = r.left + if border.is_finite() && border > 0.0 { border } else { 0.0 };
+    let client = dom.client_width(el);
+    let clip_right = if client.is_finite() && client > 0.0 { clip_left + client } else { r.right };
+    (js::math_max(left, clip_left), js::math_min(right, clip_right))
+}
+
 /// A `transform` or `translate` other than `none`, the identity matrix
 /// included: a track parked at its first slide.
 fn is_transformed(dom: &dyn Dom, el: ElId) -> bool {
@@ -325,6 +420,35 @@ pub fn phrasing_holds_break(dom: &dyn Dom, el: ElId) -> bool {
 mod tests {
     use super::*;
     use crate::browser::fake_dom::FakeDom;
+
+    /// review of #947: a scale-only infinite pulse leaves the box where it
+    /// is, so it is no moving track; a translate, or a transform that moves
+    /// as well as scales, is.
+    #[test]
+    fn an_endless_scale_pulse_is_not_a_moving_track() {
+        use crate::browser::dom::KeyframeFrame;
+        let mut d = FakeDom::new();
+        let (_h, body) = d.with_page();
+        let track = d.add(Some(body), "div");
+        d.set_styles(track, &[("animationName", "beat"), ("animationIterationCount", "infinite")]);
+        let frames = |decls: &[(&str, &str)]| {
+            vec![KeyframeFrame { decls: decls.iter().map(|(p, v)| (p.to_string(), v.to_string())).collect() }]
+        };
+        d.keyframes.insert("beat".into(), frames(&[("transform", "scale(1.05)")]));
+        assert!(!runs_endless_animation(&d, track), "scale pulse");
+        d.keyframes.insert("beat".into(), frames(&[("-webkit-transform", "scaleX(0.9) scaleY(1.1)")]));
+        assert!(!runs_endless_animation(&d, track), "two-axis scale pulse");
+        d.keyframes.insert("beat".into(), frames(&[("transform", "translateX(-50%)")]));
+        assert!(runs_endless_animation(&d, track), "a sliding track");
+        d.keyframes.insert("beat".into(), frames(&[("transform", "scale(1.05) translateX(-10px)")]));
+        assert!(runs_endless_animation(&d, track), "scale plus a move");
+        d.keyframes.insert("beat".into(), frames(&[("transform", "scale(var(--s))")]));
+        assert!(runs_endless_animation(&d, track), "an unreadable value");
+        d.keyframes.insert("beat".into(), frames(&[("translate", "-100% 0")]));
+        assert!(runs_endless_animation(&d, track), "the translate property");
+        d.keyframes.remove("beat");
+        assert!(runs_endless_animation(&d, track), "unread keyframes");
+    }
 
     #[test]
     fn phrasing_extent_unions_inline_children_and_stops_at_blocks() {

@@ -345,17 +345,41 @@ pub fn check_borders(
                 ));
             } else if w >= 3.0 {
                 findings.push(RuleHit::new("side-tab", format!("border-{sn}: {w_s}px")));
+            } else if let Some((a, b)) = opts.corners.as_ref().map(|c| c.away_from(i)) {
+                // `radius` is the leading value of the computed shorthand,
+                // the top-left corner. A card rounded only on the side away
+                // from the stripe (`0px 12px 12px 0px` under a left rule)
+                // leads with 0 and so took the square stripe's 3px floor,
+                // which dropped a 2px stripe on a rounded card. Its radius
+                // is that of the two corners the gate above passed, the
+                // smaller of the far pair. A stripe of 3px or more keeps the
+                // wording it reported under.
+                let far = a.min(b);
+                if far > 0.0 {
+                    findings.push(RuleHit::new(
+                        "side-tab",
+                        format!("border-{sn}: {w_s}px + border-radius: {}px", number_to_string(far)),
+                    ));
+                }
             }
         } else if radius > 0.0 && w >= 2.0 {
             findings.push(RuleHit::new(
                 "border-accent-on-rounded",
                 format!("border-{sn}: {w_s}px + border-radius: {r_s}px"),
             ));
-        } else if !opts.tab_context && w >= 3.0 && w <= 12.0 {
-            // A square top or bottom band still reports. The rounded-card
-            // gate above covers the left and right accent the corpus judged;
-            // the square horizontal band was never judged, and silencing it
-            // here would drop findings on no evidence.
+        } else if !opts.tab_context
+            && w >= 3.0
+            && w <= 12.0
+            && is_rounded_away_from_side(opts.corners.as_ref(), i)
+        {
+            // A top or bottom band is the card tell only on a rounded card,
+            // the gate left and right accents pass above (decision
+            // r6-t2-side-tab-bands, narrow): on a square box it is a rule
+            // across a section or a header. A band on a card rounded all
+            // round leads with a radius and reports as
+            // `border-accent-on-rounded` instead, so what reaches here is a
+            // card rounded only away from its band, or corners nobody could
+            // read.
             findings.push(RuleHit::new("side-tab", format!("border-{sn}: {w_s}px")));
         }
     }
@@ -629,11 +653,143 @@ impl SafeTagTextSeen {
         });
     }
 
+    /// Whether the page has already claimed `key` for rule `id`, outright or
+    /// provisionally. Asking claims nothing.
+    pub fn has_claimed(&self, id: &str, key: &str) -> bool {
+        let k = (id.to_string(), key.to_string());
+        self.reported.contains(&k) || self.provisional.iter().any(|(p, _, _)| *p == k)
+    }
+
     /// The provisional hits later on-screen elements replaced, as
     /// `(handle, snippet)` (drained).
     pub fn take_superseded(&mut self) -> Vec<(u64, String)> {
         std::mem::take(&mut self.superseded)
     }
+}
+
+// ─── Contrast severity ──────────────────────────────────────────────────────
+
+/// The per-finding severity a contrast finding reports at when it is not a
+/// full failure.
+pub const ADVISORY_SEVERITY: &str = "advisory";
+
+/// The lowest ratio, as printed, that still counts as just under the 4.5:1
+/// bar for normal text: within 0.3 of it.
+pub const NEAR_BAR_FLOOR_NORMAL: f64 = 4.2;
+/// The lowest ratio, as printed, that still counts as just under the 3:1
+/// bar for large text: within 0.2 of it.
+pub const NEAR_BAR_FLOOR_LARGE: f64 = 2.8;
+
+/// Whether a failing contrast ratio sits just under its bar: 4.2:1 up to
+/// 4.5:1 for normal text, 2.8:1 up to 3:1 for large text (taste call r3-02,
+/// "Report ratios inside the margin as advisory, outside the failure count.
+/// The findings stay visible with their measured ratios.").
+///
+/// The margin is read off the ratio as the snippet prints it
+/// ([`crate::color::ratio_label`]), so every finding that prints `4.2:1`
+/// reports the same way, whether the ratio underneath is 4.196 or 4.204. A
+/// ratio at or over the bar is not a failure and is not near it; any other
+/// bar (a NaN from a candidate with no threshold) has no margin.
+pub fn contrast_near_bar(ratio: f64, threshold: f64) -> bool {
+    if !ratio.is_finite() || !(ratio < threshold) {
+        return false;
+    }
+    let floor = if threshold == 4.5 {
+        NEAR_BAR_FLOOR_NORMAL
+    } else if threshold == 3.0 {
+        NEAR_BAR_FLOOR_LARGE
+    } else {
+        return false;
+    };
+    string_to_number(&crate::color::ratio_label(ratio, threshold)) >= floor
+}
+
+/// The severity a failing contrast finding carries: `advisory` just under
+/// its bar ([`contrast_near_bar`]), else the rule's own.
+pub fn contrast_severity(ratio: f64, threshold: f64) -> Option<String> {
+    contrast_near_bar(ratio, threshold).then(|| ADVISORY_SEVERITY.to_string())
+}
+
+/// The words in a font family's name that say the face is drawn bold.
+const HEAVY_FACE_WORDS: &[&str] = &[
+    "bold", "semibold", "demibold", "extrabold", "ultrabold", "heavy", "black",
+];
+
+/// Whether the first family in a computed `font-family` list is named as a
+/// bold cut: `ploni-demi-bold`, `EMprint Semibold`, `Gotham-Black`,
+/// `ProximaNovaBold` (taste call r5-p31). The name is split at anything that
+/// is not a letter or digit and at a lower-to-upper case step, so `demi-bold`
+/// reads as `demi` + `bold` and `Blackletter` or `Kobold` as neither. Only
+/// the first family is read: it is the one the page asked for, and the
+/// engine cannot see which face was actually loaded.
+pub fn family_names_heavy_face(font_family: &str) -> bool {
+    let first = font_family.split(',').next().unwrap_or("");
+    let first = first.trim().trim_matches(|c| c == '"' || c == '\'');
+    let mut words: Vec<String> = Vec::new();
+    let mut word = String::new();
+    let mut prev_lower = false;
+    for c in first.chars() {
+        if !c.is_alphanumeric() {
+            if !word.is_empty() {
+                words.push(std::mem::take(&mut word));
+            }
+            prev_lower = false;
+            continue;
+        }
+        if c.is_uppercase() && prev_lower && !word.is_empty() {
+            words.push(std::mem::take(&mut word));
+        }
+        prev_lower = c.is_lowercase();
+        word.extend(c.to_lowercase());
+    }
+    if !word.is_empty() {
+        words.push(word);
+    }
+    words.iter().any(|w| HEAVY_FACE_WORDS.contains(&w.as_str()))
+}
+
+/// The weight the large-text contrast bar reads: the computed weight, or 700
+/// where the family is named as a bold cut and the computed weight is under
+/// it ([`family_names_heavy_face`]). A face drawn bold and served as its
+/// family's regular weight computes to 400, and 19px of it is large text.
+pub fn contrast_font_weight(font_weight: f64, font_family: &str) -> f64 {
+    if font_weight < 700.0 && family_names_heavy_face(font_family) {
+        700.0
+    } else {
+        font_weight
+    }
+}
+
+/// Marks every `low-contrast` hit advisory. The engines call it on an
+/// element whose text has no reading job ([`crate::checks::decorative_text`]).
+pub fn demote_low_contrast(hits: &mut [RuleHit]) {
+    for h in hits.iter_mut().filter(|h| h.id == "low-contrast") {
+        h.severity = Some(ADVISORY_SEVERITY.to_string());
+    }
+}
+
+/// Whether an ai-color-palette finding is one of its purple/violet forms
+/// (purple heading text, a purple or violet gradient, the stock violet
+/// accents, Tailwind `purple`/`violet`/`indigo` classes), as opposed to its
+/// cyan-on-dark forms. These are the forms a project's DESIGN.md switches
+/// off when it declares a purple (see `impeccable_detect::design_system`).
+pub fn is_purple_palette_finding(id: &str, snippet: &str) -> bool {
+    if id != "ai-color-palette" {
+        return false;
+    }
+    let lower = snippet.to_ascii_lowercase();
+    lower.contains("purple") || lower.contains("violet") || lower.contains("indigo")
+}
+
+/// Whether a declared colour is a purple or violet: chromatic, in the hue
+/// band the rule reads as purple (260-310deg) widened by 10deg a side, so a
+/// violet-500 (258deg) or a magenta-leaning plum (318deg) counts.
+pub fn is_declared_purple(c: &Rgba) -> bool {
+    if !has_chroma(Some(c), Some(30.0)) {
+        return false;
+    }
+    let hue = get_hue(Some(c));
+    (250.0..=320.0).contains(&hue)
 }
 
 /// JS: checks.mjs#checkColors
@@ -756,37 +912,72 @@ pub fn check_colors_deduped_claiming(
     claim: Option<PairClaim>,
     keep: &mut dyn FnMut(&RuleHit) -> bool,
 ) -> Vec<RuleHit> {
+    check_colors_deduped_shaped(opts, seen, claim, &|| false, keep)
+}
+
+/// [`check_colors_deduped_claiming`] with the engine's verdict on whether
+/// the element's text has no reading job ([`crate::checks::decorative_text`]).
+/// `decorative` is asked at most once, and only when the element failed
+/// contrast; a yes reports its `low-contrast` hits as advisory.
+///
+/// An advisory copy never speaks for the page's failing copies of the same
+/// colour pair: it is dropped where a failing copy already reported the
+/// pair, and the pair it claims is its own, so the white-on-blue avatar
+/// initial that comes first leaves the white-on-blue button label after it
+/// failing as before.
+pub fn check_colors_deduped_shaped(
+    opts: &ColorOpts,
+    seen: &mut SafeTagTextSeen,
+    claim: Option<PairClaim>,
+    decorative: &dyn Fn() -> bool,
+    keep: &mut dyn FnMut(&RuleHit) -> bool,
+) -> Vec<RuleHit> {
     let mut hits = check_colors(opts);
+    let shaped = hits.iter().any(|h| h.id == "low-contrast") && decorative();
+    if shaped {
+        demote_low_contrast(&mut hits);
+    }
     if scores_safe_tag_text(opts) {
-        match (
+        let surface_key = match (
             opts.bg_source.as_deref(),
             opts.bg_source_host.as_deref(),
             opts.text_color.as_ref(),
         ) {
-            // A gradient is sampled where each element's text sits, so fifty
-            // links across one gradient header name fifty slightly different
-            // colours. They are one text colour on one box, reported once.
-            // The box is named by its identity, not by its label: a row of
-            // `div.w-14` tiles on amber, lime and blue gradients is three
-            // surfaces. The snippet is claimed as well, so identical tiles on
-            // one gradient stay one report, as they always were.
             (Some(source), Some(host), Some(text)) => {
-                let surface_key =
-                    format!("text {} over {} [{}]", ink_key(text), source, host);
-                seen.keep_first_keyed_claiming(
-                    &mut hits,
-                    &|h: &RuleHit| vec![h.snippet.clone(), surface_key.clone()],
-                    claim,
-                    keep,
-                );
+                Some(format!("text {} over {} [{}]", ink_key(text), source, host))
             }
-            _ => seen.keep_first_keyed_claiming(
-                &mut hits,
-                &|h: &RuleHit| vec![h.snippet.clone()],
-                claim,
-                keep,
-            ),
+            _ => None,
+        };
+        if shaped {
+            hits.retain(|h| {
+                !(seen.has_claimed(&h.id, &h.snippet)
+                    || surface_key.as_deref().is_some_and(|k| seen.has_claimed(&h.id, k)))
+            });
+            let keys_of = |h: &RuleHit| {
+                let mut keys = vec![format!("decorative {}", h.snippet)];
+                if let Some(k) = &surface_key {
+                    keys.push(format!("decorative {k}"));
+                }
+                keys
+            };
+            seen.keep_first_keyed_claiming(&mut hits, &keys_of, claim, keep);
+            return hits;
         }
+        // A gradient is sampled where each element's text sits, so fifty
+        // links across one gradient header name fifty slightly different
+        // colours. They are one text colour on one box, reported once. The
+        // box is named by its identity, not by its label: a row of `div.w-14`
+        // tiles on amber, lime and blue gradients is three surfaces. The
+        // snippet is claimed as well, so identical tiles on one gradient stay
+        // one report, as they always were.
+        let keys_of = |h: &RuleHit| {
+            let mut keys = vec![h.snippet.clone()];
+            if let Some(k) = &surface_key {
+                keys.push(k.clone());
+            }
+            keys
+        };
+        seen.keep_first_keyed_claiming(&mut hits, &keys_of, claim, keep);
     }
     hits
 }
@@ -923,11 +1114,10 @@ fn contrast_findings(opts: &ColorOpts, text_color: &Rgba) -> Vec<RuleHit> {
         }
     };
     let mut findings = Vec::new();
-    // Gray is low chroma at whatever lightness the ink sits at, and the
-    // surface is a colour when it has chroma of its own. The old pair of
-    // tests read relative luminance as if it were lightness, which made every
-    // off-white under 0.85 gray and charged an off-white nav on a teal
-    // masthead three times over (REN-404).
+    // Gray is low chroma at whatever lightness the ink sits at (relative
+    // luminance read as lightness made every off-white under 0.85 gray,
+    // REN-404), and the surface is a colour when its spread clears the bar,
+    // which rises as the surface nears black.
     if is_gray_ink(text_color) && bgs.iter().all(background_reads_as_colour) {
         let bg_label = match opts.effective_bg {
             Some(bg) => color_to_hex(Some(&bg)),
@@ -975,7 +1165,7 @@ fn contrast_findings(opts: &ColorOpts, text_color: &Rgba) -> Vec<RuleHit> {
                 .as_deref()
                 .map(|s| format!(" ({s})"))
                 .unwrap_or_default();
-            findings.push(RuleHit::new(
+            let mut hit = RuleHit::new(
                 "low-contrast",
                 format!(
                     "{}:1 (need {}:1) — text {} on {}{}",
@@ -985,7 +1175,9 @@ fn contrast_findings(opts: &ColorOpts, text_color: &Rgba) -> Vec<RuleHit> {
                     color_to_hex(Some(&bgs[worst_idx])),
                     source
                 ),
-            ));
+            );
+            hit.severity = contrast_severity(ratio, threshold);
+            findings.push(hit);
         }
     }
     findings
@@ -1003,6 +1195,12 @@ pub fn check_placeholder_colors(
     placeholder_text: &str,
     mut text_color: Rgba,
 ) -> Vec<RuleHit> {
+    // A placeholder inked at (nearly) zero alpha paints nothing: Bootstrap's
+    // floating labels and `placeholder:text-transparent` hide it so a label
+    // can take its place.
+    if text_color.alpha_or_one() <= TRANSPARENT_INK_FLOOR {
+        return Vec::new();
+    }
     // `visible_text` is the host's own ink; the placeholder paints its own.
     let host_ink_cleared;
     let opts = if opts.visible_text.is_some() {
@@ -1064,7 +1262,7 @@ pub fn check_hover_contrast(opts: &HoverContrastOpts) -> Vec<RuleHit> {
     if ratio >= threshold {
         return Vec::new();
     }
-    vec![RuleHit::new(
+    let mut hit = RuleHit::new(
         "low-contrast",
         format!(
             ":hover state {}:1 (need {}:1) — text {} on {}",
@@ -1073,7 +1271,9 @@ pub fn check_hover_contrast(opts: &HoverContrastOpts) -> Vec<RuleHit> {
             color_to_hex(Some(&text_color)),
             color_to_hex(Some(&bg))
         ),
-    )]
+    );
+    hit.severity = contrast_severity(ratio, threshold);
+    vec![hit]
 }
 
 // ─── isCardLikeFromProps / HEADING_TAGS ─────────────────────────────────────
@@ -1096,7 +1296,7 @@ pub const ICON_TILE_MIN_BG_ALPHA: f64 = 0.05;
 
 /// JS: checks.mjs#checkIconTile
 pub fn check_icon_tile(opts: &IconTileOpts) -> Vec<RuleHit> {
-    if !is_heading_tag(&opts.heading_tag) {
+    if !is_heading_tag(&opts.heading_tag) && !opts.heading_is_card_title {
         return Vec::new();
     }
     let sibling_tag = match opts.sibling_tag.as_deref() {
@@ -1377,7 +1577,20 @@ pub fn check_hero_eyebrow(opts: &HeroEyebrowOpts) -> Vec<RuleHit> {
     let is_uppercased = opts.sibling_text_transform.as_deref() == Some("uppercase")
         || (text.bytes().any(|b| b.is_ascii_uppercase())
             && !text.bytes().any(|b| b.is_ascii_lowercase()));
-    let is_classic_tracked = is_uppercased && opts.sibling_letter_spacing >= 1.6;
+    // The em floor reaches the common tracked setting of a blog's date line
+    // (Tailwind's tracking-widest at 12px is 1.2px), so under the fixed
+    // floor a dated line is the post's meta, not an eyebrow: a `<time>`, or
+    // text naming a year. At the fixed floor and above nothing changes.
+    let em_floor_only = opts.sibling_letter_spacing < HERO_EYEBROW_TRACKING_PX;
+    let dated_meta = em_floor_only
+        && (opts.sibling_holds_time || crate::checks::text_rules::KICKER_META_YEAR_RE.is_match(text));
+    let is_classic_tracked = is_uppercased
+        && !dated_meta
+        && hero_eyebrow_tracked(
+            opts.sibling_letter_spacing,
+            opts.sibling_font_size,
+            opts.sibling_tracking_floor_em,
+        );
 
     let weight = {
         let n = match opts.sibling_font_weight.as_deref() {
@@ -1612,12 +1825,22 @@ pub(crate) fn glow_is_perceptible(
 
 /// How far the chromatic layers of one shadow value lift `surface` at the
 /// edge of the box (see [`GLOW_MIN_LIFT`]). Neutral layers are elevation, not
-/// glow light, and do not count.
+/// glow light, and do not count, and neither does a layer carrying under half
+/// the light a glow needs ([`GLOW_MIN_STRENGTH_PX`]): Tailwind's `shadow-lg`
+/// in a 0.2 purple adds a 6px layer at 1.2px of light to its 15px one, and
+/// the pair lit nothing on gameghost.manus.space's black page. The layers of
+/// an elevation ramp that each carry some of the light still add up.
 fn glow_surface_lift(value: &str, surface: &Rgba, element_opacity: Option<f64>) -> f64 {
     let opacity = element_opacity.unwrap_or(1.0);
     split_commas_outside_parens(value)
         .into_iter()
-        .filter_map(|layer| find_shadow_color(layer).and_then(|info| info.color))
+        .filter_map(|layer| {
+            let info = find_shadow_color(layer)?;
+            let color = info.color?;
+            let vals = extract_shadow_lengths(layer, Some((info.start, info.end)));
+            let blur = vals.get(2).copied().unwrap_or(0.0);
+            (blur * color.alpha_or_one() * opacity >= GLOW_MIN_STRENGTH_PX / 2.0).then_some(color)
+        })
         .filter(|color| has_chroma(Some(color), Some(30.0)))
         .map(|color| {
             let difference = (color.r - surface.r)
@@ -1729,11 +1952,93 @@ pub const TYPE_HIERARCHY_MIN_ROLES: usize = 3;
 /// JS: checks.mjs#TYPE_HIERARCHY_MIN_STEP_RATIO
 pub const TYPE_HIERARCHY_MIN_STEP_RATIO: f64 = 1.25;
 
-/// One `{ role, size }` entry the JS pushes into `samples`.
+/// One `{ role, size }` entry the JS pushes into `samples`, plus the
+/// element's computed font weight ([`parse_font_weight`]; NaN when it does
+/// not read as a weight).
 #[derive(Debug, Clone, PartialEq)]
 pub struct TypeSample {
     pub role: String,
     pub size: f64,
+    pub weight: f64,
+}
+
+/// How much heavier than the body text a heading has to be for its weight
+/// to separate the roles: two steps of the 100-900 scale (400 to 600).
+pub const TYPE_HIERARCHY_WEIGHT_STEP: f64 = 200.0;
+/// The share of heading elements that have to be that much heavier.
+pub const TYPE_HIERARCHY_WEIGHT_SHARE: f64 = 0.8;
+
+/// A computed `font-weight` as a number: `normal` 400, `bold` 700, a number
+/// as itself, anything else NaN.
+pub fn parse_font_weight(value: &str) -> f64 {
+    let v = js::to_lower_case(js::trim(value));
+    match v.as_str() {
+        "normal" => 400.0,
+        "bold" => 700.0,
+        _ => {
+            let n = js::parse_float(&v);
+            if n.is_finite() && (1.0..=1000.0).contains(&n) {
+                n
+            } else {
+                f64::NAN
+            }
+        }
+    }
+}
+
+fn type_sample_in_range(sample: &TypeSample) -> bool {
+    let size = math_round(sample.size * 10.0) / 10.0;
+    !sample.role.is_empty() && size.is_finite() && (8.0..200.0).contains(&size)
+}
+
+/// Whether weight, not size, separates the headings from the body text:
+/// the body text's most common weight, and at least four in five heading
+/// elements set at least [`TYPE_HIERARCHY_WEIGHT_STEP`] heavier. Dense
+/// commerce and listing pages (otto.de) run a tight size ramp on purpose and
+/// set every heading bold; a flat ramp there reports as advisory (corpus
+/// decision r4-p23-flat-type-hierarchy-commerce).
+pub fn type_roles_separated_by_weight(samples: &[TypeSample]) -> bool {
+    let mut body_weights: Vec<(f64, usize)> = Vec::new();
+    let mut heading_weights: Vec<f64> = Vec::new();
+    for sample in samples.iter().filter(|s| type_sample_in_range(s)) {
+        if !sample.weight.is_finite() {
+            continue;
+        }
+        if sample.role == "body" {
+            match body_weights.iter_mut().find(|(w, _)| *w == sample.weight) {
+                Some(slot) => slot.1 += 1,
+                None => body_weights.push((sample.weight, 1)),
+            }
+        } else {
+            heading_weights.push(sample.weight);
+        }
+    }
+    // The most common body weight; a tie goes to the lighter one.
+    let Some(body) = body_weights
+        .iter()
+        .max_by(|a, b| a.1.cmp(&b.1).then(b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal)))
+        .map(|(w, _)| *w)
+    else {
+        return false;
+    };
+    if heading_weights.is_empty() {
+        return false;
+    }
+    let heavier = heading_weights
+        .iter()
+        .filter(|w| **w >= body + TYPE_HIERARCHY_WEIGHT_STEP)
+        .count();
+    heavier as f64 >= TYPE_HIERARCHY_WEIGHT_SHARE * heading_weights.len() as f64
+}
+
+/// The severity a flat-type-hierarchy finding over `samples` reports at:
+/// advisory when weight separates the roles, the rule's own otherwise.
+pub fn flat_type_hierarchy_severity(samples: &[TypeSample]) -> Option<&'static str> {
+    if type_roles_separated_by_weight(samples) {
+        Some("advisory")
+    } else {
+        None
+    }
 }
 
 /// JS: checks.mjs#typeHierarchyRole
@@ -1800,13 +2105,42 @@ pub fn check_flat_type_hierarchy_samples(samples: &[TypeSample]) -> Vec<RuleHit>
         }
     }
 
-    let mut roles: Vec<(String, f64)> = by_role
-        .into_iter()
-        .filter_map(|(role, sizes)| dominant_type_role_size(&role, &sizes).map(|size| (role, size)))
-        .collect();
+    // The ladder is read from the roles whose size the samples settle. A
+    // heading level with no dominant size drops out, and which of its sizes
+    // stands for it is not something the samples say.
+    let (mut settled_headings, mut dropped_headings) = (0usize, 0usize);
+    let mut dropped_sizes: Vec<f64> = Vec::new();
+    let mut roles: Vec<(String, f64)> = Vec::new();
+    for (role, sizes) in by_role {
+        let heading = role != "body";
+        match dominant_type_role_size(&role, &sizes) {
+            Some(size) => {
+                if heading {
+                    settled_headings += sizes.len();
+                }
+                roles.push((role, size));
+            }
+            None if heading => {
+                dropped_headings += sizes.len();
+                dropped_sizes.extend(sizes);
+            }
+            None => {}
+        }
+    }
 
     if roles.len() < TYPE_HIERARCHY_MIN_ROLES {
         return Vec::new();
+    }
+
+    // An h1 set smaller than the body text is not the page's title but a
+    // label wearing the tag (phillips66.com's 14px "FIND FBOS:" form label
+    // over 16px copy); the page's real headline sits in some other element,
+    // and a ladder topped by the label measures nothing a reader sees.
+    let size_of = |name: &str| roles.iter().find(|(r, _)| r == name).map(|(_, size)| *size);
+    if let (Some(h1), Some(body)) = (size_of("h1"), size_of("body")) {
+        if h1 < body {
+            return Vec::new();
+        }
     }
 
     roles.sort_by(|a, b| {
@@ -1817,11 +2151,35 @@ pub fn check_flat_type_hierarchy_samples(samples: &[TypeSample]) -> Vec<RuleHit>
             // root collation and byte order agree.
             .then_with(|| a.0.cmp(&b.0))
     });
-    let mut largest_step = 1.0f64;
-    for i in 1..roles.len() {
-        largest_step = math_max(largest_step, roles[i].1 / roles[i - 1].1);
-    }
+    let largest_step_of = |sizes: &[f64]| -> f64 {
+        let mut step = 1.0f64;
+        for i in 1..sizes.len() {
+            step = math_max(step, sizes[i] / sizes[i - 1]);
+        }
+        step
+    };
+    let ladder: Vec<f64> = roles.iter().map(|(_, size)| *size).collect();
+    let largest_step = largest_step_of(&ladder);
     if largest_step >= TYPE_HIERARCHY_MIN_STEP_RATIO {
+        return Vec::new();
+    }
+
+    // When the dropped heading levels hold most of the page's headings, the
+    // ladder leaves out the headings a reader sees, and the verdict rests on
+    // what they would add. cnnbrasil.com.br sets its thirty h3s at 14, 16 and
+    // 20px, ten each, against twelve h1 and h2 on a 14/16/16 ladder; any of
+    // those h3s at 20px stands a 1.25 step above the 16px h2, so the page is
+    // not shown flat, and it does not report. When no dropped size would
+    // break the flatness (h2s tied at 17 and 18px on a 16/16/18 ladder), the
+    // ramp is flat whichever size stands for them, and it reports as before.
+    if dropped_headings > settled_headings
+        && dropped_sizes.iter().any(|&extra| {
+            let mut with = ladder.clone();
+            with.push(extra);
+            with.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            largest_step_of(&with) >= TYPE_HIERARCHY_MIN_STEP_RATIO
+        })
+    {
         return Vec::new();
     }
 
@@ -1829,10 +2187,15 @@ pub fn check_flat_type_hierarchy_samples(samples: &[TypeSample]) -> Vec<RuleHit>
         .iter()
         .map(|(role, size)| format!("{} {}px", role, number_to_string(*size)))
         .collect();
+    let weight_note = if type_roles_separated_by_weight(samples) {
+        "; weight separates headings from body text"
+    } else {
+        ""
+    };
     vec![RuleHit::new(
         "flat-type-hierarchy",
         format!(
-            "Role sizes: {} (largest adjacent step {}:1; target {}:1)",
+            "Role sizes: {} (largest adjacent step {}:1; target {}:1{weight_note})",
             role_sizes.join(", "),
             to_fixed(largest_step, 2),
             number_to_string(TYPE_HIERARCHY_MIN_STEP_RATIO)
@@ -1846,6 +2209,44 @@ mod tests {
 
     fn rgb(r: f64, g: f64, b: f64) -> Rgba {
         Rgba::new(r, g, b, 1.0)
+    }
+
+    fn hero_opts(text: &str, tag: &str, spacing: f64) -> HeroEyebrowOpts {
+        HeroEyebrowOpts {
+            heading_tag: "h1".to_string(),
+            heading_text: Some("How we rebuilt the scheduler".to_string()),
+            heading_font_size: 60.0,
+            heading_in_application_context: false,
+            sibling_tag: Some(tag.to_string()),
+            sibling_text: Some(text.to_string()),
+            sibling_text_transform: Some("uppercase".to_string()),
+            sibling_font_size: 12.0,
+            sibling_letter_spacing: spacing,
+            sibling_font_weight: Some("500".to_string()),
+            sibling_color: Some("rgb(85, 85, 85)".to_string()),
+            sibling_has_accent_dash_pseudo: false,
+            sibling_tracking_floor_em: Some(HERO_EYEBROW_TRACKING_EM),
+            sibling_holds_time: tag == "time",
+        }
+    }
+
+    /// copperhead.sh: "Engineering/2 September 2026" at 0.1em over a post's
+    /// h1 is the post's meta. Under the fixed floor a year or a `<time>`
+    /// keeps the em floor from calling it tracked caps; at 1.6px and up the
+    /// rule reads as it always did.
+    #[test]
+    fn hero_eyebrow_em_floor_passes_over_a_dated_meta_line() {
+        assert!(check_hero_eyebrow(&hero_opts("Engineering · 2 September 2026", "p", 1.2)).is_empty());
+        assert!(check_hero_eyebrow(&hero_opts("Sep 2, 2026", "time", 1.2)).is_empty());
+        assert!(check_hero_eyebrow(&hero_opts("Sep 2", "time", 1.2)).is_empty());
+        assert_eq!(check_hero_eyebrow(&hero_opts("Now in public beta", "p", 1.2)).len(), 1);
+        // Not a year: a version or a count stays an eyebrow.
+        assert_eq!(check_hero_eyebrow(&hero_opts("Version 3000 is here", "p", 1.2)).len(), 1);
+        // At the fixed floor the date line reports, as it did before.
+        assert_eq!(
+            check_hero_eyebrow(&hero_opts("Engineering · 2 September 2026", "p", 1.8)).len(),
+            1
+        );
     }
 
     /// swipeloan.in: light gray on #04002d, a navy that reads as black.
@@ -1920,6 +2321,7 @@ mod tests {
             sibling_border_radius: 8.0,
             has_icon_child: true,
             icon_child_width: 20.0,
+            heading_is_card_title: false,
         };
         assert_eq!(check_icon_tile(&opts(0.1)).len(), 1);
         assert_eq!(check_icon_tile(&opts(0.05)).len(), 1);
@@ -1932,8 +2334,65 @@ mod tests {
             .map(|(role, size)| TypeSample {
                 role: role.to_string(),
                 size: *size,
+                weight: f64::NAN,
             })
             .collect()
+    }
+
+    fn weighted(entries: &[(&str, f64, f64, usize)]) -> Vec<TypeSample> {
+        entries
+            .iter()
+            .flat_map(|(role, size, weight, n)| {
+                std::iter::repeat_with(move || TypeSample {
+                    role: role.to_string(),
+                    size: *size,
+                    weight: *weight,
+                })
+                .take(*n)
+            })
+            .collect()
+    }
+
+    /// otto.de (findings 111427, 112210): headings bold at 14-16px over
+    /// 14px regular body text. co-trip.jp (109941): headings at 500 and 400
+    /// over 400 body text, which weight does not separate.
+    #[test]
+    fn flat_type_hierarchy_is_advisory_when_weight_separates_the_roles() {
+        let otto = weighted(&[
+            ("body", 14.0, 400.0, 580),
+            ("h2", 16.0, 700.0, 9),
+            ("h2", 12.0, 400.0, 1),
+            ("h3", 16.0, 700.0, 12),
+            ("h3", 14.0, 700.0, 10),
+        ]);
+        let hits = check_flat_type_hierarchy_samples(&otto);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert!(hits[0].snippet.ends_with("target 1.25:1; weight separates headings from body text)"), "{hits:?}");
+        assert_eq!(flat_type_hierarchy_severity(&otto), Some("advisory"));
+
+        let co_trip = weighted(&[
+            ("body", 14.0, 400.0, 123),
+            ("h1", 16.0, 500.0, 2),
+            ("h2", 16.0, 500.0, 10),
+            ("h2", 16.0, 400.0, 8),
+            ("h3", 11.7, 400.0, 16),
+        ]);
+        let hits = check_flat_type_hierarchy_samples(&co_trip);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert!(hits[0].snippet.ends_with("target 1.25:1)"), "{hits:?}");
+        assert_eq!(flat_type_hierarchy_severity(&co_trip), None);
+
+        // One heading in five at body weight is still weight-separated; two
+        // in five is not.
+        let mostly = weighted(&[("body", 14.0, 400.0, 20), ("h2", 16.0, 700.0, 4), ("h3", 15.0, 400.0, 1)]);
+        assert!(type_roles_separated_by_weight(&mostly));
+        let split = weighted(&[("body", 14.0, 400.0, 20), ("h2", 16.0, 700.0, 3), ("h3", 15.0, 400.0, 2)]);
+        assert!(!type_roles_separated_by_weight(&split));
+        // Unread weights say nothing.
+        assert!(!type_roles_separated_by_weight(&samples(&[("body", 14.0), ("h2", 16.0)])));
+        assert_eq!(parse_font_weight("bold"), 700.0);
+        assert_eq!(parse_font_weight(" 600 "), 600.0);
+        assert!(parse_font_weight("bolder").is_nan());
     }
 
     /// copperhead.sh: a 66px title and a 48px closing title, both h1.
@@ -1961,6 +2420,63 @@ mod tests {
         h3_tie.extend([("h3", 15.0), ("h3", 22.0)]);
         let hits = check_flat_type_hierarchy_samples(&samples(&h3_tie));
         assert!(hits.is_empty() || !hits[0].snippet.contains("h3"), "{hits:?}");
+    }
+
+    /// observations-28 row 23: the ladder leaves out the headings a reader
+    /// sees. cnnbrasil.com.br sets its thirty h3 headlines at 14, 16 and 20px,
+    /// ten each, so the h3 role drops out and a 14/16/16 ladder of body, h1
+    /// and h2 reports; phillips66.com's h1 is a 14px form label over 16px
+    /// copy. Neither ladder describes the page, and neither reports. A
+    /// dropped level declines only when one of its sizes would break the
+    /// flatness, and only when it holds more headings than the ladder does:
+    /// a tied role holding fewer stays out as before (otto.de's two h2s at 16
+    /// and 26px beside an h1, an h3 and an h4).
+    #[test]
+    fn flat_type_hierarchy_declines_a_ladder_without_the_page_headings() {
+        let mut news = vec![("h1", 16.0)];
+        news.extend([("body", 14.0); 99]);
+        news.extend([("body", 16.0); 44]);
+        news.extend([("h2", 16.0); 6]);
+        news.extend([("h2", 30.0); 3]);
+        news.extend([("h3", 14.0); 10]);
+        news.extend([("h3", 16.0); 10]);
+        news.extend([("h3", 20.0); 10]);
+        assert!(check_flat_type_hierarchy_samples(&samples(&news)).is_empty(), "the h3 role drops out");
+        // With one h3 size settled, the ladder holds what a reader sees.
+        news.push(("h3", 16.0));
+        let hits = check_flat_type_hierarchy_samples(&samples(&news));
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert!(hits[0].snippet.contains("h3 16px"), "{hits:?}");
+
+        let mut label = vec![("h1", 14.0)];
+        label.extend([("body", 16.0); 26]);
+        label.extend([("body", 15.0); 15]);
+        label.extend([("h2", 15.0); 3]);
+        assert!(check_flat_type_hierarchy_samples(&samples(&label)).is_empty(), "h1 under body size");
+        // An h1 at the body size still counts.
+        label[0] = ("h1", 16.0);
+        assert_eq!(check_flat_type_hierarchy_samples(&samples(&label)).len(), 1);
+
+        // A dropped level whose sizes would all keep the ramp flat changes
+        // nothing: h2s tied at 17 and 18px, most of the headings, on a
+        // body 16px, h3 16px, h1 18px ladder.
+        let mut tie = vec![("h1", 18.0), ("h2", 17.0), ("h2", 18.0), ("h2", 17.0), ("h2", 18.0), ("h3", 16.0)];
+        tie.extend([("body", 16.0); 12]);
+        let hits = check_flat_type_hierarchy_samples(&samples(&tie));
+        assert_eq!(hits.len(), 1, "the tied h2s keep it flat: {hits:?}");
+        assert!(hits[0].snippet.starts_with("Role sizes: body 16px, h3 16px, h1 18px"), "{hits:?}");
+        // Tied h2s at 17 and 23px: 23px stands a 1.28 step above the 18px
+        // h1, so the ladder does not show the page flat, and it declines.
+        tie[2] = ("h2", 23.0);
+        tie[4] = ("h2", 23.0);
+        assert!(check_flat_type_hierarchy_samples(&samples(&tie)).is_empty(), "a 23px h2 breaks the flatness");
+
+        let mut otto = vec![("h1", 16.0), ("h2", 16.0), ("h2", 26.0), ("h3", 16.0), ("h4", 12.0)];
+        otto.extend([("body", 14.0); 357]);
+        otto.extend([("body", 12.0); 46]);
+        let hits = check_flat_type_hierarchy_samples(&samples(&otto));
+        assert_eq!(hits.len(), 1, "a tied minority role stays out: {hits:?}");
+        assert!(hits[0].snippet.starts_with("Role sizes: h4 12px, body 14px, h1 16px, h3 16px"), "{hits:?}");
     }
 
     #[test]
@@ -2279,6 +2795,22 @@ mod tests {
         };
         assert!(avatar(0.15).is_empty());
         assert_eq!(avatar(0.4).len(), 1);
+        // Tailwind's `shadow-lg shadow-purple-900/20` on a black page: the 6px
+        // layer carries 1.2px of light and lights nothing, and the 15px layer
+        // alone lifts the page by 14 (gameghost.manus.space).
+        let black = Rgba::new(0.0, 0.0, 0.0, 1.0);
+        let shadow_lg = check_glow(&GlowOpts {
+            box_shadow: Some(
+                "oklab(0.381 0.100917 -0.144194 / 0.2) 0px 10px 15px -3px, oklab(0.381 0.100917 -0.144194 / 0.2) 0px 4px 6px -4px"
+                    .to_string(),
+            ),
+            text_shadow: None,
+            effective_bg: Some(black),
+            element_opacity: Some(1.0),
+            element_size: Some((208.0, 36.0)),
+            surface: Some(black),
+        });
+        assert!(shadow_lg.is_empty(), "{shadow_lg:?}");
         // With no resolved fill behind it (a gradient, an image) the lift is
         // not measured, and the strength floor decides as before.
         let unresolved = check_glow(&GlowOpts {
@@ -2587,5 +3119,131 @@ mod tests {
         assert!(!is_heading_tag("div"));
         assert!(is_card_like_from_props(true, false, false, true));
         assert!(!is_card_like_from_props(false, false, true, true));
+    }
+
+    #[test]
+    fn near_bar_margin_reads_the_printed_ratio() {
+        // Normal text: printed 4.2 up to 4.49 is advisory, printed 4.1 fails.
+        assert!(contrast_near_bar(4.499, 4.5));
+        assert!(contrast_near_bar(4.3, 4.5));
+        assert!(contrast_near_bar(4.2, 4.5));
+        assert!(contrast_near_bar(4.174, 4.5)); // prints 4.2
+        assert!(!contrast_near_bar(4.149, 4.5)); // prints 4.1
+        assert!(!contrast_near_bar(4.5, 4.5));
+        assert!(!contrast_near_bar(2.0, 4.5));
+        // Large text: printed 2.8 up to 2.99 is advisory, printed 2.7 fails.
+        assert!(contrast_near_bar(2.995, 3.0));
+        assert!(contrast_near_bar(2.779, 3.0)); // prints 2.8
+        assert!(!contrast_near_bar(2.745, 3.0)); // prints 2.7
+        assert!(!contrast_near_bar(3.0, 3.0));
+        // No bar, no margin.
+        assert!(!contrast_near_bar(4.3, f64::NAN));
+        assert!(!contrast_near_bar(f64::NAN, 4.5));
+        assert_eq!(contrast_severity(4.3, 4.5).as_deref(), Some("advisory"));
+        assert_eq!(contrast_severity(3.9, 4.5), None);
+    }
+
+    fn white_panel(text: Rgba, font_size: f64, font_weight: f64) -> ColorOpts {
+        ColorOpts {
+            tag: "p".to_string(),
+            text_color: Some(text),
+            effective_bg: Some(Rgba::new(255.0, 255.0, 255.0, 1.0)),
+            font_size,
+            font_weight,
+            has_direct_text: true,
+            ..Default::default()
+        }
+    }
+
+    /// r5-p31: walla.co.il's `ploni-demi-bold` and exxonmobil.com's
+    /// `EMprint Semibold` compute to weight 400.
+    #[test]
+    fn a_family_named_as_a_bold_cut_reads_as_bold() {
+        for heavy in [
+            "ploni-demi-bold, arial",
+            "\"EMprint Semibold\", Arial, sans-serif",
+            "EMprint-Semibold",
+            "ProximaNovaBold",
+            "Gotham-Black",
+            "\"Avenir Heavy\"",
+            "Inter ExtraBold",
+            "Arial Black, sans-serif",
+            "DEMIBOLD",
+        ] {
+            assert!(family_names_heavy_face(heavy), "{heavy}");
+            assert_eq!(contrast_font_weight(400.0, heavy), 700.0, "{heavy}");
+        }
+        for plain in [
+            "\"Lilita One\", cursive",
+            "Inter, \"Arial Black\"",
+            "Blackletter",
+            "Kobold",
+            "Boldonse",
+            "ploni-regular",
+            "Heavyweight",
+            "",
+        ] {
+            assert!(!family_names_heavy_face(plain), "{plain}");
+            assert_eq!(contrast_font_weight(400.0, plain), 400.0, "{plain}");
+        }
+        // A computed weight at or over 700 is kept as it is.
+        assert_eq!(contrast_font_weight(900.0, "Gotham-Black"), 900.0);
+        assert_eq!(contrast_font_weight(600.0, "Inter"), 600.0);
+    }
+
+    #[test]
+    fn check_colors_stamps_near_bar_hits_advisory() {
+        let gray = |v: f64| Rgba::new(v, v, v, 1.0);
+        let near = check_colors(&white_panel(gray(121.0), 14.0, 400.0)); // #797979 4.35:1
+        let hit = near.iter().find(|h| h.id == "low-contrast").expect("hit");
+        assert!(hit.is_advisory(), "{hit:?}");
+        let far = check_colors(&white_panel(gray(125.0), 14.0, 400.0)); // #7d7d7d 4.12:1
+        assert_eq!(far.iter().find(|h| h.id == "low-contrast").unwrap().severity, None);
+        // r3-08 keeps bold display text under the large-text margin failing.
+        let display = check_colors(&white_panel(gray(158.0), 40.0, 700.0)); // #9e9e9e 2.68:1
+        assert_eq!(display.iter().find(|h| h.id == "low-contrast").unwrap().severity, None);
+        let display_near = check_colors(&white_panel(gray(149.0), 40.0, 700.0)); // #959595 2.99:1
+        assert!(display_near.iter().find(|h| h.id == "low-contrast").unwrap().is_advisory());
+        let hover = check_hover_contrast(&HoverContrastOpts {
+            tag: "button".to_string(),
+            text_color: Some(gray(120.0)),
+            bg: Some(gray(255.0)),
+            own_bg_alpha: Some(1.0),
+            font_size: 14.0,
+            font_weight: 400.0,
+            has_direct_text: true,
+            is_emoji_only: false,
+        });
+        assert!(hover[0].is_advisory(), "{hover:?}");
+    }
+
+    #[test]
+    fn shaped_hits_claim_their_own_pair() {
+        let link = ColorOpts {
+            tag: "span".to_string(),
+            paints_own_text: true,
+            ..white_panel(Rgba::new(187.0, 187.0, 187.0, 1.0), 14.0, 400.0)
+        };
+        let mut seen = SafeTagTextSeen::default();
+        let mut keep = |_: &RuleHit| true;
+        // Decorative first: advisory, and a second decorative copy dedupes.
+        let a = check_colors_deduped_shaped(&link, &mut seen, None, &|| true, &mut keep);
+        assert!(a.len() == 1 && a[0].is_advisory(), "{a:?}");
+        assert!(check_colors_deduped_shaped(&link, &mut seen, None, &|| true, &mut keep).is_empty());
+        // The failing copy after it still reports, and then speaks for both.
+        let b = check_colors_deduped_shaped(&link, &mut seen, None, &|| false, &mut keep);
+        assert!(b.len() == 1 && !b[0].is_advisory(), "{b:?}");
+        assert!(check_colors_deduped_shaped(&link, &mut seen, None, &|| false, &mut keep).is_empty());
+        let mut seen2 = SafeTagTextSeen::default();
+        assert_eq!(check_colors_deduped_shaped(&link, &mut seen2, None, &|| false, &mut keep).len(), 1);
+        assert!(check_colors_deduped_shaped(&link, &mut seen2, None, &|| true, &mut keep).is_empty());
+        // The verdict is asked only of an element that failed.
+        let readable = ColorOpts {
+            text_color: Some(Rgba::new(20.0, 20.0, 20.0, 1.0)),
+            ..link.clone()
+        };
+        let asked = std::cell::Cell::new(false);
+        check_colors_deduped_shaped(&readable, &mut seen, None, &|| { asked.set(true); true }, &mut keep);
+        assert!(!asked.get());
     }
 }

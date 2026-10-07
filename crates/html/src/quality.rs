@@ -14,9 +14,11 @@ use impeccable_core::checks::measures::{
 };
 use impeccable_core::checks::rules::RuleHit;
 use impeccable_core::checks::text_rules::{
-    is_cjk_text, justifies_without_word_spaces_text, tracking_is_crushed, ALL_CAPS_LONG_RUN,
-    JUSTIFY_NARROW_CHARS_PER_LINE, LEADING_DISPLAY_TYPE_PX, LEADING_HEADING_CONTEXT,
-    NON_RENDERED_TAGS, QUALITY_TEXT_TAGS, SR_ONLY_SELECTOR,
+    font_weight_number, is_bold_title_leading, is_cjk_text, is_line_clamp,
+    is_under_ui_text_floor, justifies_without_word_spaces_text, tracking_is_crushed,
+    ALL_CAPS_LONG_RUN, JUSTIFY_NARROW_CHARS_PER_LINE, LEADING_DISPLAY_TYPE_PX,
+    LEADING_HEADING_CONTEXT, NON_RENDERED_TAGS, QUALITY_TEXT_TAGS, SMALLPRINT_TEXT_FLOOR_PX,
+    SR_ONLY_SELECTOR, UI_TEXT_FLOOR_PX,
 };
 use impeccable_core::js::{self, number_to_string, parse_float, to_fixed};
 use impeccable_core::js_ext_a::num_truthy;
@@ -332,7 +334,35 @@ const FLUSH_SKIP_TAGS: &[&str] = &[
 
 const TINY_TEXT_UI_CONTEXT: &str = "button, a, label, summary, pre, [role=\"button\"], [role=\"link\"], [role=\"tab\"], [role=\"menuitem\"], [role=\"option\"], nav, footer, [aria-hidden=\"true\"], [class*=\"badge\" i], [class*=\"caption\" i], [class*=\"chip\" i], [class*=\"code\" i], [class*=\"console\" i], [class*=\"diff\" i], [class*=\"label\" i], [class*=\"meta\" i], [class*=\"mock\" i], [class*=\"pill\" i], [class*=\"preview\" i], [class*=\"tag\" i], [class*=\"terminal\" i], [class*=\"writes\" i]";
 const EXEMPT_CONTEXT: &str = "pre, code, kbd, samp, var, svg, [aria-hidden=\"true\"], [class*=\"terminal\" i], [class*=\"console\" i], [class*=\"code\" i], [class*=\"mock\" i], [class*=\"editor\" i], [class*=\"syntax\" i], [class*=\"diff\" i]";
-const INTERACTIVE: &str = "a[href], button, summary, label, select, textarea, [role=\"button\"], [role=\"link\"], [role=\"tab\"], [role=\"menuitem\"], [role=\"menuitemcheckbox\"], [role=\"menuitemradio\"], [role=\"option\"], [role=\"checkbox\"], [role=\"radio\"], [role=\"switch\"], [role=\"treeitem\"], [tabindex]";
+const INTERACTIVE: &str = "a[href], button, summary, label, select, textarea, [role=\"button\"], [role=\"link\"], [role=\"tab\"], [role=\"menuitem\"], [role=\"menuitemcheckbox\"], [role=\"menuitemradio\"], [role=\"option\"], [role=\"checkbox\"], [role=\"radio\"], [role=\"switch\"], [role=\"treeitem\"]";
+
+/// The browser engine's `FOCUSABLE_CONTROL_MAX_CHARS`.
+const FOCUSABLE_CONTROL_MAX_CHARS: usize = 80;
+
+/// Whether `el` is, or sits in, a control, as the browser engine reads it:
+/// one of the [`INTERACTIVE`] elements and roles, or a box with a `tabindex`
+/// that is not negative and that holds at most
+/// [`FOCUSABLE_CONTROL_MAX_CHARS`] of text. A focusable region (a card, an
+/// accordion item, a skip-link target) is not a control.
+fn is_in_control(el: &StaticElement<'_>) -> bool {
+    if el.closest(INTERACTIVE).is_some() {
+        return true;
+    }
+    let mut cur = Some(*el);
+    while let Some(c) = cur {
+        if let Some(value) = c.get_attribute("tabindex") {
+            let index = parse_float(js::trim(value));
+            let focusable = !(index.is_finite() && index < 0.0);
+            if focusable
+                && utf16_len(js::trim(&collapse_ws(&c.text_content()))) <= FOCUSABLE_CONTROL_MAX_CHARS
+            {
+                return true;
+            }
+        }
+        cur = c.parent_element();
+    }
+    false
+}
 const FURNITURE: &str = "nav, [role=\"navigation\"], td, th, [role=\"gridcell\"], [role=\"cell\"], caption, figcaption, dt, dd, footer, [class*=\"meta\" i], [class*=\"label\" i], [class*=\"badge\" i], [class*=\"chip\" i], [class*=\"pill\" i], [class*=\"tag\" i], [class*=\"kicker\" i], [class*=\"eyebrow\" i], [class*=\"breadcrumb\" i], [class*=\"timestamp\" i], [class*=\"category\" i], [class*=\"caption\" i], [class*=\"nav\" i]";
 const SMALLPRINT: &str = "small, footer, [class*=\"legal\" i], [class*=\"copyright\" i], [class*=\"fineprint\" i], [class*=\"fine-print\" i], [class*=\"smallprint\" i], [class*=\"small-print\" i], [class*=\"disclaimer\" i], [class*=\"disclosure\" i], [class*=\"footnote\" i]";
 
@@ -389,6 +419,14 @@ fn insulates_side(el: &StaticElement<'_>, s: usize, font_size: Option<f64>, dept
         [only] => insulates_side(only, s, font_size, depth - 1),
         _ => false,
     }
+}
+
+/// The hit, at advisory severity when `advisory` holds.
+fn advisory_if(mut hit: RuleHit, advisory: bool) -> RuleHit {
+    if advisory {
+        hit.severity = Some(impeccable_core::checks::rules::ADVISORY_SEVERITY.to_string());
+    }
+    hit
 }
 
 /// JS: checks.mjs#checkQuality(opts), static (`rect: null`) branches.
@@ -597,10 +635,21 @@ pub fn check_quality(q: &QualityInput<'_, '_>) -> Vec<RuleHit> {
                     && !is_non_rendered_text(el, tag, Some(style))
                     && !is_visually_hidden(el, style)
                     && !is_heading_text(el)
+                    // A bold title in a -webkit-box line clamp gets the heading
+                    // exemption. The browser engine also exempts bold text of two
+                    // lines or fewer; with no layout, lines cannot be counted here.
+                    && !is_bold_title_leading(
+                        font_weight_number(sv(style, "fontWeight")),
+                        None,
+                        is_line_clamp(sv(style, "display"), sv(style, "webkitLineClamp")),
+                    )
                 {
-                    findings.push(RuleHit::new(
-                        "tight-leading",
-                        format!("line-height {}x (need >=1.3)", to_fixed(ratio, 2)),
+                    findings.push(advisory_if(
+                        RuleHit::new(
+                            "tight-leading",
+                            format!("line-height {}x (need >=1.3)", to_fixed(ratio, 2)),
+                        ),
+                        crate::text_context::is_fine_print(el),
                     ));
                 }
             }
@@ -653,9 +702,11 @@ pub fn check_quality(q: &QualityInput<'_, '_>) -> Vec<RuleHit> {
             && !is_uppercase
             && !is_non_rendered_text(el, tag, Some(style))
         {
-            findings.push(RuleHit::new(
-                "tiny-text",
-                format!("{}px body text", number_to_string(font_size)),
+            // Fine print (taste call r5-p27) and text in a mockup (r5-p26)
+            // report as advisory.
+            findings.push(advisory_if(
+                RuleHit::new("tiny-text", format!("{}px body text", number_to_string(font_size))),
+                crate::text_context::is_fine_print(el) || crate::text_context::in_mock_context(el),
             ));
         }
     }
@@ -667,7 +718,7 @@ pub fn check_quality(q: &QualityInput<'_, '_>) -> Vec<RuleHit> {
         let ui_skip_tags = ["sub", "sup", "option"];
         if let Some(font_size) = font_size.filter(|fs| {
             *fs > 0.0
-                && *fs < 11.0
+                && *fs < UI_TEXT_FLOOR_PX
                 && dt_len >= 2
                 && !ui_skip_tags.contains(&tag)
                 // A footnote marker is set small by convention, and so is the
@@ -675,26 +726,43 @@ pub fn check_quality(q: &QualityInput<'_, '_>) -> Vec<RuleHit> {
                 && el.closest("sub, sup").is_none()
                 && !is_non_rendered_text(el, tag, Some(style))
         }) {
+            // The browser engine also exempts a monospace run with its
+            // whitespace kept that reads as code; this cascade carries no
+            // `white-space`, so a code line outside a `pre` or `code` still
+            // reports here.
             let is_exempt_context = el.closest(EXEMPT_CONTEXT).is_some();
             if !is_exempt_context && !is_visually_hidden(el, style) {
-                let is_interactive = el.closest(INTERACTIVE).is_some();
+                let is_interactive = is_in_control(el);
                 let is_furniture = el.closest(FURNITURE).is_some();
                 let is_smallprint = el.closest(SMALLPRINT).is_some();
                 let floor = if !is_interactive && is_smallprint {
-                    10.0
+                    SMALLPRINT_TEXT_FLOOR_PX
                 } else {
-                    11.0
+                    UI_TEXT_FLOOR_PX
                 };
-                if font_size < floor && (is_interactive || is_furniture || dt_len <= 20) {
+                // A 0.1px tolerance under each floor, as the browser engine.
+                if is_under_ui_text_floor(font_size, floor)
+                    && (is_interactive || is_furniture || dt_len <= 20)
+                {
                     let excerpt = slice_utf16_prefix(&direct_text, 40);
-                    findings.push(RuleHit::new(
-                        "undersized-ui-text",
-                        format!(
-                            "{}px functional text \"{}\" (below {}px floor)",
-                            number_to_string(font_size),
-                            excerpt,
-                            number_to_string(floor)
+                    // A label with no reading job (taste call r5-p3) and
+                    // text in a mockup (r5-p26) report as advisory. A
+                    // control's text is neither: a framed demo's controls
+                    // keep failing too, since a visitor can use them.
+                    let advisory = !is_interactive
+                        && (crate::text_context::is_micro_label(el)
+                            || crate::text_context::in_mock_context(el));
+                    findings.push(advisory_if(
+                        RuleHit::new(
+                            "undersized-ui-text",
+                            format!(
+                                "{}px functional text \"{}\" (below {}px floor)",
+                                number_to_string(font_size),
+                                excerpt,
+                                number_to_string(floor)
+                            ),
                         ),
+                        advisory,
                     ));
                 }
             }
@@ -798,15 +866,28 @@ pub fn check_element_quality(
 }
 
 /// JS: checks.mjs#checkPageQualityFromDoc(doc)
+///
+/// A skip into the footer is not reported; see the browser twin
+/// (`impeccable_core::browser::quality::check_page_quality_from_doc`) for
+/// the rule (corpus decision r5-p29-skipped-heading-footer-titles).
 pub fn check_page_quality_from_doc(doc: &crate::dom::StaticDocument) -> Vec<RuleHit> {
     let mut findings = Vec::new();
     let mut prev_level: i64 = 0;
     let mut prev_text = String::new();
+    let mut prev_footer = None;
+    let mut prev_opens_footer = false;
     for h in doc.query_selector_all("h1, h2, h3, h4, h5, h6") {
         let tag = h.tag_upper();
         let level = tag[1..2].parse::<i64>().unwrap_or(0);
         let text = slice_utf16_prefix(&collapse_ws(js::trim(&h.text_content())), 60);
-        if prev_level > 0 && level > prev_level + 1 {
+        let footer = h
+            .closest(impeccable_core::browser::quality::FOOTER_SELECTOR)
+            .map(|f| f.id());
+        let opens_footer = footer.is_some() && footer != prev_footer;
+        let into_footer = footer.is_some() && (opens_footer || prev_opens_footer);
+        let continues = prev_level > 0;
+        let skips = continues && level > prev_level + 1;
+        if skips && !into_footer {
             findings.push(RuleHit::new(
                 "skipped-heading",
                 format!(
@@ -821,6 +902,10 @@ pub fn check_page_quality_from_doc(doc: &crate::dom::StaticDocument) -> Vec<Rule
         }
         prev_level = level;
         prev_text = text;
+        prev_footer = footer;
+        // As in the URL engine: a footer's first heading that skipped in is
+        // a column title, and excuses nothing after it.
+        prev_opens_footer = opens_footer && continues && !skips;
     }
     findings
 }
