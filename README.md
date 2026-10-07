@@ -503,7 +503,7 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audit: 2026-10-06. Tools run: 7 (gitleaks, trufflehog, osv-scanner, trivy, bandit, config-audit, mcp-exfil-scan; semgrep timed out). Findings: 1 critical (proxy-addr GHSA-jqcg-44mw-7w3h). Fixes: proxy-addr pinned to 2.0.8 via overrides. See SECURITY_REPORT.md.
+Last audit: 2026-10-07. Tools run: 9 (gitleaks, trufflehog, osv-scanner, trivy, bandit, semgrep, config-audit, mcp-exfil-scan, skillspector degraded). Findings: 1 high (@modelcontextprotocol/sdk GHSA-6qxp-vccf-f47h). Fixes: pinned @modelcontextprotocol/sdk 1.31.0 as devDependency. See SECURITY_REPORT.md.
 
 ## Contributing
 
