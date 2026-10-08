@@ -503,7 +503,7 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audit: 2026-10-07. Tools run: 9 (gitleaks, trufflehog, osv-scanner, trivy, bandit, semgrep, config-audit, mcp-exfil-scan, skillspector degraded). Findings: 1 high (@modelcontextprotocol/sdk GHSA-6qxp-vccf-f47h). Fixes: pinned @modelcontextprotocol/sdk 1.31.0 as devDependency. See SECURITY_REPORT.md.
+Last audit: 2026-10-08. Tools run: 7 (gitleaks, trufflehog, osv-scanner, trivy, semgrep, config-audit, mcp-exfil-scan). Findings: 0 CVEs; 3 low semgrep postMessage notes in dev-only wasm tools. Fixes: none needed. See SECURITY_REPORT.md.
 
 ## Contributing
 
