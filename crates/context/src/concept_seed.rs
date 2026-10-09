@@ -43,6 +43,13 @@ pub fn extract_section(text: &str, name: &str) -> Option<String> {
     Some(body[start..=end].join("\n"))
 }
 
+/// Whether a surface of this mode builds in code by default. Image comps of
+/// working screens and documents rate below their code-led builds, so those
+/// modes are code-led whatever build path the project recorded.
+pub fn code_led_mode(mode: &str) -> bool {
+    matches!(mode, "operate" | "read")
+}
+
 /// The MODE RULES block for `mode`, or the one-line fallback naming the file
 /// when it cannot be read or lacks a section. Never fails the roll.
 pub fn mode_rules_block(env: &Env, cwd: &str, mode: &str) -> String {
@@ -61,10 +68,13 @@ pub fn mode_rules_block(env: &Env, cwd: &str, mode: &str) -> String {
 
 /// The PRESENTATION block printed after every roll: new-work.md's decision
 /// round, condensed. `build_path` is the recorded default and its file.
-pub fn presentation_block(env: &Env, cwd: &str, scope: &str, reroll: usize, degraded: bool, register: Option<&str>, build_path: Option<&(String, String)>) -> String {
+pub fn presentation_block(env: &Env, cwd: &str, scope: &str, reroll: usize, degraded: bool, register: Option<&str>, mode: Option<&str>, build_path: Option<&(String, String)>) -> String {
     let sq = crate::provider::detect(env, cwd).verb_cmd("serve-question");
     let present = fill(if reroll > 0 { t::PRESENT_REROLL } else { t::PRESENT_FIRST }, &[("SQ", &sq)]);
-    let code_led = build_path.map(|(v, _)| v == "code").unwrap_or(false);
+    // Operate and Read surfaces build in code whatever the project records;
+    // the recorded default governs Persuade and Experience.
+    let mode_code = mode.filter(|m| code_led_mode(m));
+    let code_led = mode_code.is_some() || build_path.map(|(v, _)| v == "code").unwrap_or(false);
     // A degraded roll is one text-only card, except the safer register,
     // whose lineup of grounded candidates plus canon is a full hand.
     let single_card = degraded && register != Some("safer");
@@ -75,13 +85,21 @@ pub fn presentation_block(env: &Env, cwd: &str, scope: &str, reroll: usize, degr
         (_, _, true) => t::COMPS_SURFACE_CODE,
         _ => t::COMPS_SURFACE,
     };
-    let build = match build_path {
-        Some((value, source)) => fill(t::BUILD_PATH_RECORDED, &[("VALUE", value), ("SOURCE", source)]),
-        None => t::BUILD_PATH_NONE.to_string(),
+    let build = match (mode_code, build_path) {
+        (Some(m), recorded) => {
+            let recorded = match recorded {
+                Some((value, source)) if value != "code" => format!(" (the recorded default {} from {} governs Persuade and Experience surfaces)", value, source),
+                _ => String::new(),
+            };
+            fill(t::BUILD_PATH_MODE, &[("MODE", m), ("RECORDED", &recorded)])
+        }
+        (None, Some((value, source))) => fill(t::BUILD_PATH_RECORDED, &[("VALUE", value), ("SOURCE", source)]),
+        (None, None) => t::BUILD_PATH_NONE.to_string(),
     };
-    // Comps generated up front come before the wait; a code-led round's
-    // comps wait for the flip --wait reports, and a single text card has none.
-    let when = if code_led || (scope == "direction" && single_card) { t::WAIT_NOW } else { t::WAIT_AFTER_COMPS };
+    // Comps generated up front come before the wait. A code-led round's comps
+    // wait for the flip --wait reports, but its sketches are written right
+    // after serving, before the wait; a single text card has neither.
+    let when = if scope == "direction" && single_card { t::WAIT_NOW } else if code_led { t::WAIT_AFTER_SKETCHES } else { t::WAIT_AFTER_COMPS };
     let wait = fill(t::PRESENT_WAIT, &[("SQ", &sq), ("WHEN", when)]);
     [t::PRESENTATION_HEADER, &present, comps, &wait, &build, t::PRESENT_FALLBACK].join("\n") + "\n"
 }
@@ -340,7 +358,7 @@ fn render_concept_seed(env: &Env, cwd: &str, budget: &mut ApiBudget, a: &SeedArg
     // PRESENTATION closes every roll, where a middle-truncated read still
     // reaches it, like the restated lines above it.
     let register = a.register.clone().flatten();
-    Ok((roll + &presentation_block(env, cwd, scope, reroll, degraded, register.as_deref(), a.build_path.as_ref()), worlds))
+    Ok((roll + &presentation_block(env, cwd, scope, reroll, degraded, register.as_deref(), a.mode.clone().flatten().as_deref(), a.build_path.as_ref()), worlds))
 }
 
 /// The roll itself: (scope, re-roll round, text, degraded, printed worlds).
@@ -813,7 +831,7 @@ mod tests {
         assert!(lines[2].starts_with("- With image generation, every card declares a comp under .impeccable/mocks/decision/, canon included, declined challengers excepted. Serve first"), "{block}");
         assert!(lines[2].contains("(a.png gets a.png.json)"), "{block}");
         // The wait follows comp generation, never precedes it.
-        assert!(lines[3].starts_with("- After the last comp lands (at once when this round generates none), hold `impeccable serve-question --wait --key <key>`. If your shell hands back a session before --wait exits, keep polling that session until it exits; rerun --wait only after it exits 3"), "{block}");
+        assert!(lines[3].starts_with("- After the last comp or sketch lands (at once when this round makes none), hold `impeccable serve-question --wait --key <key>`. If your shell hands back a session before --wait exits, keep polling that session until it exits; rerun --wait only after it exits 3"), "{block}");
         assert!(lines[4].starts_with("- Build path: none recorded"), "{block}");
         assert!(lines[4].contains("\"buildPath\": {\"value\": \"comp\", \"toggle\": true}"), "{block}");
         assert!(lines[5].starts_with("- The structured question tool is the fallback, never the first channel: take it when --start exits 2, when --wait exits 4"), "{block}");
@@ -825,13 +843,15 @@ mod tests {
 
     #[test]
     fn surface_roll_carries_wireframes_and_no_pick_or_canon() {
-        let (proj, skill) = fixture("present-surface", &[("mode-operate", MODE_FILE)]);
-        let (code, out) = seed(&proj, &skill, true, &["--scope", "surface", "--mode", "operate", "--from", "k1"]);
+        // Persuade: the comp-led surface wording. Operate and Read surface rounds are code-led
+        // (operate_and_read_surfaces_are_code_led_whatever_is_recorded).
+        let (proj, skill) = fixture("present-surface", &[("mode-persuade", MODE_FILE)]);
+        let (code, out) = seed(&proj, &skill, true, &["--scope", "surface", "--mode", "persuade", "--from", "k1"]);
         assert_eq!(code, 0, "{out}");
         let block = presentation(&out);
         assert!(block.contains(PRESENT_FIRST_LINE), "{block}");
         assert!(block.contains("- With image generation, each dealt card declares a comp under .impeccable/mocks/decision/; serve first"), "{block}");
-        assert!(block.contains("Without image generation, each card carries a wireframe instead (shape in --schema). Surface rounds have no pick card and no canon card."), "{block}");
+        assert!(block.contains("Without image generation, each card carries an HTML sketch: one self-contained file of the first viewport only"), "{block}");
         assert!(!block.contains("canon included"), "{block}");
     }
 
@@ -874,6 +894,41 @@ mod tests {
     }
 
     #[test]
+    fn operate_and_read_surfaces_are_code_led_whatever_is_recorded() {
+        let (proj, skill) = fixture("present-mode-code-led", &[("mode-operate", MODE_FILE), ("mode-read", MODE_FILE), ("mode-persuade", MODE_FILE)]);
+        let dir = proj.join(".impeccable");
+        std::fs::create_dir_all(&dir).unwrap();
+        let roll = |scope: &str, mode: &str| seed(&proj, &skill, true, &["--scope", scope, "--mode", mode, "--from", "k1"]).1;
+
+        // Nothing recorded: Operate and Read are code-led, Persuade and Experience keep the comp default.
+        for mode in ["operate", "read"] {
+            let out = roll("direction", mode);
+            let block = presentation(&out);
+            assert!(block.contains(&format!("- Build path: code-led. A surface in {mode} mode builds in code whatever the project records. With image generation, put \"buildPath\": {{\"value\": \"code\", \"toggle\": true}} in the payload")), "{block}");
+            assert!(block.contains("never offer to record a flip made on this surface"), "{block}");
+            assert!(block.contains("- Code-led round: every card but the declined challengers carries an HTML sketch"), "{block}");
+            assert!(block.contains("- After the last sketch lands, hold `impeccable serve-question --wait --key <key>`."), "{block}");
+            assert!(presentation(&roll("surface", mode)).contains("- Code-led round: each dealt card carries an HTML sketch"), "{mode}");
+        }
+        for mode in ["persuade", "experience"] {
+            assert!(presentation(&roll("direction", mode)).contains("- Build path: none recorded"), "{mode}");
+        }
+
+        // A recorded comp default still governs Persuade, and is named, not followed, on Operate and Read.
+        std::fs::write(dir.join("config.json"), r#"{"buildPath": "comp"}"#).unwrap();
+        let out = roll("direction", "operate");
+        let block = presentation(&out);
+        assert!(block.contains("- Build path: code-led. A surface in operate mode builds in code whatever the project records (the recorded default comp from .impeccable/config.json governs Persuade and Experience surfaces)."), "{block}");
+        assert!(block.contains("\"buildPath\": {\"value\": \"code\", \"toggle\": true}"), "{block}");
+        assert!(!block.contains("Serve first, then generate each comp in reading order"), "{block}");
+        assert!(presentation(&roll("direction", "persuade")).contains("- Build path: recorded default comp (from .impeccable/config.json)."));
+
+        // A recorded code default reads the same on Operate, with nothing extra to name.
+        std::fs::write(dir.join("config.json"), r#"{"buildPath": "code"}"#).unwrap();
+        assert!(presentation(&roll("direction", "read")).contains("A surface in read mode builds in code whatever the project records. With image generation"));
+    }
+
+    #[test]
     fn build_path_line_names_the_recorded_default() {
         let (proj, skill) = fixture("present-build-path", &[("mode-persuade", MODE_FILE)]);
         let dir = proj.join(".impeccable");
@@ -884,11 +939,11 @@ mod tests {
         let out = roll("direction");
         let block = presentation(&out);
         assert!(block.contains("- Build path: recorded default code (from .impeccable/config.json). With image generation, put \"buildPath\": {\"value\": \"code\", \"toggle\": true} in the payload; without it there is no toggle and the build is code-led. Never ask the user about the build path."), "{block}");
-        assert!(block.contains("- Code-led round: with image generation, every card still declares a comp path under .impeccable/mocks/decision/ as a flip reserve"), "{block}");
+        assert!(block.contains("- Code-led round: every card but the declined challengers carries an HTML sketch"), "{block}");
         assert!(block.contains("only when --wait prints BUILD PATH FLIPPED"), "{block}");
-        assert!(block.contains("- Right after serving, with no comp to generate first, hold `impeccable serve-question --wait --key <key>`."), "{block}");
+        assert!(block.contains("- After the last sketch lands, hold `impeccable serve-question --wait --key <key>`."), "{block}");
         let out = roll("surface");
-        assert!(presentation(&out).contains("- Code-led round: each dealt card carries a wireframe (shape in --schema)"), "{out}");
+        assert!(presentation(&out).contains("- Code-led round: each dealt card carries an HTML sketch"), "{out}");
 
         // The machine-local file wins over the committed one.
         std::fs::write(dir.join("config.local.json"), r#"{"buildPath": "comp"}"#).unwrap();
