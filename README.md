@@ -503,7 +503,7 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audit: 2026-10-08. Tools run: 7 (gitleaks, trufflehog, osv-scanner, trivy, semgrep, config-audit, mcp-exfil-scan). Findings: 0 CVEs; 3 low semgrep postMessage notes in dev-only wasm tools. Fixes: none needed. See SECURITY_REPORT.md.
+Last audit: 2026-10-09. Tools run: 5 (gitleaks, trufflehog, osv-scanner, trivy, semgrep). Findings: 0 CVEs, 0 secrets (10 unverified trufflehog URI false positives). Fixes: none needed. See SECURITY_REPORT.md.
 
 ## Contributing
 
