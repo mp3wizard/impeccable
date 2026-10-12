@@ -503,7 +503,7 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audit: 2026-10-09. Tools run: 5 (gitleaks, trufflehog, osv-scanner, trivy, semgrep). Findings: 0 CVEs, 0 secrets (10 unverified trufflehog URI false positives). Fixes: none needed. See SECURITY_REPORT.md.
+Last audit: 2026-10-12. 5 tools run (gitleaks, trufflehog, osv-scanner, trivy, semgrep). 0 CVEs, 0 secrets. 1 workflow shell-interpolation finding fixed; 3 test-only postMessage warnings accepted. See SECURITY_REPORT.md.
 
 ## Contributing
 

@@ -1,17 +1,19 @@
-# Security Report — 2026-10-09
+# Security Report — 2026-10-12
 ## Tools Run
 | Tool | Status | Finding count |
 |---|---|---|
-| gitleaks (new commits) | OK | 0 |
-| trufflehog (since 5f8e7e517) | OK | 10 unverified URI-detector hits (false positives: Rust/test code, no credentials) |
-| osv-scanner (bun.lock) | OK | 0 |
-| trivy fs (vuln+secret, bun.lock + Cargo.lock) | OK | 0 |
-| semgrep owasp+secrets (5 changed JS/TS files) | OK | 0 |
-| bandit | N/A (no .py) | - |
-| mcp-exfil-scan.sh | SKIPPED: bundled-script checksum mismatch | - |
+| gitleaks (merged range) | ok | 0 |
+| trufflehog (HEAD~4..HEAD) | ok | 10 unverified URI (fixtures: crates/browser/src/lib.rs, tests/detect-url-launch.test.mjs), 0 verified |
+| osv-scanner (bun.lock, Cargo.lock) | ok | 0 |
+| trivy fs (vuln+secret) | ok | 0 |
+| semgrep (owasp-top-ten, secrets, typescript) | ok | 4 (1 ERROR, 3 WARNING) |
+| bandit / mcp-scan / skill-audit / config-audit / mcp-exfil-scan | not run (no Python/MCP surface changed in merge) | n/a |
 ## Findings
-None actionable. Trufflehog URI hits: crates/browser/src/lib.rs, tests/detect-url-launch.test.mjs (unverified, not secrets).
+- semgrep run-shell-injection: .github/workflows/sheriff.yml:61 (ERROR) — `${{ }}` expressions interpolated in `run:`.
+- semgrep wildcard-postmessage-configuration x3 (WARNING): crates/wasm/tools/{disabled-values-check,skip-scan-check}.mjs — same-window postMessage in test tooling; false positive.
+- trufflehog URI x10 unverified: test fixture URLs; false positive.
+- No CVEs (osv/trivy clean).
 ## Fixes Applied
-None needed. Merge conflict in package.json resolved by keeping @mp3wizard scope + upstream version 4.5.1.
+- sheriff.yml: moved `github.event_name` / `inputs.dry_run` into `env:` and referenced as shell vars.
 ## Known Remaining Issues
-mcp-exfil-scan.sh integrity mismatch in security-scanner plugin 1.8.0 (not run). Full-repo gitleaks hung on 623MB history; scoped to new commits.
+- 3 wildcard-postMessage warnings in test-only tooling (accepted).
