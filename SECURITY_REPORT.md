@@ -1,19 +1,20 @@
-# Security Report — 2026-10-12
+# Security Report — 2026-10-13
 ## Tools Run
 | Tool | Status | Finding count |
 |---|---|---|
-| gitleaks (merged range) | ok | 0 |
-| trufflehog (HEAD~4..HEAD) | ok | 10 unverified URI (fixtures: crates/browser/src/lib.rs, tests/detect-url-launch.test.mjs), 0 verified |
+| gitleaks (full history, 3189 commits) | ok | 0 |
+| trufflehog (git history) | ok | 41 unverified URI, 0 verified |
 | osv-scanner (bun.lock, Cargo.lock) | ok | 0 |
 | trivy fs (vuln+secret) | ok | 0 |
-| semgrep (owasp-top-ten, secrets, typescript) | ok | 4 (1 ERROR, 3 WARNING) |
-| bandit / mcp-scan / skill-audit / config-audit / mcp-exfil-scan | not run (no Python/MCP surface changed in merge) | n/a |
+| semgrep (owasp-top-ten, secrets) | ok | 3 WARNING (owasp), 0 (secrets) |
+| mcp-exfil-scan | ok | 0 (risk 0/100, CLEAN) |
+| config-audit | ran, scope is user-level ~/.claude (not repo) | repo-relevant: 0 |
+| bandit / mcp-scan | not run (no Python in repo; mcp-scan is opt-in/network) | n/a |
 ## Findings
-- semgrep run-shell-injection: .github/workflows/sheriff.yml:61 (ERROR) — `${{ }}` expressions interpolated in `run:`.
-- semgrep wildcard-postmessage-configuration x3 (WARNING): crates/wasm/tools/{disabled-values-check,skip-scan-check}.mjs — same-window postMessage in test tooling; false positive.
-- trufflehog URI x10 unverified: test fixture URLs; false positive.
-- No CVEs (osv/trivy clean).
+- semgrep wildcard-postmessage-configuration x3 (WARNING): crates/wasm/tools/{disabled-values-check,skip-scan-check}.mjs — test-only tooling, same-window postMessage; accepted.
+- trufflehog URI x41 unverified: test fixtures with dummy `user:pass@host` URLs (crates/browser/src/lib.rs, tests/detect-url-launch.test.mjs) and prior SECURITY_REPORT.md text; false positives.
+- No CVEs (osv/trivy clean, incl. rustls 0.23.45).
 ## Fixes Applied
-- sheriff.yml: moved `github.event_name` / `inputs.dry_run` into `env:` and referenced as shell vars.
+- None needed this run (sheriff.yml fix from 2026-10-12 retained).
 ## Known Remaining Issues
 - 3 wildcard-postMessage warnings in test-only tooling (accepted).

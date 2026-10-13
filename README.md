@@ -519,7 +519,7 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audit: 2026-10-12. 5 tools run (gitleaks, trufflehog, osv-scanner, trivy, semgrep). 0 CVEs, 0 secrets. 1 workflow shell-interpolation finding fixed; 3 test-only postMessage warnings accepted. See SECURITY_REPORT.md.
+Last audit: 2026-10-13. 6 tools run (gitleaks, trufflehog, osv-scanner, trivy, semgrep, mcp-exfil-scan). 0 CVEs, 0 verified secrets. 3 test-only postMessage warnings accepted; no fixes needed. See SECURITY_REPORT.md.
 
 ## Contributing
 
