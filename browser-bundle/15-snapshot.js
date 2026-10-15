@@ -23,7 +23,7 @@ const __SNAP_STYLE_PROPS = [
   "animationComposition", "animationDelay", "animationDirection", "animationDuration", "animationFillMode",
   "animationIterationCount", "animationName", "animationPlayState", "animationTimeline", "animationTimingFunction",
   "aspectRatio", "backdropFilter", "backfaceVisibility", "background", "backgroundClip",
-  "backgroundColor", "backgroundImage", "backgroundPosition", "backgroundSize",
+  "backgroundColor", "backgroundImage", "backgroundPosition", "backgroundRepeat", "backgroundSize",
   "blockSize", "borderBottomColor", "borderBottomWidth", "borderBottomStyle",
   "borderLeftColor", "borderLeftWidth", "borderLeftStyle", "borderRadius",
   "borderRightColor", "borderRightWidth", "borderRightStyle",
@@ -55,7 +55,7 @@ const __SNAP_PSEUDO_PROPS = [
   "content", "position", "opacity", "display", "width", "height", "top",
   "right", "bottom", "left", "backgroundColor", "backgroundImage",
   "background", "borderRadius", "transform", "visibility", "zIndex",
-  "translate",
+  "translate", "scale", "rotate", "filter",
 ];
 // Pseudo-class states recorded per element (`el.matches(':name')`), so the
 // snapshot selector engine can answer `:checked` / `:disabled` / ... the way
