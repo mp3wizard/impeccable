@@ -519,7 +519,7 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audit: 2026-10-15. 9 tools run (gitleaks, trufflehog, osv-scanner, trivy, semgrep x2, mcp-exfil-scan, config-audit, skillspector). 0 verified secrets. 66 dependency advisories (stale lockfiles after upstream merge) fixed by refreshing bun.lock and Cargo.lock (rustls 0.23.46); osv-scanner now clean. 3 test-only postMessage warnings accepted. See SECURITY_REPORT.md.
+Last audit: 2026-10-16. 9 tools run (gitleaks, trufflehog, osv-scanner, trivy, semgrep x3, mcp-exfil-scan, config-audit, skillspector). 0 CVEs, 0 verified secrets; 2 Low and 4 Informational upstream-design observations (launcher checksum origin, live-server CORS). No fixes needed after merging upstream 4.6.0. See SECURITY_REPORT.md.
 
 ## Contributing
 
