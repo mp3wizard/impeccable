@@ -1,26 +1,21 @@
-# Security Report — 2026-10-16
+# Security Report — 2026-10-19
 ## Tools Run
 | Tool | Status | Finding count |
 |---|---|---|
-| gitleaks 8.30.1 (full history, 3326 commits) | ok | 0 |
-| trufflehog 3.99.1 (git history) | ok | 42 unverified URI (test fixtures), 0 verified |
-| osv-scanner 2.6.0 (209 Cargo + 223 bun pkgs) | ok | 0 |
-| trivy 0.75.0 (Cargo.lock, bun.lock) | ok | 0 |
-| semgrep 1.180.0 (owasp-top-ten, typescript, secrets) | ok | 0 |
-| mcp-exfil-scan | ok | 0 (risk 0/100, CLEAN) |
-| config-audit | ok (host-level results discarded) | 4 MEDIUM, 1 LOW (hooks/CLAUDE.md prose, by design) |
-| skillspector 2.12.0 (--no-llm, skill/) | partial | 75 informational (expected for agent playbooks / bundles) |
-| bandit | n/a (no Python) | 0 |
-| codeql, mcps-audit, mcp-scan, Jev | skipped / opt-out | n/a |
+| Gitleaks | run | 0 |
+| TruffleHog | run | 16 unverified, 0 verified |
+| Semgrep (OWASP + secrets) | run | 3 (postMessage '*' in test fixtures) |
+| Trivy | run | 0 |
+| OSV-Scanner | run | 3 (zip crate) |
+| mcp-exfil-scan | run | 0 (score 0/100) |
+| config-audit | run | host ~/.claude scope leak, not target |
+| skillspector (--no-llm) | run | pattern noise, score 100 on prose/test content |
+Opt-ins (mcp-scan, skillspector LLM, Jev) not used.
 ## Findings
-No CVEs. No verified secrets.
-- SEC-001 (Low): launcher `.claude/skills/impeccable/scripts/impeccable:96-196` verifies downloaded engine only via same-origin sha256 (CWE-494/345).
-- SEC-002 (Low): `crates/live/src/live_server.rs:638-658` CORS reflects any loopback origin, no Host check, token in query string (CWE-346/598).
-- SEC-003 (Info): CI jobs use paid API secrets on pull_request (`.github/workflows/ci.yml`).
-- SEC-004 (Info): `sync-generated-output.yml` contents:write, step output inlined in shell `if`.
-- SEC-005 (Info): URL-credential test fixtures flagged by trufflehog (false positives).
-- SEC-006 (Info): skillspector/config-audit playbook, hook and unpinned `npx impeccable` notes.
+- RUSTSEC-2026-0367 (CVSS 7.3), RUSTSEC-2026-0368, RUSTSEC-2026-0369 (CVSS 9.1): `zip` 2.4.2 in Cargo.lock, fixed in 9.0.0.
+- Semgrep: 3 postMessage wildcard-origin hits in test fixtures.
 ## Fixes Applied
-None required: no dependency CVEs or fixable config issues. Lockfiles merged from upstream 4.6.0.
+- Bumped `zip` 2 -> 9 in `crates/skills/Cargo.toml`; adapted `entry.name()` Result in `bundle.rs`; `cargo test -p impeccable-skills` passes.
 ## Known Remaining Issues
-SEC-001..006 are upstream design observations; left unpatched to avoid diverging the fork. Large bundles (`live-browser.js`, 536 KB) were not scanned by semgrep. Deep-audit skipped (unattended run; recommended scope crates/live, skill/scripts, .github/workflows).
+- TruffleHog unverified hits and skillspector prose hits: false positives, not suppressed.
+- Semgrep postMessage hits are test fixtures.

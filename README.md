@@ -519,7 +519,7 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audit: 2026-10-16. 9 tools run (gitleaks, trufflehog, osv-scanner, trivy, semgrep x3, mcp-exfil-scan, config-audit, skillspector). 0 CVEs, 0 verified secrets; 2 Low and 4 Informational upstream-design observations (launcher checksum origin, live-server CORS). No fixes needed after merging upstream 4.6.0. See SECURITY_REPORT.md.
+Last audit: 2026-10-19. 8 tools run (gitleaks, trufflehog, osv-scanner, trivy, semgrep, mcp-exfil-scan, config-audit, skillspector). Findings: 3 zip-crate advisories (RUSTSEC-2026-0367/0368/0369), 0 verified secrets. Fixed: zip bumped to 9. Details in SECURITY_REPORT.md.
 
 ## Contributing
 
