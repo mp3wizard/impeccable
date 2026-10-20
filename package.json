@@ -1,6 +1,6 @@
 {
-  "name": "@mp3wizard/impeccable",
-  "version": "4.6.0",
+  "name": "impeccable",
+  "version": "4.7.0",
   "author": "Paul Bakaus",
   "description": "Design skills, commands, and anti-pattern detection for AI coding agents",
   "keywords": [
@@ -83,35 +83,19 @@
     "build:component-review": "bun scripts/build-component-review.mjs"
   },
   "optionalDependencies": {
-    "@impeccable/cli-darwin-arm64": "0.1.15",
-    "@impeccable/cli-darwin-x64": "0.1.15",
-    "@impeccable/cli-linux-x64": "0.1.15",
-    "@impeccable/cli-linux-arm64": "0.1.15",
-    "@impeccable/cli-windows-x64": "0.1.15"
-  },
-  "overrides": {
-    "@hono/node-server": "1.19.15",
-    "@protobufjs/utf8": "1.1.1",
-    "body-parser": "2.3.0",
-    "brace-expansion": "5.0.12",
-    "devalue": "5.9.3",
-    "fast-uri": "3.1.8",
-    "hono": "4.13.7",
-    "proxy-addr": "2.0.8",
-    "ip-address": "10.7.1",
-    "js-yaml": "4.2.0",
-    "protobufjs": "7.6.3",
-    "qs": "6.16.0",
-    "undici": "7.29.1"
+    "@impeccable/cli-darwin-arm64": "0.1.16",
+    "@impeccable/cli-darwin-x64": "0.1.16",
+    "@impeccable/cli-linux-x64": "0.1.16",
+    "@impeccable/cli-linux-arm64": "0.1.16",
+    "@impeccable/cli-windows-x64": "0.1.16"
   },
   "devDependencies": {
     "@ai-sdk/anthropic": "^4.0.7",
     "@ai-sdk/google": "^4.0.8",
     "@ai-sdk/openai": "^4.0.7",
     "@anthropic-ai/claude-agent-sdk": "^0.3.165",
-    "@anthropic-ai/sdk": "^0.133.0",
+    "@anthropic-ai/sdk": "^0.135.0",
     "@babel/parser": "^8.0.4",
-    "@modelcontextprotocol/sdk": "1.31.0",
     "ai": "^7.0.14",
     "archiver": "^8.0.0",
     "playwright": "^1.59.1",
