@@ -519,7 +519,7 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audit: 2026-10-19. 8 tools run (gitleaks, trufflehog, osv-scanner, trivy, semgrep, mcp-exfil-scan, config-audit, skillspector). Findings: 3 zip-crate advisories (RUSTSEC-2026-0367/0368/0369), 0 verified secrets. Fixed: zip bumped to 9. Details in SECURITY_REPORT.md.
+Last audit: 2026-10-20. 9 tools run (osv-scanner, trivy, gitleaks, trufflehog, semgrep, mcp-exfil-scan, config-audit, skillspector). Findings: 63 dev-dependency advisories across 10 npm packages (1 critical, 18 high), 0 verified secrets. Fixed: overrides re-added and MCP SDK pinned to 1.31.0; `bun audit` is clean. Remaining: engine binary hash provenance, live-server Host check. Details in SECURITY_REPORT.md.
 
 ## Contributing
 
