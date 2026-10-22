@@ -146,3 +146,4 @@ tmp/
 # paths and candidate secrets, so they must never be pushed.
 gitleaks.sarif
 security report/
+mcps-audit-report.pdf

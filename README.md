@@ -521,7 +521,7 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audit: 2026-10-20. 9 tools run (osv-scanner, trivy, gitleaks, trufflehog, semgrep, mcp-exfil-scan, config-audit, skillspector). Findings: 63 dev-dependency advisories across 10 npm packages (1 critical, 18 high), 0 verified secrets. Fixed: overrides re-added and MCP SDK pinned to 1.31.0; `bun audit` is clean. Remaining: engine binary hash provenance, live-server Host check. Details in SECURITY_REPORT.md.
+Last audit: 2026-10-22 (10 tools run). Findings: 2 Medium (rustls-webpki / webpki-roots emSign distrust), 4 Low, rest informational. Fixes: bumped rustls-webpki, webpki-roots, and @modelcontextprotocol/sdk; gitignored local scan report. osv-scanner now clean. See [SECURITY_REPORT.md](SECURITY_REPORT.md).
 
 ## Contributing
 
