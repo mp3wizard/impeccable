@@ -30,6 +30,21 @@ pub fn hook_manifests_for(provider_id: &str) -> &'static [&'static str] {
     }
 }
 
+/// The user-level hook manifest this provider's harness loads:
+/// Claude's `~/.claude/settings.json`; Codex and agents `$CODEX_HOME/hooks.json`
+/// (relative to cwd), or `~/.codex/hooks.json` when CODEX_HOME is unset or
+/// empty. A non-empty CODEX_HOME is exclusive.
+pub fn user_hook_manifest(provider_id: &str, cwd: &str, env: &Env) -> Option<String> {
+    match provider_id {
+        "claude-code" => Some(jsp::join(&[&crate::util::homedir(env), ".claude", "settings.json"])),
+        "codex" | "agents" => Some(match env_nonempty(env, "CODEX_HOME") {
+            Some(root) => std::path::Path::new(cwd).join(root).join("hooks.json").to_string_lossy().into_owned(),
+            None => jsp::join(&[&crate::util::homedir(env), ".codex", "hooks.json"]),
+        }),
+        _ => None,
+    }
+}
+
 const STOP_REVIEW_PROVIDERS: [&str; 4] = ["claude-code", "codex", "agents", "grok"];
 
 // Only the launcher-era design hook counts as an active automatic hook. A
@@ -104,15 +119,7 @@ pub fn automatic_hook_mode(ctx: &Ctx, cwd: &str, env: &Env, provider: &Provider)
             }
         }
     }
-    let user_manifest = match provider.id.as_str() {
-        "claude-code" => Some(jsp::join(&[&crate::util::homedir(env), ".claude", "settings.json"])),
-        "codex" | "agents" => Some(match env_nonempty(env, "CODEX_HOME") {
-            Some(root) => std::path::Path::new(cwd).join(root).join("hooks.json").to_string_lossy().into_owned(),
-            None => jsp::join(&[&crate::util::homedir(env), ".codex", "hooks.json"]),
-        }),
-        _ => None,
-    };
-    if let Some(path) = user_manifest {
+    if let Some(path) = user_hook_manifest(&provider.id, cwd, env) {
         if let Some(raw) = read_json(&path) {
             if let Some(hooks) = raw.get("hooks") {
                 if crate::staleness::js_truthy(hooks) && value_has_hook_marker(hooks) {
@@ -1211,6 +1218,36 @@ mod worktree_hook_tests {
         assert_eq!(mode(at(&["main", "sub"])), "none");
         assert_eq!(mode(at(&["other", "wt"])), "none");
 
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn cursor_post_edit_and_unmigrated_gate_both_count_as_per_edit_coverage() {
+        let base = std::env::temp_dir().join(format!("impeccable-cursor-hook-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let tmp = base.to_string_lossy().into_owned();
+        let project = jsp::join(&[&tmp, "proj"]);
+        std::fs::create_dir_all(jsp::join(&[&project, ".git"])).unwrap();
+        let manifest = jsp::join(&[&project, ".cursor", "hooks.json"]);
+        std::fs::create_dir_all(jsp::dirname(&manifest)).unwrap();
+        let env = Env::from([
+            ("HOME".to_string(), tmp.clone()),
+            ("USERPROFILE".to_string(), tmp.clone()),
+            ("IMPECCABLE_PROVIDER_ID".to_string(), "cursor".to_string()),
+        ]);
+        let provider = crate::provider::detect(&env, &project);
+        assert_eq!(provider.id, "cursor");
+        let mode = || {
+            let ctx = load_context(&project, &TargetOptions::default(), &env);
+            automatic_hook_mode(&ctx, &project, &env, &provider)
+        };
+        assert_eq!(mode(), "none");
+        // Post-edit only: Cursor has no Stop deep pass wired (#1061).
+        std::fs::write(&manifest, r#"{"version":1,"hooks":{"postToolUse":[{"command":"\".cursor/skills/impeccable/scripts/impeccable\" hook","matcher":"^Write$","timeout":5}]}}"#).unwrap();
+        assert_eq!(mode(), "per-edit");
+        // The retired gate still runs until the manifest is migrated.
+        std::fs::write(&manifest, r#"{"version":1,"hooks":{"preToolUse":[{"command":"\".cursor/skills/impeccable/scripts/impeccable\" hook-before-edit","timeout":5}]}}"#).unwrap();
+        assert_eq!(mode(), "per-edit");
         let _ = std::fs::remove_dir_all(&base);
     }
 }
