@@ -521,7 +521,7 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audit: 2026-10-22 (10 tools run). Findings: 2 Medium (rustls-webpki / webpki-roots emSign distrust), 4 Low, rest informational. Fixes: bumped rustls-webpki, webpki-roots, and @modelcontextprotocol/sdk; gitignored local scan report. osv-scanner now clean. See [SECURITY_REPORT.md](SECURITY_REPORT.md).
+Last audit: 2026-10-23 (6 tools run; skillspector incomplete). Findings: 1 Medium (ip-address GHSA-rxp7-6hxx-x8q5), 42 unverified trufflehog placeholder URIs (false positives). Fixes: bumped ip-address override to 10.7.4. osv-scanner clean. See [SECURITY_REPORT.md](SECURITY_REPORT.md).
 
 ## Contributing
 

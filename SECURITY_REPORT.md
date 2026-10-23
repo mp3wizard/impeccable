@@ -1,27 +1,20 @@
-# Security Report — 2026-10-22
+# Security Report — 2026-10-23
 ## Tools Run
 | Tool | Status | Finding count |
-|---|---|---|
-| gitleaks | OK | 0 |
-| trufflehog | OK | 0 |
-| osv-scanner | OK | 6 (now 0) |
-| trivy | OK | 0 |
-| semgrep (owasp + secrets) | OK | 3 |
-| skillspector (no LLM) | OK | 75 heuristic hits |
-| config-audit | OK | heuristics only |
-| mcp-exfil-scan | OK | 0 (clean) |
-| bandit, CodeQL, mcps-audit, mcp-scan | Skipped | n/a |
+|------|--------|---------------|
+| gitleaks | OK (3555 commits) | 0 |
+| trufflehog | OK | 0 verified, 42 unverified (placeholder `user:pass@example.com` / `host.com` URIs — false positives) |
+| osv-scanner | OK | 1 (Medium) → fixed |
+| trivy fs | OK | 0 |
+| mcp-exfil-scan | OK | 0 (score 0/100) |
+| config-audit | OK | 185 total, all in global `~/.claude` settings / installed plugins, none in this repo |
+| skillspector (--no-llm) | INCOMPLETE — hung, killed after >10 min | n/a |
+| bandit / semgrep | not run this pass (no .py files; semgrep skipped) | n/a |
+| mcp-scan / Jev | opt-in, not enabled | n/a |
 ## Findings
-- CVE-2026-111943 (RUSTSEC-2026-0381/0382/0383), Medium: rustls-webpki 0.103.15, webpki-roots 1.0.9 (emSign distrust)
-- CVE-2026-111767/111768/111769/111771, Low (dev-only): @modelcontextprotocol/sdk 1.31.0
-- Low: wildcard postMessage origin in crates/wasm/tools test harnesses (3 sites)
-- Low: untracked mcps-audit-report.pdf not gitignored
-- Low: project hooks run repo-local binary (by design)
-- Info: skillspector / config-audit heuristics on skill prose
+- GHSA-rxp7-6hxx-x8q5 — ip-address 10.7.1 — CVSS 6.3 Medium (npm, pinned via package.json override)
 ## Fixes Applied
-- rustls-webpki -> 0.103.16, webpki-roots -> 1.0.10
-- @modelcontextprotocol/sdk -> 1.32.0 (devDependency + override)
-- mcps-audit-report.pdf added to .gitignore
+- Bumped `ip-address` override 10.7.1 → 10.7.4; `bun install`; osv-scanner re-run: no issues.
 ## Known Remaining Issues
-- postMessage '*' in test-only harnesses left as is (changing origin risks breaking file:// fixtures)
-- Hook trust model and heuristic hits are by design
+- skillspector scan did not complete; coverage gap.
+- Trufflehog unverified URI hits are test/doc placeholders.
