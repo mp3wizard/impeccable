@@ -521,7 +521,7 @@ Join the community and ecosystem conversations:
 
 ## Security
 
-Last audit: 2026-10-23 (6 tools run; skillspector incomplete). Findings: 1 Medium (ip-address GHSA-rxp7-6hxx-x8q5), 42 unverified trufflehog placeholder URIs (false positives). Fixes: bumped ip-address override to 10.7.4. osv-scanner clean. See [SECURITY_REPORT.md](SECURITY_REPORT.md).
+Last audit: 2026-10-26 (13 tools run). Findings: 2 Medium (dev-dep CVEs in body-parser, undici, fast-uri; engine checksum same-origin), 1 Low (live-server token exposure), informational notes; 42 unverified trufflehog fixture URIs (false positives). Fixes: bumped body-parser 2.4.0, fast-uri 3.1.9, undici 7.30.1; osv-scanner clean. See [SECURITY_REPORT.md](SECURITY_REPORT.md).
 
 ## Contributing
 
