@@ -86,7 +86,7 @@ try {
   await page.evaluate(BUNDLE);
 
   const scan = (scanId, disabledValues, extraConfig = {}) => page.evaluate(async (config) => {
-    window.postMessage({ source: 'impeccable-command', action: 'scan', config }, '*');
+    window.postMessage({ source: 'impeccable-command', action: 'scan', config }, window.location.origin);
     const deadline = Date.now() + 5000;
     while (
       Date.now() < deadline &&

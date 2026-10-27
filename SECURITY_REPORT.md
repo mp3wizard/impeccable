@@ -1,24 +1,25 @@
-# Security Report — 2026-10-26
+# Security Report — 2026-10-27
 ## Tools Run
 | Tool | Status | Finding count |
-|------|--------|---------------|
-| gitleaks | OK (3671 commits) | 0 |
-| trufflehog | OK | 0 verified, 42 unverified (test-fixture `user:pass@example.com` URIs, false positives) |
-| osv-scanner | OK | 8 advisories on 3 dev packages → fixed |
+|---|---|---|
+| gitleaks | OK | 0 |
+| trufflehog (git history) | OK | 34 unverified (0 verified) — example URLs/test fixtures |
+| semgrep owasp-top-ten (JS/TS) | OK | 3 (wildcard postMessage) → fixed |
+| semgrep secrets | OK | 0 |
 | trivy fs | OK | 0 |
-| semgrep (owasp/ts/secrets) | OK | 3 (wildcard postMessage in dev test scripts, Informational) |
-| mcp-exfil-scan | OK | 0 (0/100) |
-| skill-audit | OK | 5/100 low risk |
-| config-audit | PARTIAL | doc-text false positives only |
-| skillspector (--no-llm) | OK | parse-limit warnings on minified bundles (Informational) |
-| bandit | N/A | no Python |
-| CodeQL / mcps-audit / mcp-scan / Jev | skipped | opt-in off / not applicable |
+| osv-scanner | OK | 1 (Medium) |
+| mcp-exfil-scan | OK | 0 (score 0/100) |
+| skill-audit (SKILL.md) | OK | scores 0–15/100 |
+| skillspector (--no-llm) | OK | pattern noise: 100/100 over 8951 components incl. fixtures/goldens — treated as false positive (design-linter test corpus) |
+| config-audit | OK | scans global ~/.claude, not this repo — out of scope |
+| bandit | N/A | no .py files |
+| mcp-scan, CodeQL, mcps-audit | SKIPPED | opt-in/network, unattended run |
 ## Findings
-- SEC-001 Medium: body-parser 2.3.0 (GHSA-27r3-jxmh-p828), undici 7.29.1 (GHSA-xjj6-f33q-929c, -4qv8-2p9j-2685, -f72v-6w45-q472), fast-uri 3.1.8 (GHSA-w74x-v6f9-j3xg and 3 more). Dev-only.
-- SEC-002 Medium: engine binary checksum fetched from same release channel (`.claude/skills/impeccable/scripts/impeccable`, `cli/bin/cli.js`).
-- SEC-003 Low: live-server token in query string / injected live.js (`crates/live/src/live_server.rs`).
-- SEC-004..009 Informational: wildcard postMessage in dev scripts, project hooks, minified bundles, fixture URIs, positive CI/.env notes.
+- GHSA-qwgh-2vcv-g2f7 (Medium, 6.3) — crates.io block-buffer 0.10.4 (transitive via digest/sha1). No fixed version available.
+- Semgrep wildcard-postmessage-configuration x3 — crates/wasm/tools/{disabled-values-check,skip-scan-check}.mjs (dev test harness).
+- TruffleHog unverified URI hits — example.com / host.com placeholder creds in tests and prior reports.
 ## Fixes Applied
-- SEC-001: overrides bumped to body-parser 2.4.0, fast-uri 3.1.9, undici 7.30.1; bun.lock regenerated; osv-scanner now clean.
+- postMessage targetOrigin '*' → window.location.origin (harness loads over http://127.0.0.1); semgrep re-run: 0 findings.
 ## Known Remaining Issues
-- SEC-002, SEC-003 (design-level, need upstream/architectural change); SEC-004..006 informational. Deep-audit skipped (unattended run).
+- block-buffer 0.10.4 advisory: no upstream fix.
+- Deep-audit and mcp-scan not run (unattended).

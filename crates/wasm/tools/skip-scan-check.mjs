@@ -81,7 +81,7 @@ try {
       source: 'impeccable-command',
       action: 'scan',
       config: { scanId: 'vc-skip-1', visualContrast: true, visualContrastMaxCandidates: 20 },
-    }, '*');
+    }, window.location.origin);
   });
   const controlDeadline = Date.now() + 8000;
   let control = [];
@@ -105,7 +105,7 @@ try {
       source: 'impeccable-command',
       action: 'scan',
       config: { scanId: 'vc-skip-2', visualContrast: true, visualContrastMaxCandidates: 20, skipScan: true },
-    }, '*');
+    }, window.location.origin);
   });
   await new Promise(resolve => setTimeout(resolve, 2500));
   const skipped = await resultsFor('vc-skip-2');
