@@ -214,6 +214,10 @@ The folders that hold decision-round state (`.impeccable/questions/`, `.impeccab
 - [Changelog](https://impeccable.style/changelog) for what shipped.
 - Follow [@pbakaus](https://x.com/pbakaus) for release notes and new rules.
 
+## Security
+
+Last audit: 2026-10-29. Tools run: gitleaks, trivy, osv-scanner, semgrep, mcp-exfil-scan, config-audit (6). Findings: 3 Medium dependency advisories. Fixes: @hono/node-server → 2.1.3, qs → 6.16.1; block-buffer (Cargo, transitive) has no upstream fix. See SECURITY_REPORT.md.
+
 ## License
 
 Apache 2.0. See [LICENSE](LICENSE). Impeccable started from Anthropic's [frontend-design](https://github.com/anthropics/skills/tree/main/skills/frontend-design) skill.
