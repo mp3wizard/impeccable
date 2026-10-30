@@ -216,7 +216,7 @@ The folders that hold decision-round state (`.impeccable/questions/`, `.impeccab
 
 ## Security
 
-Last audit: 2026-10-29. Tools run: gitleaks, trivy, osv-scanner, semgrep, mcp-exfil-scan, config-audit (6). Findings: 3 Medium dependency advisories. Fixes: @hono/node-server → 2.1.3, qs → 6.16.1; block-buffer (Cargo, transitive) has no upstream fix. See SECURITY_REPORT.md.
+Last audit: 2026-10-30. Tools run: gitleaks, trivy, osv-scanner, semgrep, trufflehog, mcp-exfil-scan, config-audit, skillspector (8). Findings: 1 Medium dependency advisory (block-buffer, Cargo, transitive, no upstream fix); 34 unverified TruffleHog URI hits are example URLs. Fixes: none needed. See SECURITY_REPORT.md.
 
 ## License
 
