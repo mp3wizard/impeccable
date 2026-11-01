@@ -1,21 +1,23 @@
-# Security Report — 2026-10-30
+# Security Report — 2026-11-01
 ## Tools Run
 | Tool | Status | Finding count |
 |---|---|---|
-| gitleaks | OK | 0 |
+| gitleaks (3820 commits) | OK | 0 |
 | trivy fs (vuln+secret) | OK | 0 |
-| osv-scanner | OK | 1 (Medium, no fix) |
-| semgrep owasp-top-ten + secrets | OK | 0 |
-| trufflehog (git history) | OK | 0 verified, 34 unverified URI (example URLs in SECURITY_REPORT.md, tests/detect-url-launch.test.mjs, crates/browser/src/lib.rs — false positives) |
+| osv-scanner | OK | 1 (Medium 6.9, fixed this run) |
+| semgrep owasp-top-ten (223 rules, 150 files) + secrets (43 rules, 1833 files) | OK | 0 |
+| trufflehog (git history) | OK | 0 verified, 34 unverified (example URLs, false positives) |
+| bandit | OK | 8 Low (B404/B603 subprocess in helper scripts, reviewed, no untrusted input) |
 | mcp-exfil-scan | OK | 0 (score 0/100, CLEAN) |
-| config-audit | OK | 0 in target; CRITICAL/HIGH hits are in ~/.claude plugin cache outside target (out of scope) |
-| skillspector (--no-llm) | OK, partial coverage | many SC9 "excluded artifact not fully inspected" (byte limit) and AR2/AS1/MP3/P2 pattern hits on skill docs that describe such patterns; no confirmed issue |
-| bandit, mcp-scan, CodeQL | SKIPPED | no .py files / opt-in / not applicable |
+| config-audit | OK | 0 high in target; CRITICAL/HIGH hits are in ~/.claude plugin cache outside target (out of scope) |
+| skillspector (--no-llm) | OK, degraded | runtime limit reached, coverage partial, no confirmed issue |
+| mcp-scan, CodeQL, deep-audit | SKIPPED | opt-in / unattended run |
 ## Findings
-- GHSA-qwgh-2vcv-g2f7 (Medium, 6.3) — crates.io block-buffer 0.10.4 (transitive via digest/sha1; fix needs 0.12.1).
-- skillspector: pattern hits are in design-skill reference docs (prose about prompt injection / agent config), reviewed as non-malicious; coverage partial due to total_bytes_limit.
+- GHSA-g3hv-75wg-m249 (Medium, 6.9) — npm minimatch 10.2.5 (transitive via readdir-glob); fixed in 11.0.1.
+- bandit: 8 Low subprocess-usage notes.
+- skillspector: partial coverage (runtime limit); no confirmed issue.
 ## Fixes Applied
-- None needed this week (previous overrides for @hono/node-server and qs remain; bun.lock clean).
+- Added `"minimatch": "11.0.1"` to package.json overrides, ran `bun install`; osv-scanner re-run reports no issues.
 ## Known Remaining Issues
-- block-buffer 0.10.4: transitive crate pinned by digest 0.10; no compatible upstream fix.
-- Deep-audit, mcp-scan, LLM-mode skillspector not run (unattended).
+- bandit Low subprocess notes (accepted).
+- skillspector coverage partial; deep-audit, mcp-scan, LLM-mode skillspector not run (unattended).
