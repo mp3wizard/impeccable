@@ -1,23 +1,24 @@
-# Security Report — 2026-11-01
+# Security Report — 2026-11-03
 ## Tools Run
 | Tool | Status | Finding count |
 |---|---|---|
-| gitleaks (3820 commits) | OK | 0 |
+| gitleaks (3858 commits) | OK | 0 |
 | trivy fs (vuln+secret) | OK | 0 |
-| osv-scanner | OK | 1 (Medium 6.9, fixed this run) |
-| semgrep owasp-top-ten (223 rules, 150 files) + secrets (43 rules, 1833 files) | OK | 0 |
+| osv-scanner | OK | 0 |
+| semgrep owasp-top-ten + secrets | OK | 0 |
 | trufflehog (git history) | OK | 0 verified, 34 unverified (example URLs, false positives) |
-| bandit | OK | 8 Low (B404/B603 subprocess in helper scripts, reviewed, no untrusted input) |
-| mcp-exfil-scan | OK | 0 (score 0/100, CLEAN) |
-| config-audit | OK | 0 high in target; CRITICAL/HIGH hits are in ~/.claude plugin cache outside target (out of scope) |
-| skillspector (--no-llm) | OK, degraded | runtime limit reached, coverage partial, no confirmed issue |
-| mcp-scan, CodeQL, deep-audit | SKIPPED | opt-in / unattended run |
+| bandit | OK | 8 Low (B404/B603 subprocess in hermes plugin copies) |
+| skillspector (--no-llm) | OK, degraded | 81 heuristic hits, mostly noise for a prompt-library skill; none confirmed |
+| skill-audit | RAN | no output, inconclusive |
+| config-audit, mcp-exfil-scan | SKIPPED | scan host ~/.claude / write to plugin cache; out of scope |
+| mcp-scan, CodeQL, mcps-audit, Jev, deep-audit | SKIPPED | opt-in / unattended run |
 ## Findings
-- GHSA-g3hv-75wg-m249 (Medium, 6.9) — npm minimatch 10.2.5 (transitive via readdir-glob); fixed in 11.0.1.
-- bandit: 8 Low subprocess-usage notes.
-- skillspector: partial coverage (runtime limit); no confirmed issue.
+- SEC-001 (Medium, manual): live-mode Apply spawns `codex --dangerously-bypass-approvals-and-sandbox` or `claude --permission-mode bypassPermissions` (crates/live/src/copy_edit_agent.rs:1524, :1552). Prompt includes page HTML (prompt-injection vector). Server is 127.0.0.1 only; disclosed in README. Mitigation: set `IMPECCABLE_LIVE_COPY_AGENT=chat` or `off`.
+- SEC-002 (Low): subprocess.run list-form in skill/hermes-plugin/__init__.py:72 (bandit B603), no untrusted input.
+- SEC-003 (Info): unpinned `npx impeccable` references in skill/ (skillspector RP1).
+- SEC-004 (Info): skillspector prompt-pattern heuristics, unconfirmed.
+- CVEs: none.
 ## Fixes Applied
-- Added `"minimatch": "11.0.1"` to package.json overrides, ran `bun install`; osv-scanner re-run reports no issues.
+- None needed. SEC-001 is an upstream design decision (behavior change, not a patch-level fix); left as-is.
 ## Known Remaining Issues
-- bandit Low subprocess notes (accepted).
-- skillspector coverage partial; deep-audit, mcp-scan, LLM-mode skillspector not run (unattended).
+- SEC-001 through SEC-004 above. Recommended deep-audit: crates/live, skill (not run).
