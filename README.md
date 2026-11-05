@@ -218,7 +218,7 @@ The folders that hold decision-round state (`.impeccable/questions/`, `.impeccab
 
 ## Security
 
-Last audit: 2026-11-03. Tools run: gitleaks, trivy, osv-scanner, semgrep, trufflehog, bandit, skillspector, skill-audit (8 ran; 5 skipped). Findings: 0 CVEs, 0 secrets; 1 Medium design risk (live-mode Apply runs codex/claude with sandbox and permission checks off, upstream, disclosed), 8 Low bandit subprocess notes, 34 unverified TruffleHog example-URL hits. Fixes: none required. See SECURITY_REPORT.md.
+Last audit: 2026-11-05. 8 tools run (gitleaks, trufflehog, semgrep, bandit, trivy, osv-scanner, mcp-exfil-scan, config-audit); mcp-scan, skillspector and Jev skipped. Findings: 0 CVEs, 0 secrets; Low wildcard postMessage target in live-browser.js (upstream), 8 Low bandit subprocess notes; carried Medium design risk (live-mode Apply runs codex/claude with sandbox off, upstream, disclosed). Fixes: none required. See SECURITY_REPORT.md.
 
 ## License
 
