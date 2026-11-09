@@ -1,23 +1,31 @@
-# Security Report — 2026-11-06
+# Security Report — 2026-11-09
 ## Tools Run
 | Tool | Status | Finding count |
 |---|---|---|
-| gitleaks (3930 commits) | OK | 0 |
-| trufflehog | not completed (scan run was cut off; gitleaks covers secrets) | n/a |
-| semgrep owasp-top-ten (js/ts/py) | OK | 0 |
+| gitleaks | INCOMPLETE (full-history run killed; --no-git rerun timed out) | not a clean result |
+| trufflehog (full history) | OK | 35 unverified URI hits (fixtures/docs), 0 verified |
+| semgrep owasp-top-ten | OK | 0 |
 | semgrep secrets | OK | 0 |
-| bandit | OK | 8 (B404/B603 subprocess, informational, list-form args, hermes-plugin `__init__.py` + 3 generated copies) |
+| semgrep typescript / python | NOT RUN | n/a |
+| bandit (skill/hermes-plugin) | OK (partial coverage) | 2 Low (B404, B603) |
 | trivy fs | OK | 0 |
-| osv-scanner | OK | 2 (before fix) |
-| config-audit.py | OK | findings only in global ~/.claude plugins, out of scope for this repo |
-| mcp-exfil-scan | OK | 0 (score 0/100) |
-| skillspector --no-llm | incomplete (skill discovery partial) | n/a |
-| mcp-scan | skipped (opt-in, unattended run) | n/a |
+| osv-scanner | OK | 0 |
+| config-audit | OK | 11 MEDIUM, 1 LOW in scope (false positives / docs prose) |
+| skill-audit | OK (3 of 26 SKILL.md) | LOW RISK |
+| mcp-exfil-scan | OK | 0 (CLEAN) |
+| skillspector (--no-llm) | OK | 81 raw pattern hits, triaged as benign |
+| mcp-scan, Jev, mcps-audit | SKIPPED | n/a |
 ## Findings
-- RUSTSEC-2026-0382 rustls-webpki 0.103.15 (fixed 0.103.16)
-- RUSTSEC-2026-0381 webpki-roots 1.0.9 (fixed 1.0.10)
+CVEs: none (226 bun + 217 cargo packages checked by Trivy and OSV-Scanner).
+- SEC-001 (Low, CWE-346): `skill/scripts/live-browser.js:12527-12541` postMessage handler lacks e.source/e.origin check; postMessage uses `'*'`.
+- SEC-002 (Info, CWE-598): live-server token in query string over loopback (`live-browser.js:3948`, `:7417`).
+- SEC-003 (Info, CWE-942): component-review server CORS `*` on fonts only (`crates/context/src/component_review/server.rs:31-33`); Host/Origin pinned.
+- SEC-004 (Info, CWE-829): repo-shipped auto-run hooks in `.claude/settings.json`.
+- SEC-005 (Info, CWE-78, not exploitable): hermes plugin passes full environment to launcher (`skill/hermes-plugin/__init__.py:72`).
+- `claude.md` is a byte-identical duplicate of `CLAUDE.md`.
 ## Fixes Applied
-- `cargo update`: rustls-webpki → 0.103.16, webpki-roots 1.0.9 → 1.0.11. osv-scanner re-run: no issues.
+None. No CVEs or secrets. SEC-001 sits in a generated upstream bundle that would be overwritten by the next sync, so it was not patched locally.
 ## Known Remaining Issues
-- Bandit B404/B603 subprocess notes (no shell, fixed argv).
-- trufflehog and skillspector did not complete this run.
+- SEC-001 to SEC-005 above (Low/Info). Suggested fix for SEC-001: `if (e.source !== window || e.origin !== location.origin) return;`.
+- Gitleaks gap; semgrep typescript not run; Rust engine only grep-reviewed; prebuilt engine binary not analyzed.
+- Deep-audit not run (autonomous run).
