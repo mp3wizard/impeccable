@@ -222,6 +222,10 @@ The folders that hold decision-round state (`.impeccable/questions/`, `.impeccab
 
 Thanks to [Namespace](https://namespace.so) for sponsoring Impeccable's CI with fast Linux runners.
 
+## Security
+
+Last audit: 2026-11-10. Tools: gitleaks, osv-scanner, semgrep, trivy, bandit (5). Findings: dependency CVEs in bun.lock/Cargo.lock, wildcard postMessage in upstream live-browser.js, 8 low bandit. Fixes: dependency overrides + cargo update (osv clean). Remaining: upstream postMessage wildcard. See SECURITY_REPORT.md.
+
 ## License
 
 Apache 2.0. See [LICENSE](LICENSE). Impeccable started from Anthropic's [frontend-design](https://github.com/anthropics/skills/tree/main/skills/frontend-design) skill.
