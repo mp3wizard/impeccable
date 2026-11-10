@@ -1,6 +1,6 @@
 {
-  "name": "@mp3wizard/impeccable",
-  "version": "4.8.1",
+  "name": "impeccable",
+  "version": "4.8.2",
   "author": "Paul Bakaus",
   "description": "Design skills, commands, and anti-pattern detection for AI coding agents",
   "keywords": [
@@ -84,11 +84,11 @@
     "build:component-review": "bun scripts/build-component-review.mjs"
   },
   "optionalDependencies": {
-    "@impeccable/cli-darwin-arm64": "0.1.20",
-    "@impeccable/cli-darwin-x64": "0.1.20",
-    "@impeccable/cli-linux-x64": "0.1.20",
-    "@impeccable/cli-linux-arm64": "0.1.20",
-    "@impeccable/cli-windows-x64": "0.1.20"
+    "@impeccable/cli-darwin-arm64": "0.1.22",
+    "@impeccable/cli-darwin-x64": "0.1.22",
+    "@impeccable/cli-linux-x64": "0.1.22",
+    "@impeccable/cli-linux-arm64": "0.1.22",
+    "@impeccable/cli-windows-x64": "0.1.22"
   },
   "devDependencies": {
     "@ai-sdk/anthropic": "^4.0.7",
@@ -97,25 +97,11 @@
     "@anthropic-ai/claude-agent-sdk": "^0.3.165",
     "@anthropic-ai/sdk": "^1.2.0",
     "@babel/parser": "^8.0.4",
-    "@modelcontextprotocol/sdk": "1.32.0",
     "ai": "^7.0.14",
     "archiver": "^8.0.0",
     "playwright": "^1.59.1",
     "puppeteer": "^25.1.0",
     "svelte": "^5",
     "zod": "^4.3.6"
-  },
-  "overrides": {
-    "@hono/node-server": "2.1.3",
-    "@modelcontextprotocol/sdk": "1.32.0",
-    "body-parser": "2.4.0",
-    "brace-expansion": "5.0.12",
-    "fast-uri": "3.1.9",
-    "hono": "4.13.11",
-    "ip-address": "10.7.4",
-    "minimatch": "11.0.1",
-    "proxy-addr": "2.0.8",
-    "qs": "6.16.1",
-    "undici": "7.30.1"
   }
 }

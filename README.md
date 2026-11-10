@@ -216,9 +216,11 @@ The folders that hold decision-round state (`.impeccable/questions/`, `.impeccab
 - [Changelog](https://impeccable.style/changelog) for what shipped.
 - Follow [@pbakaus](https://x.com/pbakaus) for release notes and new rules.
 
-## Security
+## Sponsors
 
-Last audit: 2026-11-09. 12 tools run (trufflehog, semgrep x2, bandit, trivy, osv-scanner, mcp-exfil-scan, config-audit, skill-audit, skillspector); gitleaks did not complete; mcp-scan and Jev skipped. Findings: 0 CVEs, 0 secrets, 1 Low (live overlay postMessage origin check) and 4 Informational. Fixes: none needed. See SECURITY_REPORT.md.
+[![CI powered by Namespace](https://namespace.so/oss/badge.svg)](https://namespace.so/github-actions/?utm_source=oss&utm_campaign=impeccable)
+
+Thanks to [Namespace](https://namespace.so) for sponsoring Impeccable's CI with fast Linux runners.
 
 ## License
 
