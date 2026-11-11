@@ -1,21 +1,31 @@
-# Security Report — 2026-11-10
+# Security Report — 2026-11-11
+
+Target: impeccable @ merge of upstream/main (27 commits, clean merge). Scan mode: local-only (no mcp-scan network, no skillspector LLM, no Jev).
+
 ## Tools Run
 | Tool | Status | Finding count |
 |---|---|---|
-| gitleaks | ok | 0 |
-| osv-scanner | ok | 78 pre-fix → 0 post-fix |
-| semgrep (owasp-top-ten, typescript, secrets) | ok | 3 unique (wildcard-postmessage) × provider copies |
-| trivy (vuln, secret, misconfig; HIGH/CRIT) | ok | 0 |
-| bandit | ok | 8 low |
-| mcp-scan / skillspector LLM / Jev / deep-audit | skipped (opt-in off, unattended run) | n/a |
+| gitleaks (4194 commits + fs) | OK | 0 |
+| bandit | OK | 8 Low (B404/B603 subprocess, known/accepted) |
+| semgrep p/owasp-top-ten | OK (178 files) | 0 |
+| semgrep p/secrets | OK | 0 |
+| trivy fs (bun.lock, Cargo.lock) | OK | 0 vulns, 0 secrets |
+| trufflehog (git) | OK | 0 verified, 37 unverified (URI detector) |
+| osv-scanner (bun.lock 226, Cargo.lock 218) | OK | 0 |
+| config-audit.py | OK | impeccable-scoped: hooks (SessionStart/Stop) and CLAUDE.md flagged MEDIUM/LOW; CRITICAL/HIGH items are in other user-level plugins, not this repo |
+| mcp-exfil-scan | OK | 0, score 0/100 CLEAN |
+| skill-audit.sh (first 20 of 40 SKILL.md copies) | PARTIAL | all LOW RISK (0-15/100) |
+| skillspector --no-llm | INCOMPLETE | hung on skill discovery; killed, no result |
+| mcp-scan | SKIPPED | opt-in, network |
+| CodeQL | SKIPPED | not checked |
+
 ## Findings
-- bun.lock transitive CVEs (GHSA): hono, @hono/node-server, @modelcontextprotocol/sdk, body-parser, brace-expansion, fast-uri, ip-address, minimatch, proxy-addr, qs.
-- Cargo.lock: RUSTSEC-2026-0382 (rustls-webpki 0.103.15), RUSTSEC-2026-0381 (webpki-roots 1.0.9).
-- semgrep: wildcard-postmessage-configuration in live-browser.js (upstream generated code, copied into each provider dir).
-- bandit: 8 low.
+No CVEs. No verified secrets. 37 unverified TruffleHog URI hits (likely URLs with credentials-like patterns in fixtures/docs; not verified live). Bandit 8 Low subprocess notes.
+
 ## Fixes Applied
-- package.json "overrides" for the packages above + bun install; osv-scanner clean afterwards.
-- cargo update: rustls-webpki 0.103.16, webpki-roots 1.0.11.
+None needed.
+
 ## Known Remaining Issues
-- wildcard postMessage targetOrigin in upstream live-browser.js (generated, not patched; fix belongs upstream).
-- bandit low-severity items (not triaged).
+- 37 unverified TruffleHog URI hits not individually triaged.
+- skillspector did not complete; skill-audit covered only 20 SKILL.md copies.
+- Hook/CLAUDE.md MEDIUM config-audit notes are by design (upstream project hooks).

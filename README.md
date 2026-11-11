@@ -226,7 +226,7 @@ Thanks to [Namespace](https://namespace.so) for sponsoring Impeccable's CI with 
 
 ## Security
 
-Last audit: 2026-11-10. Tools: gitleaks, osv-scanner, semgrep, trivy, bandit (5). Findings: dependency CVEs in bun.lock/Cargo.lock, wildcard postMessage in upstream live-browser.js, 8 low bandit. Fixes: dependency overrides + cargo update (osv clean). Remaining: upstream postMessage wildcard. See SECURITY_REPORT.md.
+Last audit: 2026-11-11. Tools: gitleaks, osv-scanner, semgrep (2 rulesets), trivy, bandit, trufflehog, config-audit, mcp-exfil-scan, skill-audit (partial) (9+). Findings: no CVEs, no verified secrets, 8 low bandit, 37 unverified trufflehog URI hits. Fixes: none needed. Remaining: unverified trufflehog hits untriaged; skillspector did not complete. See SECURITY_REPORT.md.
 
 ## License
 
