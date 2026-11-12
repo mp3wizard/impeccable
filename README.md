@@ -226,7 +226,7 @@ Thanks to [Namespace](https://namespace.so) for sponsoring Impeccable's CI with 
 
 ## Security
 
-Last audit: 2026-11-11. Tools: gitleaks, osv-scanner, semgrep (2 rulesets), trivy, bandit, trufflehog, config-audit, mcp-exfil-scan, skill-audit (partial) (9+). Findings: no CVEs, no verified secrets, 8 low bandit, 37 unverified trufflehog URI hits. Fixes: none needed. Remaining: unverified trufflehog hits untriaged; skillspector did not complete. See SECURITY_REPORT.md.
+Last audit: 2026-11-12. Tools: gitleaks, osv-scanner, semgrep (3 rulesets), trivy, bandit, trufflehog, config-audit, mcp-exfil-scan, skill-audit, skillspector (partial) (10). Findings: no CVEs, no verified secrets, 3 Low (hook launcher trust-on-open, default-on design uploads, third-party CI cache action), 8 Low bandit, 37 unverified trufflehog placeholder hits. Fixes: none needed. Remaining: upstream design items above; skillspector whole-repo run did not complete. See SECURITY_REPORT.md.
 
 ## License
 
