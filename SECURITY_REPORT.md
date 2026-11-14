@@ -1,25 +1,20 @@
-# Security Report — 2026-11-12
+# Security Report — 2026-11-14
 ## Tools Run
 | Tool | Status | Finding count |
 |---|---|---|
-| gitleaks | OK | 0 |
-| trufflehog | OK | 0 verified, 37 unverified (placeholder URIs) |
-| bandit | OK | 8 Low (B404/B603, Hermes plugin) |
-| semgrep (owasp, typescript, secrets) | OK | 0 |
-| trivy fs | OK | 0 |
-| osv-scanner | OK | 0 |
-| config-audit | OK (host-scoped) | 12 MEDIUM doc pattern matches, 1 LOW (noise) |
-| skill-audit | OK | all LOW RISK |
-| mcp-exfil-scan | OK | 0 (clean) |
-| skillspector --no-llm | Partial (scoped to skill/SKILL.src.md; whole repo timed out) | 3 HIGH (false positive), 1 MEDIUM |
-| mcp-scan, mcps-audit, CodeQL, Jev | Skipped (opt-in off / no MCP config) | n/a |
+| gitleaks | ran | 3 (all test fixtures, crates/cli/tests/foundations.rs) |
+| bandit | ran | 12 Low (B404/B603 subprocess in Hermes hook, 6 file copies) |
+| semgrep (owasp-top-ten, typescript, secrets) | ran | 0 |
+| trivy (vuln, secret, misconfig) | ran | 0 |
+| osv-scanner | ran | 0 |
+| trufflehog (verified only) | ran | 0 |
+| skill-audit.sh (SKILL.md) | ran | risk 5/100, LOW |
+| config-audit.py | ran | 2 Low (hooks configured) |
+| mcp-exfil-scan.sh | ran | 0 |
+| mcp-scan / skillspector LLM | skipped (opt-in off, unattended run) | n/a |
 ## Findings
-- No CVEs (Cargo.lock 218 pkgs, bun.lock 226 pkgs). No live secrets.
-- SEC-001 Low: in-repo hook launcher can download/exec engine binary (trust-on-open).
-- SEC-003 Low: DESIGN.md/critique uploads default-on after sign-in; notice after first upload.
-- SEC-004 Low: third-party CI action (nscloud-cache-action, SHA-pinned) in jobs with job-level API-key env.
-- SEC-005/006/007 Informational: bandit B404/B603, trufflehog placeholder URIs, config-audit/skillspector noise.
+No CVEs. No verified secrets. gitleaks hits are intentional fake keys inside Rust test cases. bandit B404/B603 are Low subprocess usage in the Hermes design hook.
 ## Fixes Applied
-None needed. No dependency vulnerabilities; Low items are upstream design points.
+None needed.
 ## Known Remaining Issues
-SEC-001, SEC-003, SEC-004 (upstream). skillspector whole-repo run did not complete. Deep-audit not run (unattended).
+Hermes hook launches a subprocess (Low, by design). mcp-scan and skillspector not run.
